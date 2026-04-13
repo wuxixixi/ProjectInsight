@@ -90,6 +90,148 @@
         </div>
       </div>
 
+      <!-- Agent参数 -->
+      <div class="control-group">
+        <label>
+          Agent数量
+          <span class="value">{{ populationSize }} 人</span>
+        </label>
+        <div class="slider-container">
+          <input
+            type="range"
+            v-model.number="populationSize"
+            min="50"
+            max="500"
+            step="50"
+            :disabled="isRunning"
+          />
+        </div>
+        <small style="color: #888">模拟群体规模</small>
+      </div>
+
+      <div class="control-group">
+        <label>社交网络类型</label>
+        <select v-model="networkType" :disabled="isRunning" class="network-select">
+          <option value="small_world">小世界网络</option>
+          <option value="scale_free">无标度网络</option>
+          <option value="random">随机网络</option>
+        </select>
+        <small style="color: #888">{{ networkType === 'small_world' ? '真实社交网络模拟' : networkType === 'scale_free' ? '存在意见领袖' : '随机连接' }}</small>
+      </div>
+
+      <!-- LLM并发参数 (仅LLM模式显示) -->
+      <div v-if="useLLM" class="llm-config-section">
+        <h4 style="color: #64b5f6; margin-bottom: 8px;">LLM并发配置</h4>
+
+        <div class="control-group">
+          <label>
+            并发数上限
+            <span class="value">{{ maxConcurrent }}</span>
+          </label>
+          <div class="slider-container">
+            <input
+              type="range"
+              v-model.number="maxConcurrent"
+              min="50"
+              max="500"
+              step="50"
+              :disabled="isRunning"
+            />
+          </div>
+          <small style="color: #888">同时请求LLM的Agent数</small>
+        </div>
+
+        <div class="control-group">
+          <label>
+            连接池大小
+            <span class="value">{{ connectionPoolSize }}</span>
+          </label>
+          <div class="slider-container">
+            <input
+              type="range"
+              v-model.number="connectionPoolSize"
+              min="100"
+              max="800"
+              step="100"
+              :disabled="isRunning"
+            />
+          </div>
+          <small style="color: #888">应大于并发数上限</small>
+        </div>
+
+        <div class="control-group">
+          <label>
+            请求超时
+            <span class="value">{{ timeout }} 秒</span>
+          </label>
+          <div class="slider-container">
+            <input
+              type="range"
+              v-model.number="timeout"
+              min="30"
+              max="120"
+              step="10"
+              :disabled="isRunning"
+            />
+          </div>
+          <small style="color: #888">单个请求最长等待时间</small>
+        </div>
+
+        <div class="control-group">
+          <label>
+            最大重试次数
+            <span class="value">{{ maxRetries }} 次</span>
+          </label>
+          <div class="slider-container">
+            <input
+              type="range"
+              v-model.number="maxRetries"
+              min="1"
+              max="10"
+              step="1"
+              :disabled="isRunning"
+            />
+          </div>
+          <small style="color: #888">失败后自动重试</small>
+        </div>
+      </div>
+
+      <!-- 推演控制参数 -->
+      <div class="control-group">
+        <label>
+          最大推演步数
+          <span class="value">{{ maxSteps }} 步</span>
+        </label>
+        <div class="slider-container">
+          <input
+            type="range"
+            v-model.number="maxSteps"
+            min="10"
+            max="100"
+            step="10"
+            :disabled="isRunning"
+          />
+        </div>
+      </div>
+
+      <div v-if="useLLM" class="control-group">
+        <label>
+          推演间隔
+          <span class="value">{{ autoInterval / 1000 }} 秒</span>
+        </label>
+        <div class="slider-container">
+          <input
+            type="range"
+            v-model.number="autoInterval"
+            min="1000"
+            max="10000"
+            step="1000"
+            :disabled="isRunning"
+          />
+        </div>
+        <small style="color: #888">LLM模式建议3秒以上</small>
+      </div>
+
       <!-- 操作按钮 -->
       <button
         class="btn-start"
@@ -218,16 +360,29 @@ export default {
       isConnected: false,
       ws: null,
 
-      // 参数
+      // 基础参数
       cocoonStrength: 0.5,
       debunkDelay: 10,
       initialRumorSpread: 0.3,
       useLLM: true,
 
+      // Agent参数
+      populationSize: 200,        // Agent数量
+      networkType: 'small_world', // 网络类型
+
+      // LLM并发参数
+      maxConcurrent: 400,         // 并发数上限
+      connectionPoolSize: 600,    // 连接池大小
+      timeout: 60,                // 超时时间(秒)
+      maxRetries: 5,              // 最大重试次数
+
+      // 推演参数
+      maxSteps: 50,               // 最大推演步数
+      autoInterval: 3000,         // 自动推演间隔(ms)
+
       // 状态
       isRunning: false,
       currentStep: 0,
-      maxSteps: 50,
       debunked: false,
 
       // Agent 进度
@@ -295,8 +450,8 @@ export default {
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
-      // 直接连接后端 WebSocket (绕过 vite 代理)
-      const wsUrl = 'ws://localhost:8003/ws/simulation'
+      // 直接连接后端 WebSocket
+      const wsUrl = 'ws://localhost:9000/ws/simulation'
       console.log('连接 WebSocket:', wsUrl)
 
       try {
@@ -384,22 +539,31 @@ export default {
         polarization: []
       }
 
-      // 发送启动命令
+      // 发送启动命令 - 包含所有可配置参数
       this.sendAction('start', {
         params: {
+          // 基础参数
           cocoon_strength: this.cocoonStrength,
           debunk_delay: this.debunkDelay,
-          population_size: 200,
           initial_rumor_spread: this.initialRumorSpread,
-          network_type: 'small_world',
-          use_llm: this.useLLM
+          use_llm: this.useLLM,
+
+          // Agent参数
+          population_size: this.populationSize,
+          network_type: this.networkType,
+
+          // LLM并发参数
+          max_concurrent: this.maxConcurrent,
+          connection_pool_size: this.connectionPoolSize,
+          timeout: this.timeout,
+          max_retries: this.maxRetries
         }
       })
 
       // 启动自动推演
       setTimeout(() => {
         if (this.isRunning) {
-          const interval = this.useLLM ? 5000 : 500  // LLM 模式间隔更长
+          const interval = this.useLLM ? this.autoInterval : 500
           this.sendAction('auto', { interval })
         }
       }, 500)
@@ -457,7 +621,7 @@ export default {
       // 清除进度显示
       this.agentProgress = ''
 
-      // 检查是否完成
+      // 检查是否完成 - 使用动态 maxSteps
       if (data.step >= this.maxSteps) {
         this.isRunning = false
         this.sendAction('stop')
@@ -735,5 +899,33 @@ export default {
   margin: 0;
   font-size: 13px;
   color: #64b5f6;
+}
+
+.llm-config-section {
+  background: rgba(100, 181, 246, 0.1);
+  border: 1px solid rgba(100, 181, 246, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.network-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #444;
+  background: #1e1e1e;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.network-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.network-select option {
+  background: #1e1e1e;
+  color: #fff;
 }
 </style>

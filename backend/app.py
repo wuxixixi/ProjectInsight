@@ -49,12 +49,19 @@ engine: Optional[SimulationEngine] = None
 
 class StartRequest(BaseModel):
     """推演启动请求参数"""
+    # 基础参数
     cocoon_strength: float = 0.5
     debunk_delay: int = 10
     population_size: int = 200
     initial_rumor_spread: float = 0.3
     network_type: str = "small_world"
-    use_llm: bool = True  # 是否使用 LLM 模式
+    use_llm: bool = True
+
+    # LLM并发参数
+    max_concurrent: int = 400
+    connection_pool_size: int = 600
+    timeout: int = 60
+    max_retries: int = 5
 
 
 @app.get("/")
@@ -71,15 +78,15 @@ async def start_simulation(params: StartRequest):
     """
     global engine
 
-    # 配置 LLM - 高并发版本
+    # 从请求参数获取LLM配置
     llm_config = LLMConfig(
         base_url="http://10.17.2.29:31277/v1",
         api_key="R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs",
         model="DeepSeek-V3",
-        max_concurrent=400,  # 提升至400并发
-        timeout=60,  # 60秒超时
-        max_retries=5,  # 最大重试次数
-        connection_pool_size=500  # 连接池大小
+        max_concurrent=params.max_concurrent,
+        timeout=params.timeout,
+        max_retries=params.max_retries,
+        connection_pool_size=params.connection_pool_size
     )
 
     engine = SimulationEngine(
@@ -253,14 +260,15 @@ async def websocket_simulation(websocket: WebSocket):
                 params = msg.get("params", {})
                 use_llm = params.get("use_llm", True)
 
+                # 从前端获取LLM并发参数
                 llm_config = LLMConfig(
                     base_url="http://10.17.2.29:31277/v1",
                     api_key="R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs",
                     model="DeepSeek-V3",
-                    max_concurrent=400,  # 提升至400并发
-                    timeout=60,  # 60秒超时
-                    max_retries=5,  # 最大重试次数
-                    connection_pool_size=500  # 连接池大小
+                    max_concurrent=params.get("max_concurrent", 400),
+                    timeout=params.get("timeout", 60),
+                    max_retries=params.get("max_retries", 5),
+                    connection_pool_size=params.get("connection_pool_size", 600)
                 )
 
                 engine = SimulationEngine(
