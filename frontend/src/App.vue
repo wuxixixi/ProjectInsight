@@ -451,7 +451,7 @@ export default {
 
     connectWebSocket() {
       // 直接连接后端 WebSocket
-      const wsUrl = 'ws://localhost:9000/ws/simulation'
+      const wsUrl = 'ws://localhost:8000/ws/simulation'
       console.log('连接 WebSocket:', wsUrl)
 
       try {
