@@ -1,0 +1,345 @@
+"""
+LLM 驱动的智能体
+每个 Agent 通过 LLM 决策观点变化
+"""
+import asyncio
+import numpy as np
+from typing import List, Dict, Optional, Tuple
+import networkx as nx
+import logging
+import json
+
+from ..llm.client import LLMClient, LLMConfig
+
+logger = logging.getLogger(__name__)
+
+
+# Agent 决策 Prompt 模板
+AGENT_PROMPT_TEMPLATE = """你是一个社交媒体用户，正在关注一个热点事件的讨论。
+观点范围: -1(完全相信谣言) 到 1(完全相信真相)，0 表示中立。
+
+## 你的个人特征
+- 当前观点: {opinion:.2f}
+- 信念强度: {belief_strength:.2f} (越强越难改变观点)
+- 易感性: {susceptibility:.2f} (越强越容易受他人影响)
+
+## 你收到的信息
+{info_section}
+
+## 任务
+基于你的特征和收到的信息，决定你的新观点。
+注意：你的信念强度越高，越难改变观点；易感性越高，越容易受邻居影响。
+
+请直接返回 JSON 格式（不要其他文字）:
+{{"new_opinion": 数值在-1到1之间, "reasoning": "简短理由(20字内)"}}
+"""
+
+
+class LLMAgent:
+    """
+    LLM 驱动的单个智能体
+
+    属性:
+    - opinion: 观点值 [-1, 1]
+    - belief_strength: 信念强度
+    - influence: 影响力
+    - susceptibility: 易感性
+    """
+
+    def __init__(
+        self,
+        agent_id: int,
+        opinion: float,
+        belief_strength: float,
+        influence: float,
+        susceptibility: float
+    ):
+        self.id = agent_id
+        self.opinion = opinion
+        self.belief_strength = belief_strength
+        self.influence = influence
+        self.susceptibility = susceptibility
+        self.exposed_to_rumor = opinion < -0.2
+        self.exposed_to_truth = False
+
+        # 决策历史
+        self.decision_history: List[Dict] = []
+
+    def build_prompt(
+        self,
+        neighbor_opinions: List[float],
+        debunk_released: bool,
+        cocoon_strength: float
+    ) -> str:
+        """
+        构建决策 Prompt
+
+        Args:
+            neighbor_opinions: 邻居观点列表
+            debunk_released: 是否已发布辟谣
+            cocoon_strength: 茧房强度
+        """
+        # 构建信息部分
+        info_lines = []
+
+        # 邻居观点
+        if neighbor_opinions:
+            avg_neighbor = np.mean(neighbor_opinions)
+            info_lines.append(f"- 邻居平均观点: {avg_neighbor:.2f}")
+            info_lines.append(f"- 邻居数量: {len(neighbor_opinions)}")
+
+            # 简化的邻居观点分布
+            pro_rumor = sum(1 for o in neighbor_opinions if o < -0.2)
+            pro_truth = sum(1 for o in neighbor_opinions if o > 0.2)
+            neutral = len(neighbor_opinions) - pro_rumor - pro_truth
+            info_lines.append(f"- 邻居分布: {pro_rumor}人信谣言, {neutral}人中立, {pro_truth}人信真相")
+
+        # 辟谣状态
+        if debunk_released:
+            info_lines.append("- **官方已发布辟谣信息**: 指出谣言不实")
+
+        # 算法推荐模拟 (茧房效应)
+        if cocoon_strength > 0.3:
+            if self.opinion < 0:
+                info_lines.append("- 算法推荐: 更多支持谣言的内容")
+            else:
+                info_lines.append("- 算法推荐: 更多支持真相的内容")
+
+        info_section = "\n".join(info_lines) if info_lines else "- 暂无新信息"
+
+        return AGENT_PROMPT_TEMPLATE.format(
+            opinion=self.opinion,
+            belief_strength=self.belief_strength,
+            susceptibility=self.susceptibility,
+            info_section=info_section
+        )
+
+    async def decide_opinion(
+        self,
+        llm_client: LLMClient,
+        neighbor_opinions: List[float],
+        debunk_released: bool,
+        cocoon_strength: float
+    ) -> Dict:
+        """
+        通过 LLM 决定新观点
+
+        Returns:
+            {"new_opinion": float, "reasoning": str}
+        """
+        prompt = self.build_prompt(neighbor_opinions, debunk_released, cocoon_strength)
+
+        messages = [{"role": "user", "content": prompt}]
+
+        try:
+            result = await llm_client.chat_json(
+                messages,
+                temperature=0.7,
+                max_tokens=100
+            )
+
+            new_opinion = result.get("new_opinion", self.opinion)
+            reasoning = result.get("reasoning", "")
+
+            # 确保在有效范围内
+            new_opinion = np.clip(new_opinion, -1, 1)
+
+            # 信念强度约束：观点变化幅度受信念强度限制
+            max_change = 0.3 * (1 - self.belief_strength * 0.5)
+            change = new_opinion - self.opinion
+            if abs(change) > max_change:
+                new_opinion = self.opinion + np.sign(change) * max_change
+                new_opinion = np.clip(new_opinion, -1, 1)
+
+            decision = {
+                "old_opinion": self.opinion,
+                "new_opinion": float(new_opinion),
+                "reasoning": reasoning
+            }
+
+            self.decision_history.append(decision)
+            self.opinion = float(new_opinion)
+
+            return decision
+
+        except Exception as e:
+            logger.warning(f"Agent {self.id} LLM 决策失败: {e}，保持原观点")
+            return {
+                "old_opinion": self.opinion,
+                "new_opinion": self.opinion,
+                "reasoning": "决策失败，保持原观点"
+            }
+
+    def to_dict(self) -> Dict:
+        """转换为可序列化字典"""
+        return {
+            "id": self.id,
+            "opinion": float(self.opinion),
+            "belief_strength": float(self.belief_strength),
+            "influence": float(self.influence),
+            "susceptibility": float(self.susceptibility),
+            "exposed_to_rumor": bool(self.exposed_to_rumor),
+            "exposed_to_truth": bool(self.exposed_to_truth)
+        }
+
+
+class LLMAgentPopulation:
+    """
+    LLM 驱动的智能体群体
+
+    管理 Agent 群体，处理并发决策
+    """
+
+    def __init__(
+        self,
+        size: int = 200,
+        initial_rumor_spread: float = 0.3,
+        network_type: str = "small_world",
+        llm_config: Optional[LLMConfig] = None
+    ):
+        self.size = size
+        self.network_type = network_type
+        self.llm_config = llm_config or LLMConfig()
+
+        # 初始化观点分布
+        opinions = np.zeros(size)
+        rumor_believers = int(size * initial_rumor_spread)
+        opinions[:rumor_believers] = np.random.uniform(-0.8, -0.3, rumor_believers)
+        opinions[rumor_believers:] = np.random.uniform(-0.2, 0.3, size - rumor_believers)
+
+        # 初始化属性
+        belief_strengths = np.random.beta(2, 2, size)
+        influences = np.clip(np.random.exponential(0.5, size), 0.1, 1.0)
+        susceptibilities = np.random.beta(2, 5, size)
+
+        # 创建 Agent 实例
+        self.agents: List[LLMAgent] = [
+            LLMAgent(
+                agent_id=i,
+                opinion=opinions[i],
+                belief_strength=belief_strengths[i],
+                influence=influences[i],
+                susceptibility=susceptibilities[i]
+            )
+            for i in range(size)
+        ]
+
+        # 构建社交网络
+        self.network = self._build_network(network_type)
+
+        # 暴露状态
+        self.exposed_to_truth = np.zeros(size, dtype=bool)
+
+    def _build_network(self, network_type: str) -> nx.Graph:
+        """构建社交网络"""
+        if network_type == "small_world":
+            G = nx.watts_strogatz_graph(self.size, k=6, p=0.3, seed=42)
+        elif network_type == "scale_free":
+            G = nx.barabasi_albert_graph(self.size, m=3, seed=42)
+        else:
+            G = nx.watts_strogatz_graph(self.size, k=6, p=0.3, seed=42)
+        return G
+
+    def get_neighbors(self, agent_id: int) -> List[int]:
+        """获取邻居ID列表"""
+        return list(self.network.neighbors(agent_id))
+
+    def get_neighbor_opinions(self, agent_id: int) -> List[float]:
+        """获取邻居观点列表"""
+        neighbor_ids = self.get_neighbors(agent_id)
+        return [self.agents[nid].opinion for nid in neighbor_ids]
+
+    def get_edges(self) -> List[Tuple[int, int]]:
+        """获取所有边"""
+        return list(self.network.edges())
+
+    async def batch_decide(
+        self,
+        llm_client: LLMClient,
+        debunk_released: bool,
+        cocoon_strength: float,
+        progress_callback=None
+    ) -> List[Dict]:
+        """
+        批量异步决策
+
+        使用 asyncio.gather 并行调用 LLM，
+        但受 LLMClient 内部的 Semaphore 限制并发数
+
+        Args:
+            llm_client: LLM 客户端
+            debunk_released: 是否已辟谣
+            cocoon_strength: 茧房强度
+            progress_callback: 进度回调函数
+
+        Returns:
+            所有 Agent 的决策结果
+        """
+        async def decide_one(agent: LLMAgent, index: int):
+            neighbor_opinions = self.get_neighbor_opinions(agent.id)
+            result = await agent.decide_opinion(
+                llm_client,
+                neighbor_opinions,
+                debunk_released,
+                cocoon_strength
+            )
+            if progress_callback:
+                await progress_callback(index, self.size)
+            return result
+
+        tasks = [
+            decide_one(agent, i)
+            for i, agent in enumerate(self.agents)
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 处理异常结果
+        processed = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"Agent {i} 决策异常: {result}")
+                processed.append({
+                    "old_opinion": self.agents[i].opinion,
+                    "new_opinion": self.agents[i].opinion,
+                    "reasoning": "决策异常"
+                })
+            else:
+                processed.append(result)
+
+        return processed
+
+    def apply_debunking(self):
+        """应用辟谣效果"""
+        self.exposed_to_truth[:] = True
+        for agent in self.agents:
+            agent.exposed_to_truth = True
+            # 辟谣对相信谣言的人有一定影响
+            if agent.opinion < 0:
+                impact = 0.2 * (1 - agent.belief_strength)
+                agent.opinion = min(agent.opinion + impact, 1.0)
+
+    def get_opinion_histogram(self, bins: int = 20) -> Dict[str, List]:
+        """计算观点分布直方图"""
+        opinions = [a.opinion for a in self.agents]
+        hist, edges = np.histogram(opinions, bins=bins, range=(-1, 1))
+        centers = [(edges[i] + edges[i+1]) / 2 for i in range(len(edges)-1)]
+        return {
+            "counts": hist.tolist(),
+            "centers": centers
+        }
+
+    def to_agent_list(self) -> List[Dict]:
+        """转换为可序列化的 Agent 列表"""
+        return [agent.to_dict() for agent in self.agents]
+
+    def get_statistics(self) -> Dict:
+        """计算群体统计"""
+        opinions = [a.opinion for a in self.agents]
+
+        return {
+            "rumor_spread_rate": np.mean([o < -0.2 for o in opinions]),
+            "truth_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
+            "avg_opinion": float(np.mean(opinions)),
+            "polarization_index": float(np.std(opinions) * 2)
+        }

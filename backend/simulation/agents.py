@@ -1,0 +1,105 @@
+"""
+智能体群体模型
+模拟具有不同观点和社交网络的个体
+"""
+import numpy as np
+from typing import List, Dict, Tuple
+import networkx as nx
+
+
+class AgentPopulation:
+    """
+    智能体群体管理
+
+    每个智能体具有:
+    - opinion: 观点值 [-1, 1]
+    - belief_strength: 信念强度
+    - influence: 影响力
+    - susceptibility: 易感性
+    """
+
+    def __init__(
+        self,
+        size: int = 200,
+        initial_rumor_spread: float = 0.3,
+        network_type: str = "small_world"
+    ):
+        self.size = size
+        self.network_type = network_type
+
+        # 初始化观点分布
+        # 初始时部分人相信谣言(opinion < 0), 其他人中立或倾向真相
+        self.opinions = np.zeros(size)
+        rumor_believers = int(size * initial_rumor_spread)
+        self.opinions[:rumor_believers] = np.random.uniform(-0.8, -0.3, rumor_believers)
+        self.opinions[rumor_believers:] = np.random.uniform(-0.2, 0.3, size - rumor_believers)
+
+        # 信念强度 - 越强越难改变观点
+        self.belief_strength = np.random.beta(2, 2, size)  # 集中在中等
+
+        # 影响力 - 决定传播能力
+        self.influence = np.random.exponential(0.5, size)
+        self.influence = np.clip(self.influence, 0.1, 1.0)
+
+        # 易感性 - 决定被影响的程度
+        self.susceptibility = np.random.beta(2, 5, size)  # 多数人不易被影响
+
+        # 曝光状态
+        self.exposed_to_rumor = np.zeros(size, dtype=bool)
+        self.exposed_to_rumor[:rumor_believers] = True
+        self.exposed_to_truth = np.zeros(size, dtype=bool)
+
+        # 构建社交网络
+        self.network = self._build_network(network_type)
+
+    def _build_network(self, network_type: str) -> nx.Graph:
+        """构建社交网络"""
+        if network_type == "small_world":
+            # 小世界网络 - 模拟真实社交网络
+            G = nx.watts_strogatz_graph(
+                self.size,
+                k=6,           # 每人平均6个连接
+                p=0.3,         # 30%重连概率
+                seed=42
+            )
+        elif network_type == "scale_free":
+            # 无标度网络 - 存在意见领袖
+            G = nx.barabasi_albert_graph(self.size, m=3, seed=42)
+        elif network_type == "random":
+            G = nx.erdos_renyi_graph(self.size, p=0.05, seed=42)
+        else:
+            G = nx.watts_strogatz_graph(self.size, k=6, p=0.3, seed=42)
+
+        return G
+
+    def get_neighbors(self, agent_id: int) -> List[int]:
+        """获取某智能体的邻居"""
+        return list(self.network.neighbors(agent_id))
+
+    def get_edges(self) -> List[Tuple[int, int]]:
+        """获取所有边"""
+        return list(self.network.edges())
+
+    def to_agent_list(self) -> List[Dict]:
+        """转换为可序列化的智能体列表"""
+        agents = []
+        for i in range(self.size):
+            agents.append({
+                "id": i,
+                "opinion": float(self.opinions[i]),
+                "belief_strength": float(self.belief_strength[i]),
+                "influence": float(self.influence[i]),
+                "susceptibility": float(self.susceptibility[i]),
+                "exposed_to_rumor": bool(self.exposed_to_rumor[i]),
+                "exposed_to_truth": bool(self.exposed_to_truth[i])
+            })
+        return agents
+
+    def get_opinion_histogram(self, bins: int = 20) -> Dict[str, List]:
+        """计算观点分布直方图"""
+        hist, edges = np.histogram(self.opinions, bins=bins, range=(-1, 1))
+        centers = [(edges[i] + edges[i+1]) / 2 for i in range(len(edges)-1)]
+        return {
+            "counts": hist.tolist(),
+            "centers": centers
+        }

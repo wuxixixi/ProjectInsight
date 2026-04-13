@@ -1,0 +1,65 @@
+# 信息茧房推演系统 .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# 日志和报告（生成的）
+reports/*.md
+*.log
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 环境配置（敏感信息）
+.env
+.env.local
+*.pem
+*.key
+
+# Claude Code
+.claude/
