@@ -204,19 +204,24 @@ async def finish_simulation():
         return JSONResponse(content={"error": "未初始化"}, status_code=400)
 
     report_path = engine.generate_report()
+    # 使用正斜杠，避免JSON转义问题
+    report_path_safe = report_path.replace("\\", "/") if report_path else None
+    report_filename = report_path.split("\\")[-1] if report_path else None
+
     return JSONResponse(content={
         "success": True,
-        "report_path": report_path,
-        "report_filename": report_path.split("\\")[-1] if report_path else None
+        "report_path": report_path_safe,
+        "report_filename": report_filename
     })
 
 
 @app.post("/api/report/open")
 async def open_report(data: dict):
     """使用系统默认应用打开报告文件"""
-    report_path = data.get("path", "")
+    report_path = data.get("path", "").replace("/", os.sep).replace("\\", os.sep)
+
     if not report_path or not os.path.exists(report_path):
-        return JSONResponse(content={"success": False, "error": "报告文件不存在"}, status_code=404)
+        return JSONResponse(content={"success": False, "error": f"报告文件不存在: {report_path}"}, status_code=404)
 
     try:
         system = platform.system()
@@ -229,7 +234,26 @@ async def open_report(data: dict):
 
         return JSONResponse(content={"success": True, "message": "已打开报告"})
     except Exception as e:
+        logger.error(f"打开报告失败: {e}")
         return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/report/content/{filename}")
+async def get_report_content(filename: str):
+    """获取报告内容"""
+    reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
+    reports_dir = os.path.abspath(reports_dir)
+    report_path = os.path.join(reports_dir, filename)
+
+    if not os.path.exists(report_path):
+        return JSONResponse(content={"error": "报告不存在"}, status_code=404)
+
+    try:
+        with open(report_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return JSONResponse(content={"success": True, "content": content, "filename": filename})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @app.get("/api/report/list")

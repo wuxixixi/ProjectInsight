@@ -355,10 +355,30 @@
       </div>
     </div>
 
-    <!-- 报告成功提示 -->
-    <div v-if="reportGenerated" class="report-toast">
-      <p>📄 报告已生成</p>
-      <button class="btn-open-report" @click="openReport">打开报告</button>
+    <!-- 报告弹窗 -->
+    <div v-if="reportGenerated" class="report-modal-overlay" @click.self="closeReport">
+      <div class="report-modal">
+        <div class="report-modal-header">
+          <h3>📄 推演报告</h3>
+          <button class="report-close-btn" @click="closeReport">✕</button>
+        </div>
+        <div class="report-modal-body">
+          <div v-if="reportLoading" class="report-loading">
+            <div class="loading-spinner"></div>
+            <p>加载报告中...</p>
+          </div>
+          <div v-else-if="reportContent" class="report-content">
+            <pre>{{ reportContent }}</pre>
+          </div>
+          <div v-else class="report-placeholder">
+            <p>报告加载失败</p>
+          </div>
+        </div>
+        <div class="report-modal-footer">
+          <button class="btn-download" @click="downloadReport">⬇ 下载报告</button>
+          <button class="btn-view-file" @click="openReportInApp">在应用中打开</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -431,6 +451,8 @@ export default {
       reportGenerated: false,
       reportFilename: '',
       reportPath: '',
+      reportContent: '',
+      reportLoading: false,
 
       // Agent透视弹窗
       showAgentModal: false,
@@ -573,6 +595,8 @@ export default {
             this.reportGenerated = true
             this.reportFilename = msg.data.report_filename
             this.reportPath = msg.data.report_path
+            // 自动加载报告内容
+            this.loadReportContent()
           }
           break
       }
@@ -633,9 +657,42 @@ export default {
       this.sendAction('finish')
     },
 
-    async openReport() {
+    async loadReportContent() {
+      if (!this.reportFilename) return
+      this.reportLoading = true
+      this.reportContent = ''
       try {
-        const response = await fetch('/api/report/open', {
+        const response = await fetch(window.location.origin + '/api/report/content/' + this.reportFilename)
+        const data = await response.json()
+        if (data.success) {
+          this.reportContent = data.content
+        } else {
+          this.reportContent = '加载报告失败: ' + (data.error || '未知错误')
+        }
+      } catch (error) {
+        console.error('加载报告失败:', error)
+        this.reportContent = '加载报告失败: ' + error.message
+      } finally {
+        this.reportLoading = false
+      }
+    },
+
+    closeReport() {
+      this.reportGenerated = false
+    },
+
+    downloadReport() {
+      if (this.reportFilename) {
+        const link = document.createElement('a')
+        link.href = window.location.origin + '/api/report/download/' + this.reportFilename
+        link.download = this.reportFilename
+        link.click()
+      }
+    },
+
+    async openReportInApp() {
+      try {
+        const response = await fetch(window.location.origin + '/api/report/open', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: this.reportPath })
@@ -646,6 +703,7 @@ export default {
         }
       } catch (error) {
         console.error('打开报告失败:', error)
+        alert('打开报告失败: ' + error.message)
       }
     },
 
