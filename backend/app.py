@@ -4,7 +4,7 @@ Ascend 环境运行提示:
   1. conda activate info-cocoon  # 激活环境
   2. uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -238,7 +238,7 @@ async def open_report(data: dict):
         return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
 
 
-@app.get("/api/report/content/{filename}")
+@app.get("/api/report/content")
 async def get_report_content(filename: str):
     """获取报告内容"""
     reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
@@ -246,7 +246,7 @@ async def get_report_content(filename: str):
     report_path = os.path.join(reports_dir, filename)
 
     if not os.path.exists(report_path):
-        return JSONResponse(content={"error": "报告不存在"}, status_code=404)
+        return JSONResponse(content={"error": f"报告不存在: {filename}"}, status_code=404)
 
     try:
         with open(report_path, "r", encoding="utf-8") as f:
@@ -254,6 +254,23 @@ async def get_report_content(filename: str):
         return JSONResponse(content={"success": True, "content": content, "filename": filename})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/api/report/download")
+async def download_report(filename: str):
+    """下载报告文件"""
+    reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
+    reports_dir = os.path.abspath(reports_dir)
+    report_path = os.path.join(reports_dir, filename)
+
+    if not os.path.exists(report_path):
+        return JSONResponse(content={"error": "报告不存在"}, status_code=404)
+
+    return FileResponse(
+        path=report_path,
+        filename=filename,
+        media_type="text/markdown"
+    )
 
 
 @app.get("/api/report/list")

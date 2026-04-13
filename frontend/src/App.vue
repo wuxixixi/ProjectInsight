@@ -662,7 +662,9 @@ export default {
       this.reportLoading = true
       this.reportContent = ''
       try {
-        const response = await fetch(window.location.origin + '/api/report/content/' + this.reportFilename)
+        const response = await fetch(
+          window.location.origin + '/api/report/content?filename=' + encodeURIComponent(this.reportFilename)
+        )
         const data = await response.json()
         if (data.success) {
           this.reportContent = data.content
@@ -684,7 +686,7 @@ export default {
     downloadReport() {
       if (this.reportFilename) {
         const link = document.createElement('a')
-        link.href = window.location.origin + '/api/report/download/' + this.reportFilename
+        link.href = window.location.origin + '/api/report/download?filename=' + encodeURIComponent(this.reportFilename)
         link.download = this.reportFilename
         link.click()
       }
@@ -2020,41 +2022,154 @@ export default {
   overflow-y: auto;
 }
 
-/* ==================== 报告提示 ==================== */
-.report-toast {
+/* ==================== 报告弹窗 ==================== */
+.report-modal-overlay {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 300;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  background: rgba(34, 197, 94, 0.15);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 12px;
-  color: #4ade80;
-  font-size: 14px;
-  animation: slideIn 0.3s ease;
-  z-index: 50;
+  justify-content: center;
 }
 
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+.report-modal {
+  width: 700px;
+  max-height: 85vh;
+  background: linear-gradient(145deg, #0f172a, #1e1b4b);
+  border: 1px solid rgba(100, 181, 246, 0.25);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(100, 181, 246, 0.2);
 }
 
-.btn-open-report {
-  padding: 6px 14px;
-  background: rgba(34, 197, 94, 0.2);
-  border: 1px solid rgba(34, 197, 94, 0.4);
+.report-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(100, 181, 246, 0.1);
+  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
+}
+
+.report-modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.report-close-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: #4ade80;
-  font-size: 12px;
+  color: #94a3b8;
   cursor: pointer;
+  font-size: 14px;
 }
 
-.btn-open-report:hover {
-  background: rgba(34, 197, 94, 0.3);
+.report-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.report-modal-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 300px;
+}
+
+.report-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #6b7280;
+}
+
+.report-loading .loading-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(100, 181, 246, 0.2);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+.report-content {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.report-content pre {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.report-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #6b7280;
+}
+
+.report-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(100, 181, 246, 0.05);
+  border-top: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.btn-download, .btn-view-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-download {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: none;
+  color: white;
+}
+
+.btn-download:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+}
+
+.btn-view-file {
+  background: rgba(100, 181, 246, 0.15);
+  border: 1px solid rgba(100, 181, 246, 0.3);
+  color: #60a5fa;
+}
+
+.btn-view-file:hover {
+  background: rgba(100, 181, 246, 0.25);
 }
 
 /* ==================== 响应式适配 ==================== */
