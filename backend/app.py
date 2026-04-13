@@ -18,6 +18,7 @@ import logging
 
 from .simulation.engine import SimulationEngine
 from .simulation.agents import AgentPopulation
+from .simulation.llm_agents import get_agent_snapshot_global
 from .models.schemas import SimulationParams, SimulationState
 from .llm.client import LLMConfig
 
@@ -132,6 +133,67 @@ async def get_state():
         return JSONResponse(content={"error": "未初始化"}, status_code=400)
 
     return JSONResponse(content=engine.current_state.to_dict())
+
+
+@app.get("/api/agent/{agent_id}/inspect")
+async def inspect_agent(agent_id: int):
+    """
+    微观行为透视接口
+    获取指定Agent的决策上下文快照
+    """
+    global engine
+
+    # 检查引擎是否初始化
+    if engine is None:
+        return JSONResponse(
+            content={"error": "模拟未启动，请先开始推演", "has_decided": False},
+            status_code=400
+        )
+
+    # 检查agent_id是否有效
+    if agent_id < 0 or agent_id >= engine.population_size:
+        return JSONResponse(
+            content={"error": f"无效的Agent ID: {agent_id}", "has_decided": False},
+            status_code=404
+        )
+
+    # 优先从全局存储获取快照
+    snapshot = get_agent_snapshot_global(agent_id)
+
+    if snapshot:
+        return JSONResponse(content=snapshot)
+
+    # 如果全局存储没有，尝试从引擎获取
+    if engine.use_llm and engine.llm_population:
+        snapshot = engine.llm_population.get_agent_snapshot(agent_id)
+        if snapshot:
+            return JSONResponse(content=snapshot)
+
+    # 获取基础Agent信息（未参与决策）
+    if engine.use_llm and engine.llm_population:
+        agent = engine.llm_population.agents[agent_id]
+        return JSONResponse(content={
+            "agent_id": agent_id,
+            "persona": agent.persona,
+            "persona_str": f"{agent.persona['type']} - {agent.persona['desc']}",
+            "belief_strength": float(agent.belief_strength),
+            "susceptibility": float(agent.susceptibility),
+            "influence": float(agent.influence),
+            "old_opinion": float(agent.opinion),
+            "new_opinion": float(agent.opinion),
+            "received_news": [],
+            "llm_raw_response": None,
+            "emotion": "未激活",
+            "action": "未参与",
+            "generated_comment": "",
+            "reasoning": "该Agent尚未参与本轮推演，处于初始状态",
+            "has_decided": False
+        })
+
+    return JSONResponse(
+        content={"error": "Agent信息不可用", "has_decided": False},
+        status_code=500
+    )
 
 
 @app.post("/api/simulation/finish")
