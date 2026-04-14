@@ -555,8 +555,8 @@ export default {
       populationSize: 200,
       networkType: 'small_world',
 
-      // LLM并发参数
-      maxConcurrent: 400,
+      // LLM并发参数（留空则自动计算）
+      maxConcurrent: null,
       connectionPoolSize: 600,
       timeout: 60,
       maxRetries: 5,
