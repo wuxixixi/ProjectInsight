@@ -388,26 +388,26 @@
           </div>
 
           <!-- 区块B: 心理博弈过程 (沉默的螺旋) -->
-          <div v-if="agentSnapshot.perceived_climate" class="info-block psychology-block">
+          <div v-if="normalizedClimate" class="info-block psychology-block">
             <div class="block-title"><span class="block-icon">🌀</span> 心理博弈过程</div>
             <div class="block-content">
               <div class="psychology-analysis">
                 <div class="climate-info">
                   <div class="climate-item">
                     <span class="label">邻居数量</span>
-                    <span class="value">{{ agentSnapshot.perceived_climate.total }}</span>
+                    <span class="value">{{ normalizedClimate.total }}</span>
                   </div>
                   <div class="climate-item">
                     <span class="label">信谣言比例</span>
-                    <span class="value rumor">{{ (agentSnapshot.perceived_climate.pro_rumor_ratio * 100).toFixed(0) }}%</span>
+                    <span class="value rumor">{{ (normalizedClimate.pro_rumor_ratio * 100).toFixed(0) }}%</span>
                   </div>
                   <div class="climate-item">
                     <span class="label">信真相比例</span>
-                    <span class="value truth">{{ (agentSnapshot.perceived_climate.pro_truth_ratio * 100).toFixed(0) }}%</span>
+                    <span class="value truth">{{ (normalizedClimate.pro_truth_ratio * 100).toFixed(0) }}%</span>
                   </div>
                   <div class="climate-item">
                     <span class="label">沉默比例</span>
-                    <span class="value silent">{{ (agentSnapshot.perceived_climate.silent_ratio * 100).toFixed(0) }}%</span>
+                    <span class="value silent">{{ (normalizedClimate.silent_ratio * 100).toFixed(0) }}%</span>
                   </div>
                 </div>
                 <!-- 心理博弈结论 -->
@@ -422,10 +422,10 @@
                   <div class="conclusion-icon">🔊</div>
                   <div class="conclusion-text">
                     <strong>选择发声</strong>
-                    <p v-if="agentSnapshot.perceived_climate.pro_rumor_ratio > agentSnapshot.perceived_climate.pro_truth_ratio && agentSnapshot.new_opinion > 0.2">
+                    <p v-if="normalizedClimate.pro_rumor_ratio > normalizedClimate.pro_truth_ratio && agentSnapshot.new_opinion > 0.2">
                       "虽然周围信谣言的人更多，但我有足够的勇气和信念表达我的观点。"
                     </p>
-                    <p v-else-if="agentSnapshot.perceived_climate.pro_truth_ratio > agentSnapshot.perceived_climate.pro_rumor_ratio && agentSnapshot.new_opinion < -0.2">
+                    <p v-else-if="normalizedClimate.pro_truth_ratio > normalizedClimate.pro_rumor_ratio && agentSnapshot.new_opinion < -0.2">
                       "虽然周围信真相的人更多，但我坚持自己的判断，不会轻易改变。"
                     </p>
                     <p v-else>
@@ -726,6 +726,37 @@ export default {
     renderedIntelligence() {
       if (!this.intelligenceContent) return ''
       return marked(this.intelligenceContent)
+    },
+    // 兼容单层和双层网络的 perceived_climate
+    normalizedClimate() {
+      if (!this.agentSnapshot || !this.agentSnapshot.perceived_climate) return null
+
+      const pc = this.agentSnapshot.perceived_climate
+
+      // 单层网络格式：直接有 total/pro_rumor_ratio 等字段
+      if (pc.total !== undefined) {
+        return pc
+      }
+
+      // 双层网络格式：{public: {...}, private: {...}}
+      // 合并两个网络的统计数据
+      if (pc.public && pc.private) {
+        const total = (pc.public.total || 0) + (pc.private.total || 0)
+        if (total === 0) return { total: 0, pro_rumor_ratio: 0, pro_truth_ratio: 0, silent_ratio: 0 }
+
+        const rumorCount = (pc.public.pro_rumor_count || 0) + (pc.private.pro_rumor_count || 0)
+        const truthCount = (pc.public.pro_truth_count || 0) + (pc.private.pro_truth_count || 0)
+        const silentCount = (pc.public.silent_count || 0) + (pc.private.silent_count || 0)
+
+        return {
+          total: total,
+          pro_rumor_ratio: total > 0 ? rumorCount / total : 0,
+          pro_truth_ratio: total > 0 ? truthCount / total : 0,
+          silent_ratio: total > 0 ? silentCount / total : 0
+        }
+      }
+
+      return null
     }
   },
 
