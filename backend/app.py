@@ -206,7 +206,7 @@ async def finish_simulation():
     report_path = engine.generate_report()
     # 使用正斜杠，避免JSON转义问题
     report_path_safe = report_path.replace("\\", "/") if report_path else None
-    report_filename = report_path.split("\\")[-1] if report_path else None
+    report_filename = os.path.basename(report_path) if report_path else None
 
     return JSONResponse(content={
         "success": True,
@@ -448,12 +448,13 @@ async def websocket_simulation(websocket: WebSocket):
                     continue
 
                 report_path = engine.generate_report()
+                report_path_safe = report_path.replace("\\", "/") if report_path else None
                 await websocket.send_json({
                     "type": "report",
                     "data": {
                         "success": True,
-                        "report_path": report_path,
-                        "report_filename": report_path.split("\\")[-1] if report_path else None
+                        "report_path": report_path_safe,
+                        "report_filename": os.path.basename(report_path) if report_path else None
                     }
                 })
 

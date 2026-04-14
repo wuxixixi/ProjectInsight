@@ -9,28 +9,35 @@ from pathlib import Path
 
 # 服务器配置
 SERVER_HOST = "101.34.62.149"
-SERVER_USER = "root"
-SERVER_PASS = "412410"
-REMOTE_DIR = "/root/ProjectInsight"
+SERVER_USER = "ubuntu"
+SERVER_PASS = "Wuxi,62047720"
+REMOTE_DIR = "/home/ubuntu/ProjectInsight"
 
 def create_ssh_client():
     """创建SSH连接"""
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(SERVER_HOST, username=SERVER_USER, password=SERVER_PASS)
+    client.connect(SERVER_HOST, username=SERVER_USER, password=SERVER_PASS, timeout=30)
     return client
 
 def run_command(client, cmd, show_output=True):
     """执行远程命令"""
     print(f"[CMD] {cmd}")
     stdin, stdout, stderr = client.exec_command(cmd)
-    out = stdout.read().decode('utf-8')
-    err = stderr.read().decode('utf-8')
+    out = stdout.read().decode('utf-8', errors='replace')
+    err = stderr.read().decode('utf-8', errors='replace')
     if show_output:
         if out:
-            print(out)
+            # 过滤掉无法编码的字符
+            try:
+                print(out)
+            except UnicodeEncodeError:
+                print(out.encode('gbk', errors='replace').decode('gbk'))
         if err:
-            print(f"[ERR] {err}")
+            try:
+                print(f"[ERR] {err}")
+            except UnicodeEncodeError:
+                print(f"[ERR] {err.encode('gbk', errors='replace').decode('gbk')}")
     return out, err, stdout.channel.recv_exit_status()
 
 def upload_directory(client, local_dir, remote_dir):
@@ -42,8 +49,8 @@ def upload_directory(client, local_dir, remote_dir):
         try:
             sftp.stat(path)
         except FileNotFoundError:
-            parent = str(Path(path).parent)
-            if parent != path:
+            parent = '/'.join(path.split('/')[:-1])
+            if parent and parent != path:
                 mkdir_p(parent)
             try:
                 sftp.mkdir(path)
@@ -52,21 +59,27 @@ def upload_directory(client, local_dir, remote_dir):
 
     mkdir_p(remote_dir)
 
-    for root, dirs, files in os.walk(local_dir):
-        # 跳过不需要上传的目录
-        rel_path = os.path.relpath(root, local_dir)
-        if rel_path.startswith(('.git', '__pycache__', 'node_modules', '.venv', 'venv')):
-            continue
+    # 需要跳过的目录名
+    skip_dirs = {'.git', '__pycache__', 'node_modules', '.venv', 'venv', '.pytest_cache', '.claude'}
 
-        remote_path = os.path.join(remote_dir, rel_path) if rel_path != '.' else remote_dir
+    for root, dirs, files in os.walk(local_dir):
+        # 跳过不需要上传的目录（修改dirs列表会影响os.walk的遍历）
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+
+        rel_path = os.path.relpath(root, local_dir)
+        # 使用正斜杠作为远程路径分隔符
+        if rel_path == '.':
+            remote_path = remote_dir
+        else:
+            remote_path = remote_dir + '/' + rel_path.replace('\\', '/')
         mkdir_p(remote_path)
 
         for f in files:
             # 跳过不需要上传的文件
-            if f.endswith(('.pyc', '.pyo', '.log')):
+            if f.endswith(('.pyc', '.pyo', '.log', '.lock')):
                 continue
             local_file = os.path.join(root, f)
-            remote_file = os.path.join(remote_path, f)
+            remote_file = remote_path + '/' + f
             print(f"[UPLOAD] {local_file} -> {remote_file}")
             try:
                 sftp.put(local_file, remote_file)
@@ -95,8 +108,8 @@ def main():
     # 安装必要软件
     print("\n[3] 安装依赖软件...")
     commands = [
-        "apt-get update -qq",
-        "apt-get install -y -qq python3 python3-pip python3-venv nodejs npm git",
+        "sudo apt-get update -qq",
+        "sudo apt-get install -y -qq python3 python3-pip python3-venv nodejs npm git",
     ]
     for cmd in commands:
         run_command(client, cmd)
@@ -109,8 +122,8 @@ def main():
 
     if node_version in ('none', ''):
         # 安装Node.js 18
-        run_command(client, "curl -fsSL https://deb.nodesource.com/setup_18.x | bash -")
-        run_command(client, "apt-get install -y nodejs")
+        run_command(client, "curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -")
+        run_command(client, "sudo apt-get install -y nodejs")
 
     # 创建项目目录
     print("\n[5] 创建项目目录...")
@@ -140,6 +153,7 @@ After=network.target
 
 [Service]
 Type=simple
+User=ubuntu
 WorkingDirectory={REMOTE_DIR}
 ExecStart=/usr/bin/python3 -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 Restart=always
@@ -149,14 +163,14 @@ RestartSec=3
 WantedBy=multi-user.target
 """
     # 写入服务文件
-    run_command(client, f"echo '{backend_service}' > /etc/systemd/system/info-cocoon.service")
-    run_command(client, "systemctl daemon-reload")
-    run_command(client, "systemctl enable info-cocoon")
-    run_command(client, "systemctl restart info-cocoon")
+    run_command(client, f"echo '{backend_service}' | sudo tee /etc/systemd/system/info-cocoon.service")
+    run_command(client, "sudo systemctl daemon-reload")
+    run_command(client, "sudo systemctl enable info-cocoon")
+    run_command(client, "sudo systemctl restart info-cocoon")
 
     # 配置nginx
     print("\n[11] 配置Nginx...")
-    run_command(client, "apt-get install -y nginx")
+    run_command(client, "sudo apt-get install -y nginx")
 
     nginx_config = f"""server {{
     listen 80;
@@ -188,15 +202,15 @@ WantedBy=multi-user.target
         proxy_read_timeout 86400;
     }}
 }}"""
-    run_command(client, f"echo '{nginx_config}' > /etc/nginx/sites-available/info-cocoon")
-    run_command(client, "rm -f /etc/nginx/sites-enabled/default")
-    run_command(client, "ln -sf /etc/nginx/sites-available/info-cocoon /etc/nginx/sites-enabled/")
-    run_command(client, "nginx -t && systemctl restart nginx")
+    run_command(client, f"echo '{nginx_config}' | sudo tee /etc/nginx/sites-available/info-cocoon")
+    run_command(client, "sudo rm -f /etc/nginx/sites-enabled/default")
+    run_command(client, "sudo ln -sf /etc/nginx/sites-available/info-cocoon /etc/nginx/sites-enabled/")
+    run_command(client, "sudo nginx -t && sudo systemctl restart nginx")
 
     # 检查服务状态
     print("\n[12] 检查服务状态...")
-    run_command(client, "systemctl status info-cocoon --no-pager || true")
-    run_command(client, "systemctl status nginx --no-pager || true")
+    run_command(client, "sudo systemctl status info-cocoon --no-pager || true")
+    run_command(client, "sudo systemctl status nginx --no-pager || true")
 
     client.close()
 

@@ -109,8 +109,11 @@
         <button v-if="currentStep > 0 && !isRunning" class="btn-report" @click="generateReport">
           <span>📄</span> 生成报告
         </button>
+        <button class="btn-history" @click="fetchReportList">
+          <span>📚</span> 历史报告
+        </button>
         <button class="btn-settings" @click="showSettingsDrawer = true">
-          <span>⚙️</span> 高级设置
+          <span>⚙️</span> 设置
         </button>
       </div>
     </aside>
@@ -376,7 +379,35 @@
         </div>
         <div class="report-modal-footer">
           <button class="btn-download" @click="downloadReport">⬇ 下载报告</button>
-          <button class="btn-view-file" @click="openReportInApp">在应用中打开</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史报告列表弹窗 -->
+    <div v-if="showReportList" class="report-modal-overlay" @click.self="showReportList = false">
+      <div class="report-modal">
+        <div class="report-modal-header">
+          <h3>📚 历史报告</h3>
+          <button class="report-close-btn" @click="showReportList = false">✕</button>
+        </div>
+        <div class="report-modal-body">
+          <div v-if="reportListLoading" class="report-loading">
+            <div class="loading-spinner"></div>
+            <p>加载报告列表...</p>
+          </div>
+          <div v-else-if="reportList.length > 0" class="report-list">
+            <div v-for="report in reportList" :key="report.filename" class="report-item" @click="viewHistoryReport(report)">
+              <div class="report-item-icon">📄</div>
+              <div class="report-item-info">
+                <div class="report-item-name">{{ report.filename }}</div>
+                <div class="report-item-meta">{{ formatFileSize(report.size) }} · {{ formatDate(report.modified) }}</div>
+              </div>
+              <div class="report-item-action">查看</div>
+            </div>
+          </div>
+          <div v-else class="report-placeholder">
+            <p>暂无历史报告</p>
+          </div>
         </div>
       </div>
     </div>
@@ -453,6 +484,11 @@ export default {
       reportPath: '',
       reportContent: '',
       reportLoading: false,
+
+      // 历史报告列表
+      showReportList: false,
+      reportList: [],
+      reportListLoading: false,
 
       // Agent透视弹窗
       showAgentModal: false,
@@ -534,7 +570,7 @@ export default {
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
-      const wsUrl = 'ws://localhost:8000/ws/simulation'
+      const wsUrl = (window.location.origin.replace('http', 'ws')) + '/ws/simulation'
       console.log('连接 WebSocket:', wsUrl)
 
       try {
@@ -683,6 +719,43 @@ export default {
       this.reportGenerated = false
     },
 
+    // ==================== 历史报告功能 ====================
+
+    async fetchReportList() {
+      this.showReportList = true
+      this.reportListLoading = true
+      this.reportList = []
+      try {
+        const response = await fetch(window.location.origin + '/api/report/list')
+        const data = await response.json()
+        this.reportList = data.reports || []
+      } catch (error) {
+        console.error('获取报告列表失败:', error)
+        this.reportList = []
+      } finally {
+        this.reportListLoading = false
+      }
+    },
+
+    async viewHistoryReport(report) {
+      this.showReportList = false
+      this.reportFilename = report.filename
+      this.reportPath = report.path
+      this.reportGenerated = true
+      await this.loadReportContent()
+    },
+
+    formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B'
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+      return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+    },
+
+    formatDate(timestamp) {
+      const date = new Date(timestamp * 1000)
+      return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    },
+
     downloadReport() {
       if (this.reportFilename) {
         const link = document.createElement('a')
@@ -718,7 +791,7 @@ export default {
       this.agentSnapshot = null
 
       try {
-        const response = await fetch(`http://localhost:8000/api/agent/${agentId}/inspect`)
+        const response = await fetch(`${window.location.origin}/api/agent/${agentId}/inspect`)
         const data = await response.json()
         this.agentSnapshot = data
       } catch (error) {
@@ -2170,6 +2243,81 @@ export default {
 
 .btn-view-file:hover {
   background: rgba(100, 181, 246, 0.25);
+}
+
+/* 历史报告列表样式 */
+.report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.report-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(100, 181, 246, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.report-item:hover {
+  background: rgba(100, 181, 246, 0.1);
+  border-color: rgba(100, 181, 246, 0.3);
+}
+
+.report-item-icon {
+  font-size: 24px;
+}
+
+.report-item-info {
+  flex: 1;
+}
+
+.report-item-name {
+  font-size: 13px;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.report-item-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.report-item-action {
+  font-size: 12px;
+  color: #60a5fa;
+  padding: 4px 12px;
+  background: rgba(100, 181, 246, 0.15);
+  border-radius: 4px;
+}
+
+.btn-history {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-history:hover {
+  background: rgba(100, 181, 246, 0.1);
+  color: #60a5fa;
 }
 
 /* ==================== 响应式适配 ==================== */
