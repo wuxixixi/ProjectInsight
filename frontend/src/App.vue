@@ -156,6 +156,13 @@
             <span class="kpi-value">{{ avgOpinion.toFixed(3) }}</span>
           </div>
         </div>
+        <div class="kpi-card purple">
+          <div class="kpi-icon">🤫</div>
+          <div class="kpi-content">
+            <span class="kpi-label">沉默率</span>
+            <span class="kpi-value">{{ (silenceRate * 100).toFixed(1) }}<small>%</small></span>
+          </div>
+        </div>
         <div class="kpi-card warning">
           <div class="kpi-icon">⚡</div>
           <div class="kpi-content">
@@ -183,9 +190,20 @@
           <div class="chart-card network-chart">
             <div class="chart-header">
               <h3>信息传播网络</h3>
-              <span class="chart-tip">点击节点查看Agent详情</span>
+              <div class="network-tabs">
+                <button :class="['tab-btn', { active: activeNetworkTab === 'public' }]" @click="activeNetworkTab = 'public'">
+                  🏛️ 公域广场
+                </button>
+                <button :class="['tab-btn', { active: activeNetworkTab === 'private' }]" @click="activeNetworkTab = 'private'">
+                  🏠 私域茧房
+                </button>
+              </div>
             </div>
             <div class="chart-body" ref="networkChart"></div>
+            <div class="network-info">
+              <span v-if="activeNetworkTab === 'public'">大V数量: {{ numInfluencers }} | 节点大小表示影响力</span>
+              <span v-else>社群数量: {{ numCommunities }} | 不同颜色代表不同社群</span>
+            </div>
           </div>
         </div>
 
@@ -307,11 +325,70 @@
                   <span class="label">当前立场</span>
                   <span :class="['value', 'status-badge', agentOpinionClass]">{{ agentOpinionLabel }}</span>
                 </div>
+                <!-- 沉默的螺旋：新增属性 -->
+                <div class="info-item">
+                  <span class="label">孤立恐惧感</span>
+                  <span :class="['value', agentSnapshot.fear_of_isolation > 0.6 ? 'warning' : '']">{{ (agentSnapshot.fear_of_isolation * 100).toFixed(0) }}%</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">沉默状态</span>
+                  <span :class="['value', 'status-badge', agentSnapshot.is_silent ? 'silent' : 'active']">{{ agentSnapshot.is_silent ? '🤫 沉默' : '🔊 发声' }}</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- 区块B: 信息刺激 -->
+          <!-- 区块B: 心理博弈过程 (沉默的螺旋) -->
+          <div v-if="agentSnapshot.perceived_climate" class="info-block psychology-block">
+            <div class="block-title"><span class="block-icon">🌀</span> 心理博弈过程</div>
+            <div class="block-content">
+              <div class="psychology-analysis">
+                <div class="climate-info">
+                  <div class="climate-item">
+                    <span class="label">邻居数量</span>
+                    <span class="value">{{ agentSnapshot.perceived_climate.total }}</span>
+                  </div>
+                  <div class="climate-item">
+                    <span class="label">信谣言比例</span>
+                    <span class="value rumor">{{ (agentSnapshot.perceived_climate.pro_rumor_ratio * 100).toFixed(0) }}%</span>
+                  </div>
+                  <div class="climate-item">
+                    <span class="label">信真相比例</span>
+                    <span class="value truth">{{ (agentSnapshot.perceived_climate.pro_truth_ratio * 100).toFixed(0) }}%</span>
+                  </div>
+                  <div class="climate-item">
+                    <span class="label">沉默比例</span>
+                    <span class="value silent">{{ (agentSnapshot.perceived_climate.silent_ratio * 100).toFixed(0) }}%</span>
+                  </div>
+                </div>
+                <!-- 心理博弈结论 -->
+                <div v-if="agentSnapshot.is_silent" class="psychology-conclusion silent">
+                  <div class="conclusion-icon">🤫</div>
+                  <div class="conclusion-text">
+                    <strong>选择沉默</strong>
+                    <p>"虽然我不完全认同周围人的观点，但大家都这样想，我怕被孤立/被骂/被攻击，所以选择保持沉默。"</p>
+                  </div>
+                </div>
+                <div v-else class="psychology-conclusion active">
+                  <div class="conclusion-icon">🔊</div>
+                  <div class="conclusion-text">
+                    <strong>选择发声</strong>
+                    <p v-if="agentSnapshot.perceived_climate.pro_rumor_ratio > agentSnapshot.perceived_climate.pro_truth_ratio && agentSnapshot.new_opinion > 0.2">
+                      "虽然周围信谣言的人更多，但我有足够的勇气和信念表达我的观点。"
+                    </p>
+                    <p v-else-if="agentSnapshot.perceived_climate.pro_truth_ratio > agentSnapshot.perceived_climate.pro_rumor_ratio && agentSnapshot.new_opinion < -0.2">
+                      "虽然周围信真相的人更多，但我坚持自己的判断，不会轻易改变。"
+                    </p>
+                    <p v-else>
+                      "舆论环境相对宽松，我可以自由表达我的观点。"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 区块C: 信息刺激 -->
           <div class="info-block stimulus-block">
             <div class="block-title"><span class="block-icon">📡</span> 信息刺激</div>
             <div class="block-content">
@@ -322,7 +399,7 @@
             </div>
           </div>
 
-          <!-- 区块C: LLM决策输出 -->
+          <!-- 区块D: LLM决策输出 -->
           <div class="info-block decision-block">
             <div class="block-title"><span class="block-icon">🧠</span> LLM 决策引擎输出</div>
             <div class="block-content">
@@ -337,9 +414,13 @@
                     <span class="value action">{{ agentSnapshot.action || '-' }}</span>
                   </div>
                   <div class="summary-item">
-                    <span class="label">观点变化</span>
-                    <span class="value opinion-change">{{ agentSnapshot.old_opinion?.toFixed(3) }} → {{ agentSnapshot.new_opinion?.toFixed(3) }}</span>
+                    <span class="label">沉默决策</span>
+                    <span :class="['value', agentSnapshot.is_silent ? 'silent-status' : 'active-status']">{{ agentSnapshot.is_silent ? '是' : '否' }}</span>
                   </div>
+                </div>
+                <div class="summary-row">
+                  <span class="label">观点变化</span>
+                  <span class="value opinion-change">{{ agentSnapshot.old_opinion?.toFixed(3) }} → {{ agentSnapshot.new_opinion?.toFixed(3) }}</span>
                 </div>
                 <div v-if="agentSnapshot.generated_comment" class="generated-comment">
                   <span class="label">生成评论</span>
@@ -495,6 +576,7 @@ export default {
       truthAcceptanceRate: 0,
       avgOpinion: 0,
       polarizationIndex: 0,
+      silenceRate: 0,  // 沉默率
 
       // 动画数值
       animatedStep: 0,
@@ -508,8 +590,21 @@ export default {
         rumorRates: [],
         truthRates: [],
         avgOpinions: [],
-        polarization: []
+        polarization: [],
+        silenceRates: [],  // 沉默率历史
+        publicRumorRates: [],   // 公域谣言率历史
+        privateRumorRates: []   // 私域谣言率历史
       },
+
+      // 双层网络相关
+      useDualNetwork: false,
+      publicEdges: [],
+      privateEdges: [],
+      activeNetworkTab: 'public',
+      publicRumorRate: 0,
+      privateRumorRate: 0,
+      numCommunities: 0,
+      numInfluencers: 0,
 
       // 图表实例
       opinionChartInstance: null,
@@ -705,8 +800,19 @@ export default {
         rumorRates: [],
         truthRates: [],
         avgOpinions: [],
-        polarization: []
+        polarization: [],
+        silenceRates: [],
+        publicRumorRates: [],
+        privateRumorRates: []
       }
+
+      // 重置双层网络数据
+      this.publicEdges = []
+      this.privateEdges = []
+      this.publicRumorRate = 0
+      this.privateRumorRate = 0
+      this.numCommunities = 0
+      this.numInfluencers = 0
 
       this.sendAction('start', {
         params: {
@@ -719,7 +825,10 @@ export default {
           max_concurrent: this.maxConcurrent,
           connection_pool_size: this.connectionPoolSize,
           timeout: this.timeout,
-          max_retries: this.maxRetries
+          max_retries: this.maxRetries,
+          use_dual_network: true,  // 启用双层网络模式
+          num_communities: 8,      // 私域社群数量
+          public_m: 3              // 公域网络参数
         }
       })
 
@@ -949,11 +1058,23 @@ export default {
       this.currentStep = data.step
       this.agents = data.agents
       this.edges = data.edges
+
+      // 双层网络边数据
+      this.publicEdges = data.public_edges || data.edges || []
+      this.privateEdges = data.private_edges || []
+
+      // 双层统计数据
+      this.publicRumorRate = data.public_rumor_rate || data.rumor_spread_rate
+      this.privateRumorRate = data.private_rumor_rate || data.rumor_spread_rate
+      this.numCommunities = data.num_communities || 0
+      this.numInfluencers = data.num_influencers || 0
+
       this.opinionDist = data.opinion_distribution
       this.rumorSpreadRate = data.rumor_spread_rate
       this.truthAcceptanceRate = data.truth_acceptance_rate
       this.avgOpinion = data.avg_opinion
       this.polarizationIndex = data.polarization_index
+      this.silenceRate = data.silence_rate || 0
       this.debunked = data.step >= this.debunkDelay
 
       this.trendHistory.steps.push(data.step)
@@ -961,6 +1082,9 @@ export default {
       this.trendHistory.truthRates.push(data.truth_acceptance_rate)
       this.trendHistory.avgOpinions.push(data.avg_opinion)
       this.trendHistory.polarization.push(data.polarization_index)
+      this.trendHistory.silenceRates.push(data.silence_rate || 0)
+      this.trendHistory.publicRumorRates.push(data.public_rumor_rate || data.rumor_spread_rate)
+      this.trendHistory.privateRumorRates.push(data.private_rumor_rate || data.rumor_spread_rate)
 
       this.agentProgress = ''
 
@@ -1059,28 +1183,70 @@ export default {
     renderNetworkChart() {
       if (!this.agents.length) return
 
+      // 根据当前 Tab 选择边数据
+      const edges = this.activeNetworkTab === 'public' ? this.publicEdges : this.privateEdges
+      const actualEdges = edges.length > 0 ? edges : this.edges
+
+      // 社群颜色
+      const communityColors = [
+        '#60a5fa', '#a78bfa', '#f472b6', '#fb923c',
+        '#4ade80', '#22d3ee', '#facc15', '#e879f9'
+      ]
+
       const nodes = this.agents.map(agent => {
         let color
         if (agent.opinion < -0.2) color = '#ef4444'
         else if (agent.opinion > 0.2) color = '#22c55e'
         else color = '#f59e0b'
 
+        // 沉默的节点透明度降低
+        const opacity = agent.is_silent ? 0.3 : 1.0
+
+        // 公域网络 vs 私域网络样式
+        let symbolSize
+        if (this.activeNetworkTab === 'public') {
+          // 公域：按影响力大小，大V节点更大
+          symbolSize = agent.is_influencer
+            ? 12 + agent.influence * 15
+            : 4 + agent.influence * 6
+        } else {
+          // 私域：按社群颜色区分
+          color = communityColors[agent.community_id % 8] || color
+          symbolSize = agent.is_silent ? 3 : 5
+        }
+
         return {
           id: agent.id.toString(),
-          symbolSize: 4 + agent.influence * 8,
-          itemStyle: { color },
+          symbolSize: symbolSize,
+          itemStyle: {
+            color: color,
+            opacity: opacity,
+            borderColor: agent.is_influencer ? '#fcd34d' : null,
+            borderWidth: agent.is_influencer ? 2 : 0
+          },
+          label: agent.is_influencer && this.activeNetworkTab === 'public' ? {
+            show: true,
+            formatter: 'V',
+            fontSize: 10,
+            color: '#fcd34d'
+          } : null,
           x: Math.random() * 800,
           y: Math.random() * 500
         }
       })
 
-      const sampledEdges = this.edges
-        .filter(() => Math.random() < 0.25)
-        .slice(0, 400)
+      const sampledEdges = actualEdges
+        .filter(() => Math.random() < 0.3)
+        .slice(0, 500)
         .map(([source, target]) => ({
           source: source.toString(),
           target: target.toString(),
-          lineStyle: { color: 'rgba(100, 181, 246, 0.15)', width: 0.5 }
+          lineStyle: {
+            color: this.activeNetworkTab === 'public'
+              ? 'rgba(100, 181, 246, 0.2)'
+              : 'rgba(167, 139, 250, 0.15)',
+            width: 0.5
+          }
         }))
 
       const option = {
@@ -1090,9 +1256,14 @@ export default {
             if (params.dataType === 'node') {
               const agent = this.agents.find(a => a.id.toString() === params.data.id)
               if (agent) {
+                const influencerTag = agent.is_influencer ? ' [大V]' : ''
+                const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
+                const tag = this.activeNetworkTab === 'public' ? influencerTag : communityTag
+                const silenceTag = agent.is_silent ? ' [沉默]' : ''
                 return `<div style="padding: 8px;">
-                  <div style="font-weight: bold; margin-bottom: 4px;">Agent ${agent.id}</div>
+                  <div style="font-weight: bold;">Agent ${agent.id}${tag}${silenceTag}</div>
                   <div>观点: ${agent.opinion.toFixed(3)}</div>
+                  <div>发布渠道: ${agent.publish_channel || 'none'}</div>
                   <div style="color: #64b5f6; margin-top: 4px;">点击查看详情</div>
                 </div>`
               }
@@ -1111,8 +1282,8 @@ export default {
           roam: true,
           draggable: true,
           force: {
-            repulsion: 80,
-            edgeLength: 40,
+            repulsion: this.activeNetworkTab === 'public' ? 100 : 50,
+            edgeLength: this.activeNetworkTab === 'public' ? 60 : 30,
             gravity: 0.1
           },
           emphasis: {
@@ -1136,6 +1307,10 @@ export default {
     },
 
     renderTrendChart() {
+      // 判断是否有双层数据
+      const hasDualData = this.trendHistory.publicRumorRates.length > 0 &&
+                          this.publicRumorRates !== this.trendHistory.rumorRates
+
       const option = {
         backgroundColor: 'transparent',
         tooltip: {
@@ -1145,7 +1320,7 @@ export default {
           textStyle: { color: '#e0e0e0' }
         },
         legend: {
-          data: ['谣言传播率', '真相接受率', '平均观点', '极化指数'],
+          data: ['谣言传播率', '真相接受率', '平均观点', '极化指数', '沉默率', '公域谣言率', '私域谣言率'],
           textStyle: { color: '#6b7280', fontSize: 11 },
           top: 5,
           itemWidth: 16,
@@ -1237,6 +1412,45 @@ export default {
             itemStyle: { color: '#f59e0b' },
             smooth: true,
             symbol: 'none'
+          },
+          {
+            name: '沉默率',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.silenceRates,
+            lineStyle: { color: '#8b5cf6', width: 2, type: 'dotted' },
+            itemStyle: { color: '#8b5cf6' },
+            smooth: true,
+            symbol: 'none',
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(139, 92, 246, 0.2)' },
+                { offset: 1, color: 'rgba(139, 92, 246, 0.02)' }
+              ])
+            }
+          },
+          // 双层网络：公域/私域谣言率曲线
+          {
+            name: '公域谣言率',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.publicRumorRates,
+            lineStyle: { color: '#f97316', width: 2, type: 'dashed' },
+            itemStyle: { color: '#f97316' },
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 4
+          },
+          {
+            name: '私域谣言率',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.privateRumorRates,
+            lineStyle: { color: '#dc2626', width: 2, type: 'solid' },
+            itemStyle: { color: '#dc2626' },
+            smooth: true,
+            symbol: 'diamond',
+            symbolSize: 4
           }
         ]
       }
@@ -1676,6 +1890,19 @@ export default {
   color: #f59e0b;
 }
 
+.kpi-card.purple {
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.kpi-card.purple .kpi-icon {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+.kpi-card.purple .kpi-value {
+  color: #a78bfa;
+}
+
 .kpi-icon {
   width: 44px;
   height: 44px;
@@ -1798,6 +2025,42 @@ export default {
 .chart-tip {
   font-size: 11px;
   color: #6b7280;
+}
+
+/* 网络 Tab 切换 */
+.network-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: rgba(100, 181, 246, 0.1);
+}
+
+.tab-btn.active {
+  background: rgba(100, 181, 246, 0.2);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.network-info {
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #6b7280;
+  margin: 8px 12px;
 }
 
 .debunk-badge {
@@ -2101,6 +2364,128 @@ export default {
 .status-badge.neutral {
   background: rgba(245, 158, 11, 0.15);
   color: #fbbf24;
+}
+
+/* 沉默状态徽章 */
+.status-badge.silent {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+/* 心理博弈区块 */
+.psychology-block {
+  border-color: rgba(139, 92, 246, 0.25);
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.05) 0%, rgba(0, 0, 0, 0.3) 100%);
+}
+
+.psychology-block .block-title {
+  background: rgba(139, 92, 246, 0.1);
+  color: #a78bfa;
+}
+
+.psychology-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.climate-info {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.climate-item {
+  text-align: center;
+  padding: 10px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: 6px;
+}
+
+.climate-item .label {
+  display: block;
+  font-size: 10px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.climate-item .value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.climate-item .value.rumor { color: #f87171; }
+.climate-item .value.truth { color: #4ade80; }
+.climate-item .value.silent { color: #a78bfa; }
+
+.psychology-conclusion {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  align-items: flex-start;
+}
+
+.psychology-conclusion.silent {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.psychology-conclusion.active {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.conclusion-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.conclusion-text strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.psychology-conclusion.silent .conclusion-text strong { color: #a78bfa; }
+.psychology-conclusion.active .conclusion-text strong { color: #4ade80; }
+
+.conclusion-text p {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* 沉默决策状态 */
+.value.warning { color: #fbbf24; }
+.value.silent-status { color: #a78bfa; font-weight: 600; }
+.value.active-status { color: #4ade80; font-weight: 600; }
+
+.summary-row {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(100, 181, 246, 0.05);
+  border-radius: 6px;
+}
+
+.summary-row .label {
+  display: block;
+  font-size: 10px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.summary-row .value {
+  font-size: 13px;
+  color: #e2e8f0;
 }
 
 .decision-block {

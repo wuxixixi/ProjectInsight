@@ -186,45 +186,40 @@ class DataSampler:
 # AnalystAgent System Prompt
 ANALYST_SYSTEM_PROMPT = """你是一位上海社会科学院（国家高端智库）觉测团队的资深舆情分析专家，拥有丰富的网络舆论研究和危机应对经验。你的任务是针对信息茧房推演系统的模拟结果，撰写一份结构严谨、语气专业的内参报告。
 
-## 你的专业背景
+你的专业背景:
 - 深谙网络舆论传播规律，对算法推荐机制有深入研究
 - 熟悉社交心理学和群体行为学理论
 - 具备丰富的舆情危机应对和政策建议经验
 - 文风严谨、客观，使用学术化、专业化的表述
 
-## 报告撰写要求
-1. 使用 Markdown 格式输出
-2. 语言风格要正式、专业，避免口语化
-3. 数据引用要准确，分析要有理有据
-4. 政策建议要切实可行，具有操作性
-5. 报告末尾必须注明：本分析基于上海社会科学院觉测团队【洞见】多智能体舆论认知干预沙盘仿真数据
+报告撰写要求:
+1. 直接输出报告正文，不要使用代码块包裹
+2. 使用 Markdown 标题格式（## 一、核心摘要 等）
+3. 语言风格要正式、专业，避免口语化
+4. 数据引用要准确，分析要有理有据
+5. 政策建议要切实可行，具有操作性
+6. 报告末尾注明：本分析基于上海社会科学院觉测团队【洞见】多智能体舆论认知干预沙盘仿真数据
 """
 
-ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库专报（Markdown格式，直接输出）。
+ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库专报。
 
-**参数**: {use_llm_mode}模式，{population_size}人，茧房强度{cocoon_strength:.1f}，辟谣延迟{debunk_delay}步
-**趋势**: 谣言率 {initial_rumor_rate:.0%}→{final_rumor_rate:.0%}，真相率 {initial_truth_rate:.0%}→{final_truth_rate:.0%}
-**极化**: {initial_polarization:.2f}→{final_polarization:.2f}
+参数: {use_llm_mode}模式，{population_size}人，茧房强度{cocoon_strength:.1f}，辟谣延迟{debunk_delay}步
+趋势: 谣言率 {initial_rumor_rate:.0%}→{final_rumor_rate:.0%}，真相率 {initial_truth_rate:.0%}→{final_truth_rate:.0%}
+极化: {initial_polarization:.2f}→{final_polarization:.2f}
 
-**转化样本**:
+转化样本:
 {converted_samples}
 
-**顽固样本**:
+顽固样本:
 {stubborn_samples}
 
----
-报告结构（共4节，每节150-200字）：
-## 一、核心摘要
-关键发现与结论。
+报告结构（共4节，每节150-200字）:
+一、核心摘要 - 关键发现与结论
+二、参数影响分析 - 茧房强度、辟谣时机对舆论的影响
+三、个体认知分析 - 分析上述样本的心理机制
+四、政策建议 - 3条可行的干预建议
 
-## 二、参数影响分析
-茧房强度、辟谣时机对舆论的影响。
-
-## 三、个体认知分析
-分析上述样本的心理机制。
-
-## 四、政策建议
-3条可行的干预建议。"""
+请直接输出报告内容，使用中文撰写。"""
 
 
 class AnalystAgent:
@@ -260,16 +255,16 @@ class AnalystAgent:
 
         lines = []
         for i, s in enumerate(samples, 1):
-            lines.append(f"""**样本{i}**: Agent #{s['agent_id']}
-- 人设: {s['persona_str']}
-- 信念强度: {s['belief_strength']:.2f}, 易感性: {s['susceptibility']:.2f}
-- 观点变化: {s['old_opinion']:.2f} → {s['new_opinion']:.2f}
-- 情绪状态: {s['emotion']}
-- 行动选择: {s['action']}
-- 理由: {s['reasoning']}
-- 生成评论: "{s['generated_comment']}" """ if s.get('generated_comment') else "")
+            comment_part = f"，评论：「{s['generated_comment']}」" if s.get('generated_comment') else ""
+            lines.append(
+                f"样本{i}: Agent #{s['agent_id']}，人设「{s['persona_str']}」，"
+                f"信念{ s['belief_strength']:.0%}，易感{s['susceptibility']:.0%}，"
+                f"观点{ s['old_opinion']:.2f}→{s['new_opinion']:.2f}，"
+                f"情绪「{s['emotion']}」，行动「{s['action']}」，"
+                f"理由：{s['reasoning']}{comment_part}"
+            )
 
-        return "\n\n".join(lines)
+        return "\n".join(lines)
 
     async def generate_report(self, context: Dict[str, Any]) -> str:
         """
@@ -335,10 +330,11 @@ class AnalystAgent:
             content = response["choices"][0]["message"]["content"]
 
             # 添加报告头部
-            header = f"""---
-title: 信息茧房推演智库专报
-date: {context['generated_at']}
-generated_by: AI分析师智能体
+            header = f"""# 信息茧房推演智库专报
+
+> 生成时间: {context['generated_at']}
+> 分析工具: AI分析师智能体
+
 ---
 
 """
@@ -404,10 +400,11 @@ generated_by: AI分析师智能体
 
         try:
             # 先输出报告头部
-            header = f"""---
-title: 信息茧房推演智库专报
-date: {context['generated_at']}
-generated_by: AI分析师智能体
+            header = f"""# 信息茧房推演智库专报
+
+> 生成时间: {context['generated_at']}
+> 分析工具: AI分析师智能体
+
 ---
 
 """

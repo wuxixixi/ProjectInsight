@@ -18,8 +18,8 @@ class LLMConfig:
     """LLM 配置"""
     base_url: str = "http://10.17.2.29:31277/v1"
     api_key: str = "R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs"
-    model: str = "DeepSeek-V3"
-    max_concurrent: int = 400  # 最大并发数，提升至400
+    model: str = "Qwen2.5-32B-Instruct"
+    max_concurrent: int = 100  # 默认并发数，实际会根据 Agent 数量自动调节
     timeout: int = 60  # 60秒超时控制
     max_retries: int = 5  # 最大重试次数
     temperature: float = 0.7

@@ -17,8 +17,10 @@ import platform
 import logging
 
 from .simulation.engine import SimulationEngine
+from .simulation.engine_dual import SimulationEngineDual
 from .simulation.agents import AgentPopulation
 from .simulation.llm_agents import get_agent_snapshot_global
+from .simulation.llm_agents_dual import get_agent_snapshot_global as get_agent_snapshot_global_dual
 from .simulation.analyst_agent import generate_intelligence_report, AnalystAgent, DataSampler
 from .models.schemas import SimulationParams, SimulationState
 from .llm.client import LLMConfig
@@ -59,11 +61,25 @@ class StartRequest(BaseModel):
     network_type: str = "small_world"
     use_llm: bool = True
 
-    # LLM并发参数
-    max_concurrent: int = 400
+    # LLM并发参数（留空则自动计算）
+    max_concurrent: Optional[int] = None  # None 表示根据 population_size 自动计算
     connection_pool_size: int = 600
     timeout: int = 60
     max_retries: int = 5
+
+    # 双层网络参数
+    use_dual_network: bool = True     # 是否使用双层网络模式
+    num_communities: int = 8          # 私域社群数量
+    public_m: int = 3                 # 公域网络 BA 模型参数
+
+
+def calculate_max_concurrent(population_size: int) -> int:
+    """
+    根据 Agent 数量自动计算合理的并发数
+
+    策略：取 population_size 的 50%，但限制在 [10, 100] 范围内
+    """
+    return max(10, min(int(population_size * 0.5), 100))
 
 
 @app.get("/")
@@ -80,26 +96,44 @@ async def start_simulation(params: StartRequest):
     """
     global engine
 
+    # 自动计算并发数（如果未指定）
+    max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
+    logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {params.population_size})")
+
     # 从请求参数获取LLM配置
     llm_config = LLMConfig(
         base_url="http://10.17.2.29:31277/v1",
         api_key="R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs",
-        model="DeepSeek-V3",
-        max_concurrent=params.max_concurrent,
+        model="Qwen2.5-32B-Instruct",
+        max_concurrent=max_concurrent,
         timeout=params.timeout,
         max_retries=params.max_retries,
         connection_pool_size=params.connection_pool_size
     )
 
-    engine = SimulationEngine(
-        population_size=params.population_size,
-        cocoon_strength=params.cocoon_strength,
-        debunk_delay=params.debunk_delay,
-        initial_rumor_spread=params.initial_rumor_spread,
-        network_type=params.network_type,
-        use_llm=params.use_llm,
-        llm_config=llm_config
-    )
+    # 根据是否启用双层网络选择引擎
+    if params.use_dual_network:
+        logger.info(f"使用双层网络引擎, 社群数: {params.num_communities}, LLM模式: {params.use_llm}")
+        engine = SimulationEngineDual(
+            population_size=params.population_size,
+            cocoon_strength=params.cocoon_strength,
+            debunk_delay=params.debunk_delay,
+            initial_rumor_spread=params.initial_rumor_spread,
+            use_llm=params.use_llm,
+            llm_config=llm_config,
+            num_communities=params.num_communities,
+            public_m=params.public_m
+        )
+    else:
+        engine = SimulationEngine(
+            population_size=params.population_size,
+            cocoon_strength=params.cocoon_strength,
+            debunk_delay=params.debunk_delay,
+            initial_rumor_spread=params.initial_rumor_spread,
+            network_type=params.network_type,
+            use_llm=params.use_llm,
+            llm_config=llm_config
+        )
 
     initial_state = engine.initialize()
     return JSONResponse(content=initial_state.to_dict())
@@ -158,14 +192,14 @@ async def inspect_agent(agent_id: int):
             status_code=404
         )
 
-    # 优先从全局存储获取快照
-    snapshot = get_agent_snapshot_global(agent_id)
+    # 优先从全局存储获取快照（同时检查单层和双层）
+    snapshot = get_agent_snapshot_global(agent_id) or get_agent_snapshot_global_dual(agent_id)
 
     if snapshot:
         return JSONResponse(content=snapshot)
 
-    # 如果全局存储没有，尝试从引擎获取
-    if engine.use_llm and engine.llm_population:
+    # 如果全局存储没有，尝试从引擎获取（支持双层网络）
+    if engine.use_llm and hasattr(engine, 'llm_population') and engine.llm_population:
         snapshot = engine.llm_population.get_agent_snapshot(agent_id)
         if snapshot:
             return JSONResponse(content=snapshot)
@@ -188,7 +222,12 @@ async def inspect_agent(agent_id: int):
             "action": "未参与",
             "generated_comment": "",
             "reasoning": "该Agent尚未参与本轮推演，处于初始状态",
-            "has_decided": False
+            "has_decided": False,
+            # 沉默的螺旋相关
+            "fear_of_isolation": float(agent.fear_of_isolation),
+            "conviction": float(agent.conviction),
+            "is_silent": bool(agent.is_silent),
+            "perceived_climate": agent.perceived_climate
         })
 
     return JSONResponse(
@@ -496,27 +535,49 @@ async def websocket_simulation(websocket: WebSocket):
                 # 启动新模拟
                 params = msg.get("params", {})
                 use_llm = params.get("use_llm", True)
+                population_size = params.get("population_size", 200)
+                use_dual_network = params.get("use_dual_network", True)
+
+                # 自动计算并发数（如果未指定）
+                max_concurrent = params.get("max_concurrent")
+                if max_concurrent is None:
+                    max_concurrent = calculate_max_concurrent(population_size)
+                logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {population_size})")
 
                 # 从前端获取LLM并发参数
                 llm_config = LLMConfig(
                     base_url="http://10.17.2.29:31277/v1",
                     api_key="R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs",
-                    model="DeepSeek-V3",
-                    max_concurrent=params.get("max_concurrent", 400),
+                    model="Qwen2.5-32B-Instruct",
+                    max_concurrent=max_concurrent,
                     timeout=params.get("timeout", 60),
                     max_retries=params.get("max_retries", 5),
                     connection_pool_size=params.get("connection_pool_size", 600)
                 )
 
-                engine = SimulationEngine(
-                    population_size=params.get("population_size", 200),
-                    cocoon_strength=params.get("cocoon_strength", 0.5),
-                    debunk_delay=params.get("debunk_delay", 10),
-                    initial_rumor_spread=params.get("initial_rumor_spread", 0.3),
-                    network_type=params.get("network_type", "small_world"),
-                    use_llm=use_llm,
-                    llm_config=llm_config
-                )
+                # 根据是否启用双层网络选择引擎
+                if use_dual_network:
+                    logger.info(f"使用双层网络引擎, 社群数: {params.get('num_communities', 8)}, LLM模式: {use_llm}")
+                    engine = SimulationEngineDual(
+                        population_size=population_size,
+                        cocoon_strength=params.get("cocoon_strength", 0.5),
+                        debunk_delay=params.get("debunk_delay", 10),
+                        initial_rumor_spread=params.get("initial_rumor_spread", 0.3),
+                        use_llm=use_llm,
+                        llm_config=llm_config,
+                        num_communities=params.get("num_communities", 8),
+                        public_m=params.get("public_m", 3)
+                    )
+                else:
+                    engine = SimulationEngine(
+                        population_size=population_size,
+                        cocoon_strength=params.get("cocoon_strength", 0.5),
+                        debunk_delay=params.get("debunk_delay", 10),
+                        initial_rumor_spread=params.get("initial_rumor_spread", 0.3),
+                        network_type=params.get("network_type", "small_world"),
+                        use_llm=use_llm,
+                        llm_config=llm_config
+                    )
 
                 # 设置进度回调
                 engine.set_progress_callback(send_progress)
@@ -526,7 +587,7 @@ async def websocket_simulation(websocket: WebSocket):
                     "type": "state",
                     "data": initial_state.to_dict()
                 })
-                logger.info(f"模拟已启动, LLM模式: {use_llm}")
+                logger.info(f"模拟已启动, LLM模式: {use_llm}, 双层网络: {use_dual_network}")
 
             elif action == "step":
                 # 单步推演

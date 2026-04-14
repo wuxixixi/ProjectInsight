@@ -263,7 +263,8 @@ class SimulationEngine:
                 "rumor_spread_rate": float(np.mean(pop.opinions < -0.2)),
                 "truth_acceptance_rate": float(np.mean(pop.opinions > 0.2)),
                 "avg_opinion": float(np.mean(pop.opinions)),
-                "polarization_index": float(np.std(pop.opinions) * 2)
+                "polarization_index": float(np.std(pop.opinions) * 2),
+                "silence_rate": 0.0  # 数学模型模式暂不支持沉默率
             }
             agents = pop.to_agent_list()
             edges = pop.get_edges()
@@ -276,7 +277,8 @@ class SimulationEngine:
             rumor_spread_rate=stats["rumor_spread_rate"],
             truth_acceptance_rate=stats["truth_acceptance_rate"],
             avg_opinion=stats["avg_opinion"],
-            polarization_index=stats["polarization_index"]
+            polarization_index=stats["polarization_index"],
+            silence_rate=stats.get("silence_rate", 0.0)
         )
 
     def generate_report(self) -> str:
