@@ -6,7 +6,7 @@ Ascend 环境运行提示:
 """
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Path
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import asyncio
@@ -19,6 +19,7 @@ import logging
 from .simulation.engine import SimulationEngine
 from .simulation.agents import AgentPopulation
 from .simulation.llm_agents import get_agent_snapshot_global
+from .simulation.analyst_agent import generate_intelligence_report, AnalystAgent, DataSampler
 from .models.schemas import SimulationParams, SimulationState
 from .llm.client import LLMConfig
 
@@ -295,6 +296,139 @@ async def list_reports():
             })
 
     return JSONResponse(content={"reports": reports})
+
+
+@app.post("/api/report/generate")
+async def generate_intelligence_report_endpoint():
+    """
+    生成智库专报 (异步，耗时较长)
+
+    调用 AnalystAgent 基于 LLM 生成专业的舆情分析报告
+    """
+    global engine
+    if engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化，请先运行推演"},
+            status_code=400
+        )
+
+    if not engine.use_llm:
+        return JSONResponse(
+            content={"success": False, "error": "智库专报仅支持LLM驱动模式"},
+            status_code=400
+        )
+
+    if not engine.history:
+        return JSONResponse(
+            content={"success": False, "error": "推演尚未运行，请先执行推演"},
+            status_code=400
+        )
+
+    if not engine.llm_population:
+        return JSONResponse(
+            content={"success": False, "error": "Agent群体未初始化"},
+            status_code=400
+        )
+
+    try:
+        # 生成智库专报
+        report_content = await generate_intelligence_report(
+            engine,
+            engine.llm_population
+        )
+
+        # 保存报告
+        reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
+        reports_dir = os.path.abspath(reports_dir)
+        os.makedirs(reports_dir, exist_ok=True)
+
+        import time
+        report_filename = f"intelligence_report_{int(time.time())}.md"
+        report_path = os.path.join(reports_dir, report_filename)
+
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(report_content)
+
+        return JSONResponse(content={
+            "success": True,
+            "content": report_content,
+            "filename": report_filename,
+            "path": report_path.replace("\\", "/")
+        })
+
+    except Exception as e:
+        logger.error(f"智库专报生成失败: {e}")
+        return JSONResponse(
+            content={"success": False, "error": f"报告生成失败: {str(e)}"},
+            status_code=500
+        )
+
+
+@app.get("/api/report/stream")
+async def stream_intelligence_report():
+    """
+    流式生成智库专报 (SSE)
+
+    使用 Server-Sent Events 实时推送报告内容
+    """
+    global engine
+    if engine is None:
+        return JSONResponse(
+            content={"error": "推演引擎未初始化，请先运行推演"},
+            status_code=400
+        )
+
+    if not engine.use_llm:
+        return JSONResponse(
+            content={"error": "智库专报仅支持LLM驱动模式"},
+            status_code=400
+        )
+
+    if not engine.history:
+        return JSONResponse(
+            content={"error": "推演尚未运行，请先执行推演"},
+            status_code=400
+        )
+
+    if not engine.llm_population:
+        return JSONResponse(
+            content={"error": "Agent群体未初始化"},
+            status_code=400
+        )
+
+    async def event_generator():
+        """SSE 事件生成器"""
+        try:
+            # 构建上下文
+            context = DataSampler.build_context(engine, engine.llm_population)
+
+            # 创建 AnalystAgent 实例
+            llm_config = LLMConfig()
+            llm_config.timeout = 120
+            llm_config.max_tokens = 2000
+            llm_config.temperature = 0.5
+
+            async with AnalystAgent(llm_config) as agent:
+                async for chunk in agent.generate_report_stream(context):
+                    # SSE 格式: data: {content}\n\n
+                    yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+
+            # 发送结束信号
+            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            logger.error(f"流式报告生成失败: {e}")
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @app.websocket("/ws/simulation")

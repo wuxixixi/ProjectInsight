@@ -6,6 +6,9 @@
       <div class="panel-header">
         <h1>觉测·洞鉴</h1>
         <p class="subtitle">多智能体舆论认知干预沙盘</p>
+        <a href="https://github.com/wuxixixi/ProjectInsight" target="_blank" class="project-link">
+          <span>📖 项目文档</span>
+        </a>
       </div>
 
       <!-- 连接状态 -->
@@ -108,6 +111,9 @@
       <div class="panel-footer">
         <button v-if="currentStep > 0 && !isRunning" class="btn-report" @click="generateReport">
           <span>📄</span> 生成报告
+        </button>
+        <button v-if="currentStep > 0 && !isRunning && useLLM" class="btn-intelligence" @click="generateIntelligenceReport" :disabled="reportGenerating">
+          <span>🧠</span> {{ reportGenerating ? '撰写中...' : '智库专报' }}
         </button>
         <button class="btn-history" @click="fetchReportList">
           <span>📚</span> 历史报告
@@ -411,11 +417,43 @@
         </div>
       </div>
     </div>
+
+    <!-- 智库专报弹窗 -->
+    <div v-if="showIntelligenceModal" class="intelligence-modal-overlay" @click.self="closeIntelligenceModal">
+      <div class="intelligence-modal">
+        <div class="intelligence-modal-header">
+          <h3>🧠 智库专报</h3>
+          <button class="report-close-btn" @click="closeIntelligenceModal">✕</button>
+        </div>
+        <div class="intelligence-modal-body">
+          <!-- 流式输出时显示原始内容 -->
+          <div v-if="reportGenerating && intelligenceContent" class="intelligence-content intelligence-streaming">
+            <pre>{{ intelligenceContent }}</pre>
+            <div class="streaming-cursor">▌</div>
+          </div>
+          <!-- 生成中但无内容 -->
+          <div v-else-if="reportGenerating" class="intelligence-loading">
+            <div class="loading-spinner"></div>
+            <p>分析师智能体正在撰写专报，请稍候...</p>
+            <p class="loading-tip">预计需要10-20秒</p>
+          </div>
+          <!-- 生成完成后渲染Markdown -->
+          <div v-else-if="intelligenceContent" class="intelligence-content markdown-body" v-html="renderedIntelligence"></div>
+          <div v-else class="report-placeholder">
+            <p>专报生成失败</p>
+          </div>
+        </div>
+        <div class="intelligence-modal-footer">
+          <button class="btn-download-intelligence" @click="downloadIntelligenceReport">📥 导出 Markdown</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import * as echarts from 'echarts'
+import { marked } from 'marked'
 
 export default {
   name: 'App',
@@ -490,6 +528,12 @@ export default {
       reportList: [],
       reportListLoading: false,
 
+      // 智库专报
+      showIntelligenceModal: false,
+      reportGenerating: false,
+      intelligenceContent: '',
+      intelligenceFilename: '',
+
       // Agent透视弹窗
       showAgentModal: false,
       inspectAgentId: null,
@@ -529,6 +573,10 @@ export default {
       if (opinion > 0.2) return '相信真相'
       if (opinion < -0.2) return '相信谣言'
       return '中立'
+    },
+    renderedIntelligence() {
+      if (!this.intelligenceContent) return ''
+      return marked(this.intelligenceContent)
     }
   },
 
@@ -762,6 +810,88 @@ export default {
         link.href = window.location.origin + '/api/report/download?filename=' + encodeURIComponent(this.reportFilename)
         link.download = this.reportFilename
         link.click()
+      }
+    },
+
+    // ==================== 智库专报功能 ====================
+
+    async generateIntelligenceReport() {
+      this.showIntelligenceModal = true
+      this.reportGenerating = true
+      this.intelligenceContent = ''
+      this.intelligenceFilename = `intelligence_report_${new Date().toISOString().slice(0,10)}.md`
+
+      try {
+        // 使用 EventSource 进行流式接收
+        const eventSource = new EventSource(window.location.origin + '/api/report/stream')
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+
+            if (data.done) {
+              // 生成完成
+              eventSource.close()
+              this.reportGenerating = false
+            } else if (data.error) {
+              // 发生错误
+              this.intelligenceContent = `# 生成失败\n\n${data.error}`
+              eventSource.close()
+              this.reportGenerating = false
+            } else if (data.content) {
+              // 追加内容
+              this.intelligenceContent += data.content
+              // 自动滚动到底部
+              this.$nextTick(() => {
+                const container = document.querySelector('.intelligence-modal-body')
+                if (container) {
+                  container.scrollTop = container.scrollHeight
+                }
+              })
+            }
+          } catch (e) {
+            console.error('解析SSE数据失败:', e)
+          }
+        }
+
+        eventSource.onerror = (error) => {
+          console.error('EventSource错误:', error)
+          if (this.intelligenceContent === '') {
+            this.intelligenceContent = '# 生成失败\n\n连接中断，请重试'
+          }
+          eventSource.close()
+          this.reportGenerating = false
+        }
+
+      } catch (error) {
+        console.error('智库专报生成失败:', error)
+        this.intelligenceContent = `# 生成失败\n\n网络错误: ${error.message}`
+        this.reportGenerating = false
+      }
+    },
+
+    closeIntelligenceModal() {
+      this.showIntelligenceModal = false
+    },
+
+    downloadIntelligenceReport() {
+      if (this.intelligenceContent && this.intelligenceFilename) {
+        const blob = new Blob([this.intelligenceContent], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = this.intelligenceFilename
+        link.click()
+        URL.revokeObjectURL(url)
+      } else if (this.intelligenceContent) {
+        // 没有文件名时，生成一个默认的
+        const blob = new Blob([this.intelligenceContent], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `intelligence_report_${new Date().toISOString().slice(0,10)}.md`
+        link.click()
+        URL.revokeObjectURL(url)
       }
     },
 
@@ -1166,6 +1296,26 @@ export default {
 .panel-header .subtitle {
   font-size: 12px;
   color: #6b7280;
+}
+
+.project-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: rgba(100, 181, 246, 0.1);
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  border-radius: 12px;
+  font-size: 11px;
+  color: #60a5fa;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.project-link:hover {
+  background: rgba(100, 181, 246, 0.2);
+  border-color: rgba(100, 181, 246, 0.4);
 }
 
 /* 连接状态 */
@@ -2318,6 +2468,285 @@ export default {
 .btn-history:hover {
   background: rgba(100, 181, 246, 0.1);
   color: #60a5fa;
+}
+
+/* 智库专报按钮 */
+.btn-intelligence {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.2));
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 8px;
+  color: #c4b5fd;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-intelligence:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.3), rgba(139, 92, 246, 0.3));
+  border-color: rgba(167, 139, 250, 0.5);
+  color: #ddd6fe;
+}
+
+.btn-intelligence:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 智库专报模态框 */
+.intelligence-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intelligence-modal {
+  width: 70%;
+  max-width: 1000px;
+  max-height: 90vh;
+  background: linear-gradient(145deg, #0f172a, #1e1b4b);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 0 80px rgba(167, 139, 250, 0.15);
+}
+
+.intelligence-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: rgba(167, 139, 250, 0.1);
+  border-bottom: 1px solid rgba(167, 139, 250, 0.15);
+}
+
+.intelligence-modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #c4b5fd;
+}
+
+.intelligence-modal-body {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  min-height: 300px;
+}
+
+.intelligence-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #94a3b8;
+}
+
+.intelligence-loading .loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(167, 139, 250, 0.2);
+  border-top-color: #a78bfa;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-tip {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 8px;
+}
+
+.intelligence-content {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 24px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+  color: #e2e8f0;
+  line-height: 1.8;
+}
+
+/* 流式输出样式 */
+.intelligence-streaming {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.intelligence-streaming pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  font-family: 'Inter', 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #a5b4fc;
+}
+
+.streaming-cursor {
+  display: inline;
+  animation: blink 1s infinite;
+  color: #60a5fa;
+  font-size: 16px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Markdown 样式 */
+.intelligence-content h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #c4b5fd;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(167, 139, 250, 0.3);
+}
+
+.intelligence-content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #a78bfa;
+  margin: 28px 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+}
+
+.intelligence-content h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #818cf8;
+  margin: 20px 0 12px 0;
+}
+
+.intelligence-content h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #60a5fa;
+  margin: 16px 0 8px 0;
+}
+
+.intelligence-content p {
+  margin: 0 0 16px 0;
+  line-height: 1.8;
+}
+
+.intelligence-content ul, .intelligence-content ol {
+  margin: 0 0 16px 0;
+  padding-left: 24px;
+}
+
+.intelligence-content li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.intelligence-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.intelligence-content th, .intelligence-content td {
+  padding: 10px 14px;
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  text-align: left;
+}
+
+.intelligence-content th {
+  background: rgba(100, 181, 246, 0.1);
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.intelligence-content tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.intelligence-content blockquote {
+  border-left: 4px solid #a78bfa;
+  padding-left: 16px;
+  margin: 16px 0;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.intelligence-content code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  color: #86efac;
+}
+
+.intelligence-content pre {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+
+.intelligence-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.intelligence-content strong {
+  color: #fcd34d;
+}
+
+.intelligence-content em {
+  color: #a5b4fc;
+}
+
+.intelligence-content hr {
+  border: none;
+  border-top: 1px solid rgba(100, 181, 246, 0.2);
+  margin: 24px 0;
+}
+
+.intelligence-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background: rgba(167, 139, 250, 0.05);
+  border-top: 1px solid rgba(167, 139, 250, 0.1);
+}
+
+.btn-download-intelligence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-download-intelligence:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
 }
 
 /* ==================== 响应式适配 ==================== */

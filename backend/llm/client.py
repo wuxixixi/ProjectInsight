@@ -67,12 +67,14 @@ class LLMClient:
             force_close=False,  # 复用连接
         )
 
+        # 对于长耗时任务（如报告生成），socket读取超时需要与总超时一致
+        sock_read_timeout = max(self.config.timeout - 10, 60)  # 留10秒给连接建立
         self._session = aiohttp.ClientSession(
             connector=connector,
             timeout=aiohttp.ClientTimeout(
                 total=self.config.timeout,
                 connect=10,  # 连接超时10秒
-                sock_read=50  # socket读取超时
+                sock_read=sock_read_timeout  # socket读取超时，动态计算
             ),
             headers={
                 "Authorization": f"Bearer {self.config.api_key}",
@@ -260,6 +262,75 @@ class LLMClient:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         return results
+
+    async def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
+    ):
+        """
+        流式聊天请求 (生成器)
+
+        Args:
+            messages: OpenAI 格式的消息列表
+            temperature: 温度参数
+            max_tokens: 最大生成 token 数
+
+        Yields:
+            str: 每个 token 文本片段
+        """
+        if not self._session:
+            raise RuntimeError("请使用 async with 上下文管理器")
+
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
+            "temperature": temperature or self.config.temperature,
+            "max_tokens": max_tokens or self.config.max_tokens,
+            "stream": True  # 启用流式输出
+        }
+
+        self._request_count += 1
+
+        async with self._semaphore:
+            try:
+                async with self._session.post(
+                    f"{self.config.base_url}/chat/completions",
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error = await response.text()
+                        logger.error(f"LLM API 错误: {response.status} - {error}")
+                        raise Exception(f"LLM API 错误: {response.status}")
+
+                    self._success_count += 1
+
+                    # 读取 SSE 流
+                    async for line in response.content:
+                        line = line.decode('utf-8').strip()
+                        if not line:
+                            continue
+                        if line.startswith('data: '):
+                            data = line[6:]  # 去掉 "data: " 前缀
+                            if data == '[DONE]':
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                if 'choices' in chunk and len(chunk['choices']) > 0:
+                                    delta = chunk['choices'][0].get('delta', {})
+                                    content = delta.get('content', '')
+                                    if content:
+                                        yield content
+                            except json.JSONDecodeError:
+                                continue
+
+            except asyncio.TimeoutError:
+                logger.error("流式请求超时")
+                raise Exception(f"请求超时: {self.config.timeout}s")
+            except aiohttp.ClientError as e:
+                logger.error(f"网络错误: {e}")
+                raise
 
     def get_stats(self) -> Dict[str, int]:
         """获取统计信息"""
