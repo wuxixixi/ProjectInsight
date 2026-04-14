@@ -42,6 +42,14 @@ class DataSampler:
         opinion_trend = [h['avg_opinion'] for h in engine.history]
         polarization_trend = [h['polarization_index'] for h in engine.history]
 
+        # 兼容单层/双层引擎的网络类型字段
+        network_type = getattr(engine, "network_type", None)
+        if network_type is None:
+            if hasattr(engine, "num_communities"):
+                network_type = f"dual_layer({getattr(engine, 'num_communities', 0)} communities)"
+            else:
+                network_type = "unknown"
+
         return {
             # 初始参数
             "parameters": {
@@ -49,7 +57,7 @@ class DataSampler:
                 "cocoon_strength": engine.cocoon_strength,
                 "debunk_delay": engine.debunk_delay,
                 "initial_rumor_spread": engine.initial_rumor_spread,
-                "network_type": engine.network_type,
+                "network_type": network_type,
                 "use_llm": engine.use_llm,
                 "total_steps": len(engine.history) - 1
             },

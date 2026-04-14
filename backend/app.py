@@ -82,6 +82,86 @@ def calculate_max_concurrent(population_size: int) -> int:
     return max(10, min(int(population_size * 0.5), 100))
 
 
+def _build_perceived_climate_summary(agent_id: int) -> dict:
+    """
+    统一构建 Agent 邻居舆论气候（兼容单层/双层网络）。
+    返回前端透视面板所需的扁平字段。
+    """
+    global engine
+
+    default_climate = {
+        "total": 0,
+        "pro_rumor_ratio": 0.0,
+        "pro_truth_ratio": 0.0,
+        "neutral_ratio": 1.0,
+        "silent_ratio": 0.0,
+        "avg_opinion": 0.0
+    }
+
+    if engine is None or not getattr(engine, "use_llm", False) or not getattr(engine, "llm_population", None):
+        return default_climate
+
+    population = engine.llm_population
+    if agent_id < 0 or agent_id >= len(population.agents):
+        return default_climate
+
+    try:
+        # 双层网络模式：合并公域+私域邻居去重后统计
+        if hasattr(population, "get_public_neighbor_agents") and hasattr(population, "get_private_neighbor_agents"):
+            public_neighbors = population.get_public_neighbor_agents(agent_id)
+            private_neighbors = population.get_private_neighbor_agents(agent_id)
+            neighbor_map = {n.id: n for n in (public_neighbors + private_neighbors)}
+            neighbors = list(neighbor_map.values())
+        # 单层网络模式
+        elif hasattr(population, "get_neighbor_agents"):
+            neighbors = population.get_neighbor_agents(agent_id)
+        else:
+            neighbors = []
+    except Exception:
+        neighbors = []
+
+    if not neighbors:
+        return default_climate
+
+    total = len(neighbors)
+    pro_rumor = sum(1 for n in neighbors if n.opinion < -0.2)
+    pro_truth = sum(1 for n in neighbors if n.opinion > 0.2)
+    neutral = total - pro_rumor - pro_truth
+    silent = sum(1 for n in neighbors if getattr(n, "is_silent", False))
+    avg_opinion = sum(float(n.opinion) for n in neighbors) / total
+
+    return {
+        "total": total,
+        "pro_rumor_ratio": pro_rumor / total,
+        "pro_truth_ratio": pro_truth / total,
+        "neutral_ratio": neutral / total,
+        "silent_ratio": silent / total,
+        "avg_opinion": avg_opinion
+    }
+
+
+def _normalize_snapshot_climate(snapshot: dict) -> dict:
+    """
+    规范化快照中的 perceived_climate，保证前端字段可用。
+    """
+    agent_id = int(snapshot.get("agent_id", -1))
+    climate = snapshot.get("perceived_climate")
+
+    # 1) 已是前端需要的扁平结构，补默认值后直接返回
+    if isinstance(climate, dict) and "total" in climate:
+        climate.setdefault("pro_rumor_ratio", 0.0)
+        climate.setdefault("pro_truth_ratio", 0.0)
+        climate.setdefault("neutral_ratio", 1.0)
+        climate.setdefault("silent_ratio", 0.0)
+        climate.setdefault("avg_opinion", 0.0)
+        snapshot["perceived_climate"] = climate
+        return snapshot
+
+    # 2) 双层结构（public/private）或缺失时，统一重算扁平结构
+    snapshot["perceived_climate"] = _build_perceived_climate_summary(agent_id)
+    return snapshot
+
+
 @app.get("/")
 async def root():
     """健康检查"""
@@ -193,13 +273,13 @@ async def inspect_agent(agent_id: int):
     snapshot = get_agent_snapshot_global(agent_id) or get_agent_snapshot_global_dual(agent_id)
 
     if snapshot:
-        return JSONResponse(content=snapshot)
+        return JSONResponse(content=_normalize_snapshot_climate(snapshot))
 
     # 如果全局存储没有，尝试从引擎获取（支持双层网络）
     if engine.use_llm and hasattr(engine, 'llm_population') and engine.llm_population:
         snapshot = engine.llm_population.get_agent_snapshot(agent_id)
         if snapshot:
-            return JSONResponse(content=snapshot)
+            return JSONResponse(content=_normalize_snapshot_climate(snapshot))
 
     # 获取基础Agent信息（未参与决策）
     if engine.use_llm and engine.llm_population:
@@ -224,7 +304,7 @@ async def inspect_agent(agent_id: int):
             "fear_of_isolation": float(agent.fear_of_isolation),
             "conviction": float(agent.conviction),
             "is_silent": bool(agent.is_silent),
-            "perceived_climate": agent.perceived_climate
+            "perceived_climate": _build_perceived_climate_summary(agent_id)
         })
 
     return JSONResponse(

@@ -220,6 +220,20 @@ class LLMClient:
 
         raise Exception(f"LLM 调用失败，已达最大重试次数: {last_error}")
 
+    def _parse_json_content(self, content: str) -> Dict[str, Any]:
+        """
+        从 LLM 生成的文本中提取并解析 JSON
+        """
+        try:
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            return json.loads(content.strip())
+        except (json.JSONDecodeError, IndexError):
+            logger.warning(f"JSON 解析失败: {content}")
+            return {"raw_content": content}
+
     async def chat_json(
         self,
         messages: List[Dict[str, str]],
@@ -231,19 +245,7 @@ class LLMClient:
         """
         response = await self.chat(messages, **kwargs)
         content = response["choices"][0]["message"]["content"]
-
-        # 尝试解析 JSON
-        try:
-            # 处理可能的 markdown 代码块
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
-
-            return json.loads(content.strip())
-        except json.JSONDecodeError:
-            logger.warning(f"JSON 解析失败: {content}")
-            return {"raw_content": content}
+        return self._parse_json_content(content)
 
     async def batch_chat(
         self,
