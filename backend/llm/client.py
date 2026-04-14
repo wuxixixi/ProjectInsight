@@ -6,6 +6,7 @@ import asyncio
 import aiohttp
 import json
 import os
+import re
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 import logging
@@ -229,7 +230,15 @@ class LLMClient:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
                 content = content.split("```")[1].split("```")[0]
-            return json.loads(content.strip())
+            text = content.strip()
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # 容错：提取首个 JSON 对象，兼容模型在 JSON 前后夹带解释文本
+                match = re.search(r"\{[\s\S]*\}", text)
+                if match:
+                    return json.loads(match.group(0))
+                raise
         except (json.JSONDecodeError, IndexError):
             logger.warning(f"JSON 解析失败: {content}")
             return {"raw_content": content}

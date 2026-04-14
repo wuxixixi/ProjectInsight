@@ -10,7 +10,8 @@ import asyncio
 import logging
 
 from .agents import AgentPopulation
-from .llm_agents import LLMAgentPopulation
+from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
+from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
 from ..models.schemas import SimulationState
 from ..llm.client import LLMClient, LLMConfig
 
@@ -39,7 +40,14 @@ class SimulationEngine:
         initial_rumor_spread: float = 0.3,
         network_type: str = "small_world",
         use_llm: bool = True,
-        llm_config: Optional[LLMConfig] = None
+        llm_config: Optional[LLMConfig] = None,
+        # 增强版数学模型参数
+        debunk_credibility: float = 0.7,
+        authority_factor: float = 0.5,
+        backfire_strength: float = 0.3,
+        silence_threshold: float = 0.3,
+        polarization_factor: float = 0.3,
+        echo_chamber_factor: float = 0.2
     ):
         self.population_size = population_size
         self.cocoon_strength = cocoon_strength
@@ -49,9 +57,30 @@ class SimulationEngine:
         self.use_llm = use_llm
         self.llm_config = llm_config or LLMConfig()
 
+        # 增强版数学模型参数
+        self.debunk_credibility = debunk_credibility
+        self.authority_factor = authority_factor
+        self.backfire_strength = backfire_strength
+        self.silence_threshold = silence_threshold
+        self.polarization_factor = polarization_factor
+        self.echo_chamber_factor = echo_chamber_factor
+
         self.step_count = 0
         self.debunked = False
         self.current_state: Optional[SimulationState] = None
+
+        # 增强版数学模型实例
+        math_params = EnhancedMathParams(
+            cocoon_strength=cocoon_strength,
+            debunk_delay=debunk_delay,
+            debunk_credibility=debunk_credibility,
+            authority_factor=authority_factor,
+            backfire_strength=backfire_strength,
+            silence_threshold=silence_threshold,
+            polarization_factor=polarization_factor,
+            echo_chamber_factor=echo_chamber_factor
+        )
+        self.math_model = EnhancedMathModel(math_params)
 
         # 历史记录
         self.history: List[Dict] = []
@@ -174,79 +203,167 @@ class SimulationEngine:
             agent.opinion = np.clip(agent.opinion + noise, -1, 1)
 
     def _math_step(self):
-        """数学模型推演步骤"""
+        """
+        数学模型推演步骤 - 使用增强版数学模型
+
+        整合的社会心理学机制：
+        1. 增强版社交传播影响（观点相似度权重、权威效应、回音室效应）
+        2. 算法茧房效应
+        3. 沉默的螺旋
+        4. 群体极化效应
+        5. 辟谣与逆火效应
+        6. 认知失调
+        """
         pop = self.population
+        old_opinions = pop.opinions.copy()
 
-        # 社交传播影响
-        self._social_influence()
+        # 获取邻居列表
+        neighbors_list = [pop.get_neighbors(i) for i in range(pop.size)]
 
-        # 算法茧房效应
-        self._algorithmic_cocoon()
+        # 使用增强版数学模型计算一步
+        new_opinions, new_belief, is_silent, metrics = self.math_model.compute_step(
+            opinions=pop.opinions,
+            belief_strength=pop.belief_strength,
+            influence=pop.influence,
+            susceptibility=pop.susceptibility,
+            fear_of_isolation=pop.fear_of_isolation,
+            neighbors=neighbors_list,
+            influencer_ids=self._get_influencer_ids(),
+            debunk_released=self.debunked,
+            step_count=self.step_count
+        )
 
-        # 随机扰动
-        self._random_noise()
+        # 更新状态
+        pop.opinions = new_opinions
+        pop.belief_strength = new_belief
+        pop.is_silent = is_silent
 
-    def _social_influence(self):
-        """社交网络传播影响"""
+        # 标记曝光真相（辟谣后）
+        if self.debunked:
+            pop.exposed_to_truth = np.ones(pop.size, dtype=bool)
+
+        # 记录指标到日志
+        logger.debug(f"Math model metrics: {metrics}")
+
+        # === 为每个 Agent 生成决策快照 ===
+        self._generate_math_snapshots(old_opinions, new_opinions, is_silent, neighbors_list)
+
+    def _get_influencer_ids(self) -> List[int]:
+        """获取意见领袖ID列表（影响力前5%的节点）"""
+        if self.population is None:
+            return []
+
         pop = self.population
-        new_opinions = pop.opinions.copy()
+        threshold = np.percentile(pop.influence, 95)
+        return list(np.where(pop.influence >= threshold)[0])
+
+    def _generate_math_snapshots(
+        self,
+        old_opinions: np.ndarray,
+        new_opinions: np.ndarray,
+        is_silent: np.ndarray,
+        neighbors_list: List[List[int]]
+    ):
+        """
+        为数学模型模式生成决策快照
+
+        基于数学模型的计算结果，为每个 Agent 生成决策理由
+        """
+        pop = self.population
+        influencer_ids = set(self._get_influencer_ids())
 
         for i in range(pop.size):
-            neighbors = pop.get_neighbors(i)
-            if not neighbors:
-                continue
+            old_op = old_opinions[i]
+            new_op = new_opinions[i]
+            opinion_change = new_op - old_op
+            neighbors = neighbors_list[i]
 
-            neighbor_opinions = pop.opinions[neighbors]
-            neighbor_influence = pop.influence[neighbors]
+            # 生成决策理由
+            reasons = []
 
-            weights = neighbor_influence / neighbor_influence.sum()
-            weighted_opinion = np.sum(neighbor_opinions * weights)
+            # 1. 社交影响分析
+            if neighbors:
+                neighbor_opinions = old_opinions[neighbors]
+                avg_neighbor_op = np.mean(neighbor_opinions)
+                opinion_gap = avg_neighbor_op - old_op
 
-            change = (weighted_opinion - pop.opinions[i]) * pop.susceptibility[i]
-            change *= (1 - pop.belief_strength[i] * 0.5)
+                if abs(opinion_gap) > 0.1:
+                    direction = "真相" if opinion_gap > 0 else "谣言"
+                    reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
 
-            new_opinions[i] += change
+                # 检查意见领袖影响
+                influencer_neighbors = [n for n in neighbors if n in influencer_ids]
+                if influencer_neighbors:
+                    reasons.append(f"受{len(influencer_neighbors)}位意见领袖影响")
 
-        pop.opinions = np.clip(new_opinions, -1, 1)
+            # 2. 茧房效应
+            cocoon_effect = self.cocoon_strength * old_op * 0.1
+            if abs(cocoon_effect) > 0.01:
+                direction = "强化" if old_op < 0 else "真相方向"
+                reasons.append(f"算法推荐{direction}观点")
 
-    def _algorithmic_cocoon(self):
-        """算法茧房效应"""
-        pop = self.population
+            # 3. 沉默状态
+            if is_silent[i]:
+                reasons.append(f"因孤立恐惧(恐惧值{pop.fear_of_isolation[i]:.2f})选择沉默")
+            elif pop.fear_of_isolation[i] > 0.6:
+                reasons.append("孤立恐惧较高但未沉默")
 
-        for i in range(pop.size):
-            current_opinion = pop.opinions[i]
+            # 4. 辟谣影响
+            if self.debunked and old_op < 0:
+                if new_op > old_op:
+                    reasons.append("收到辟谣信息，观点向真相偏移")
+                elif new_op < old_op:
+                    reasons.append("辟谣触发逆火效应，观点反加强")
 
-            if current_opinion < 0:
-                reinforcement = -self.cocoon_strength * 0.05 * (1 + abs(current_opinion))
+            # 5. 观点变化总结
+            if abs(opinion_change) < 0.01:
+                reasons.append("观点基本稳定")
+            elif opinion_change > 0:
+                reasons.append(f"观点向真相偏移{abs(opinion_change):.3f}")
             else:
-                reinforcement = self.cocoon_strength * 0.05 * (1 + abs(current_opinion))
+                reasons.append(f"观点向谣言偏移{abs(opinion_change):.3f}")
 
-            pop.opinions[i] += reinforcement * pop.belief_strength[i]
+            reasoning = "；".join(reasons) if reasons else "观点微调"
 
-        pop.opinions = np.clip(pop.opinions, -1, 1)
+            # 构建快照
+            snapshot = {
+                "agent_id": i,
+                "persona": {"type": "数学模型Agent", "desc": "基于增强版数学模型决策"},
+                "persona_str": "数学模型Agent - 基于增强版数学模型决策",
+                "belief_strength": float(pop.belief_strength[i]),
+                "susceptibility": float(pop.susceptibility[i]),
+                "influence": float(pop.influence[i]),
+                "old_opinion": float(old_op),
+                "new_opinion": float(new_op),
+                "received_news": ["辟谣信息"] if self.debunked else [],
+                "llm_raw_response": None,  # 数学模型无LLM响应
+                "emotion": "冷静",
+                "action": "沉默" if is_silent[i] else "观望",
+                "generated_comment": "",
+                "reasoning": reasoning,
+                "has_decided": True,
+                # 沉默的螺旋相关
+                "fear_of_isolation": float(pop.fear_of_isolation[i]),
+                "conviction": float(pop.conviction[i]),
+                "is_silent": bool(is_silent[i]),
+                "perceived_climate": {
+                    "neighbor_count": len(neighbors),
+                    "avg_neighbor_opinion": float(np.mean(old_opinions[neighbors])) if neighbors else 0.0
+                }
+            }
+
+            # 保存到全局存储
+            AGENT_DECISION_SNAPSHOTS[i] = snapshot
 
     def _release_debunking(self):
-        """发布官方辟谣信息"""
+        """
+        发布官方辟谣信息
+
+        辟谣效果现在由增强版数学模型在 compute_step 中统一处理，
+        包括逆火效应。这里只标记辟谣已发布。
+        """
         self.debunked = True
         logger.info(f"Step {self.step_count}: 发布辟谣")
-
-        if self.use_llm:
-            self.llm_population.apply_debunking()
-        else:
-            pop = self.population
-            for i in range(pop.size):
-                if pop.opinions[i] < 0:
-                    impact = 0.3 * (1 - pop.belief_strength[i])
-                    pop.opinions[i] += impact
-                    pop.exposed_to_truth[i] = True
-            pop.opinions = np.clip(pop.opinions, -1, 1)
-
-    def _random_noise(self):
-        """随机扰动"""
-        pop = self.population
-        noise = np.random.normal(0, 0.01, pop.size)
-        pop.opinions += noise
-        pop.opinions = np.clip(pop.opinions, -1, 1)
 
     def _compute_state(self) -> SimulationState:
         """计算当前状态统计"""
@@ -264,7 +381,7 @@ class SimulationEngine:
                 "truth_acceptance_rate": float(np.mean(pop.opinions > 0.2)),
                 "avg_opinion": float(np.mean(pop.opinions)),
                 "polarization_index": float(np.std(pop.opinions) * 2),
-                "silence_rate": 0.0  # 数学模型模式暂不支持沉默率
+                "silence_rate": float(np.mean(pop.is_silent))
             }
             agents = pop.to_agent_list()
             edges = pop.get_edges()

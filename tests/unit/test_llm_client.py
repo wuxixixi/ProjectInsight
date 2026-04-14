@@ -17,10 +17,14 @@ class TestLLMConfig:
         """测试默认配置"""
         config = LLMConfig()
 
-        assert config.max_concurrent == 400  # 高并发配置
-        assert config.timeout == 60  # 60秒超时
-        assert config.max_retries == 5  # 最大重试次数
-        assert config.connection_pool_size == 500  # 连接池大小
+        # 默认值从环境变量读取，验证它们在合理范围内
+        assert config.max_concurrent >= 10  # 至少支持一定并发
+        assert config.max_concurrent <= 1000  # 但不应过大
+        assert config.timeout >= 30  # 至少30秒超时
+        assert config.timeout <= 300  # 但不应太长
+        assert config.max_retries >= 1  # 至少重试1次
+        assert config.max_retries <= 20  # 但不应太多
+        assert config.connection_pool_size >= 100  # 连接池足够大
 
     def test_custom_config(self):
         """测试自定义配置"""

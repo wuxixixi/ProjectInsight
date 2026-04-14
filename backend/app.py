@@ -72,13 +72,63 @@ class StartRequest(BaseModel):
     num_communities: int = 8          # 私域社群数量
     public_m: int = 3                 # 公域网络 BA 模型参数
 
+    # 增强版数学模型参数
+    debunk_credibility: float = 0.7      # 辟谣来源可信度 [0, 1]
+    authority_factor: float = 0.5        # 权威影响力系数 [0, 1]
+    backfire_strength: float = 0.3       # 逆火效应强度 [0, 1]
+    silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
+    polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
+    echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
+
+
+def _is_local_llm_runtime(llm_config: LLMConfig) -> bool:
+    """根据 LLM 配置判断是否本地推理环境（如 Ollama）。"""
+    base_url = (llm_config.base_url or "").lower()
+    local_hosts = ("localhost", "127.0.0.1", "::1")
+    return any(host in base_url for host in local_hosts) or "11434" in base_url
+
+
+def _infer_ollama_model_size_b(model_name: str) -> int:
+    """
+    从模型名推断参数规模（如 gemma4:31b -> 31）。
+    解析失败返回 0。
+    """
+    if not model_name:
+        return 0
+    model_name = model_name.lower()
+    if "b" not in model_name or ":" not in model_name:
+        return 0
+    try:
+        suffix = model_name.split(":")[-1]
+        if suffix.endswith("b"):
+            return int(suffix[:-1])
+    except ValueError:
+        return 0
+    return 0
+
 
 def calculate_max_concurrent(population_size: int) -> int:
     """
     根据 Agent 数量自动计算合理的并发数
 
-    策略：取 population_size 的 50%，但限制在 [10, 100] 范围内
+    默认 auto 策略会按运行环境自适应：
+    - local: 本地推理（如 Ollama），更保守，避免超时重试风暴
+    - remote: 远程推理服务，允许更高并发
+
+    可通过环境变量覆盖：
+    - LLM_CONCURRENCY_PROFILE=local|remote|auto
     """
+    profile = os.getenv("LLM_CONCURRENCY_PROFILE", "auto").strip().lower()
+    llm_config = LLMConfig()
+    is_local = _is_local_llm_runtime(llm_config)
+    model_size_b = _infer_ollama_model_size_b(llm_config.model)
+
+    if profile == "local" or (profile == "auto" and is_local):
+        # 本地推理：默认保守；超大模型（>=20B）更保守
+        max_cap = 16 if model_size_b >= 20 else 20
+        return max(4, min(int(population_size * 0.2), max_cap))
+
+    # remote / auto(remote)
     return max(10, min(int(population_size * 0.5), 100))
 
 
@@ -199,7 +249,14 @@ async def start_simulation(params: StartRequest):
             use_llm=params.use_llm,
             llm_config=llm_config,
             num_communities=params.num_communities,
-            public_m=params.public_m
+            public_m=params.public_m,
+            # 增强版数学模型参数
+            debunk_credibility=params.debunk_credibility,
+            authority_factor=params.authority_factor,
+            backfire_strength=params.backfire_strength,
+            silence_threshold=params.silence_threshold,
+            polarization_factor=params.polarization_factor,
+            echo_chamber_factor=params.echo_chamber_factor
         )
     else:
         engine = SimulationEngine(
@@ -209,7 +266,14 @@ async def start_simulation(params: StartRequest):
             initial_rumor_spread=params.initial_rumor_spread,
             network_type=params.network_type,
             use_llm=params.use_llm,
-            llm_config=llm_config
+            llm_config=llm_config,
+            # 增强版数学模型参数
+            debunk_credibility=params.debunk_credibility,
+            authority_factor=params.authority_factor,
+            backfire_strength=params.backfire_strength,
+            silence_threshold=params.silence_threshold,
+            polarization_factor=params.polarization_factor,
+            echo_chamber_factor=params.echo_chamber_factor
         )
 
     initial_state = engine.initialize()
@@ -245,6 +309,25 @@ async def get_state():
         return JSONResponse(content={"error": "未初始化"}, status_code=400)
 
     return JSONResponse(content=engine.current_state.to_dict())
+
+
+@app.get("/api/math-model/explanation")
+async def get_math_model_explanation():
+    """
+    获取增强版数学模型的理论解释
+    
+    返回：
+    - theories: 各社会心理学机制的理论说明
+    - parameters: 各参数的含义和影响
+    """
+    from .simulation.math_model_enhanced import EnhancedMathModel
+    
+    model = EnhancedMathModel()
+    
+    return JSONResponse(content={
+        "theories": model.get_theory_explanation(),
+        "parameters": model.get_parameter_explanation()
+    })
 
 
 @app.get("/api/agent/{agent_id}/inspect")
@@ -641,7 +724,14 @@ async def websocket_simulation(websocket: WebSocket):
                         use_llm=use_llm,
                         llm_config=llm_config,
                         num_communities=params.get("num_communities", 8),
-                        public_m=params.get("public_m", 3)
+                        public_m=params.get("public_m", 3),
+                        # 增强版数学模型参数
+                        debunk_credibility=params.get("debunk_credibility", 0.7),
+                        authority_factor=params.get("authority_factor", 0.5),
+                        backfire_strength=params.get("backfire_strength", 0.3),
+                        silence_threshold=params.get("silence_threshold", 0.3),
+                        polarization_factor=params.get("polarization_factor", 0.3),
+                        echo_chamber_factor=params.get("echo_chamber_factor", 0.2)
                     )
                 else:
                     engine = SimulationEngine(
@@ -651,7 +741,14 @@ async def websocket_simulation(websocket: WebSocket):
                         initial_rumor_spread=params.get("initial_rumor_spread", 0.3),
                         network_type=params.get("network_type", "small_world"),
                         use_llm=use_llm,
-                        llm_config=llm_config
+                        llm_config=llm_config,
+                        # 增强版数学模型参数
+                        debunk_credibility=params.get("debunk_credibility", 0.7),
+                        authority_factor=params.get("authority_factor", 0.5),
+                        backfire_strength=params.get("backfire_strength", 0.3),
+                        silence_threshold=params.get("silence_threshold", 0.3),
+                        polarization_factor=params.get("polarization_factor", 0.3),
+                        echo_chamber_factor=params.get("echo_chamber_factor", 0.2)
                     )
 
                 # 设置进度回调

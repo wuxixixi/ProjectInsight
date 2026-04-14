@@ -37,6 +37,13 @@ class SimulationParams(BaseModel):
     use_dual_network: bool = False     # 是否使用双层网络
     num_communities: int = 8           # 私域社群数量
     public_m: int = 3                  # 公域网络 BA 模型参数
+    # 增强版数学模型参数
+    debunk_credibility: float = 0.7      # 辟谣来源可信度 [0, 1]
+    authority_factor: float = 0.5        # 权威影响力系数 [0, 1]
+    backfire_strength: float = 0.3       # 逆火效应强度 [0, 1]
+    silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
+    polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
+    echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
 
 
 class SimulationState(BaseModel):

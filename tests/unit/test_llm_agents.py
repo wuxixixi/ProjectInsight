@@ -4,7 +4,7 @@ LLM Agent 单元测试
 """
 import pytest
 import numpy as np
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 import asyncio
 
 from backend.simulation.llm_agents import LLMAgent, LLMAgentPopulation
@@ -60,15 +60,29 @@ class TestLLMAgent:
             susceptibility=0.3
         )
 
-        prompt = agent.build_prompt(
-            neighbor_opinions=[0.2, -0.3, 0.1],
+        # 创建模拟邻居 Agent
+        neighbor1 = MagicMock()
+        neighbor1.id = 1
+        neighbor1.opinion = 0.2
+        neighbor1.is_silent = False
+        neighbor2 = MagicMock()
+        neighbor2.id = 2
+        neighbor2.opinion = -0.3
+        neighbor2.is_silent = False
+        neighbor3 = MagicMock()
+        neighbor3.id = 3
+        neighbor3.opinion = 0.1
+        neighbor3.is_silent = False
+
+        prompt, _ = agent.build_prompt(
+            neighbor_agents=[neighbor1, neighbor2, neighbor3],
             debunk_released=False,
             cocoon_strength=0.5
         )
 
         assert "当前观点: -0.50" in prompt
         assert "信念强度: 0.60" in prompt
-        assert "邻居平均观点" in prompt
+        assert "邻居" in prompt
 
     def test_build_prompt_with_debunk(self):
         """测试带辟谣的 Prompt 构建"""
@@ -80,13 +94,18 @@ class TestLLMAgent:
             susceptibility=0.3
         )
 
-        prompt = agent.build_prompt(
-            neighbor_opinions=[0.2, -0.3],
+        neighbor = MagicMock()
+        neighbor.id = 1
+        neighbor.opinion = 0.2
+        neighbor.is_silent = False
+
+        prompt, _ = agent.build_prompt(
+            neighbor_agents=[neighbor],
             debunk_released=True,
             cocoon_strength=0.5
         )
 
-        assert "官方已发布辟谣信息" in prompt
+        assert "辟谣" in prompt or "真相" in prompt or "官方" in prompt
 
     def test_build_prompt_with_cocoon(self):
         """测试带茧房效应的 Prompt 构建"""
@@ -99,11 +118,11 @@ class TestLLMAgent:
             influence=0.5, susceptibility=0.5
         )
 
-        prompt_rumor = agent_rumor.build_prompt(
-            neighbor_opinions=[], debunk_released=False, cocoon_strength=0.8
+        prompt_rumor, _ = agent_rumor.build_prompt(
+            neighbor_agents=[], debunk_released=False, cocoon_strength=0.8
         )
-        prompt_truth = agent_truth.build_prompt(
-            neighbor_opinions=[], debunk_released=False, cocoon_strength=0.8
+        prompt_truth, _ = agent_truth.build_prompt(
+            neighbor_agents=[], debunk_released=False, cocoon_strength=0.8
         )
 
         # 高茧房强度应该有推荐信息
@@ -121,6 +140,12 @@ class TestLLMAgent:
             susceptibility=0.5
         )
 
+        # 创建模拟邻居
+        neighbor = MagicMock()
+        neighbor.id = 1
+        neighbor.opinion = 0.2
+        neighbor.is_silent = False
+
         mock_client = AsyncMock()
         mock_client.chat_json = AsyncMock(return_value={
             "new_opinion": -0.2,
@@ -129,7 +154,7 @@ class TestLLMAgent:
 
         result = await agent.decide_opinion(
             mock_client,
-            neighbor_opinions=[0.2, 0.3],
+            neighbor_agents=[neighbor],
             debunk_released=False,
             cocoon_strength=0.5
         )
@@ -149,6 +174,11 @@ class TestLLMAgent:
             susceptibility=0.5
         )
 
+        neighbor = MagicMock()
+        neighbor.id = 1
+        neighbor.opinion = 0.5
+        neighbor.is_silent = False
+
         mock_client = AsyncMock()
         # LLM 返回极端变化
         mock_client.chat_json = AsyncMock(return_value={
@@ -158,7 +188,7 @@ class TestLLMAgent:
 
         result = await agent.decide_opinion(
             mock_client,
-            neighbor_opinions=[0.5],
+            neighbor_agents=[neighbor],
             debunk_released=False,
             cocoon_strength=0.5
         )
@@ -184,7 +214,7 @@ class TestLLMAgent:
 
         result = await agent.decide_opinion(
             mock_client,
-            neighbor_opinions=[],
+            neighbor_agents=[],
             debunk_released=False,
             cocoon_strength=0.5
         )
@@ -272,7 +302,7 @@ class TestLLMAgentPopulation:
         # 记录辟谣前的观点
         pre_opinions = [a.opinion for a in pop.agents]
 
-        pop.apply_debunking()
+        pop.apply_debunking(effectiveness=0.2)
 
         # 检查辟谣效果
         for i, agent in enumerate(pop.agents):

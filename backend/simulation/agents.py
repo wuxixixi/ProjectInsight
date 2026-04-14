@@ -16,6 +16,8 @@ class AgentPopulation:
     - belief_strength: 信念强度
     - influence: 影响力
     - susceptibility: 易感性
+    - fear_of_isolation: 孤立恐惧感
+    - is_silent: 是否沉默
     """
 
     def __init__(
@@ -43,6 +45,15 @@ class AgentPopulation:
 
         # 易感性 - 决定被影响的程度
         self.susceptibility = np.random.beta(2, 5, size)  # 多数人不易被影响
+
+        # 孤立恐惧感 - 用于沉默的螺旋机制
+        self.fear_of_isolation = np.random.beta(2, 2, size)
+
+        # 初始信念强度 - 用于沉默的螺旋机制
+        self.conviction = np.random.beta(2, 2, size)
+
+        # 沉默状态
+        self.is_silent = np.zeros(size, dtype=bool)
 
         # 曝光状态
         self.exposed_to_rumor = np.zeros(size, dtype=bool)
@@ -90,6 +101,9 @@ class AgentPopulation:
                 "belief_strength": float(self.belief_strength[i]),
                 "influence": float(self.influence[i]),
                 "susceptibility": float(self.susceptibility[i]),
+                "fear_of_isolation": float(self.fear_of_isolation[i]),
+                "conviction": float(self.conviction[i]),
+                "is_silent": bool(self.is_silent[i]),
                 "exposed_to_rumor": bool(self.exposed_to_rumor[i]),
                 "exposed_to_truth": bool(self.exposed_to_truth[i])
             })
