@@ -5,23 +5,39 @@ LLM 客户端封装
 import asyncio
 import aiohttp
 import json
+import os
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 import logging
 import random
+from dotenv import load_dotenv
+
+# 加载 .env 文件
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
+def get_env_str(key: str, default: str) -> str:
+    """获取字符串类型的环境变量"""
+    return os.getenv(key, default)
+
+
+def get_env_int(key: str, default: int) -> int:
+    """获取整数类型的环境变量"""
+    val = os.getenv(key)
+    return int(val) if val else default
+
+
 @dataclass
 class LLMConfig:
-    """LLM 配置"""
-    base_url: str = "http://10.17.2.29:31277/v1"
-    api_key: str = "R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs"
-    model: str = "Qwen2.5-32B-Instruct"
-    max_concurrent: int = 100  # 默认并发数，实际会根据 Agent 数量自动调节
-    timeout: int = 60  # 60秒超时控制
-    max_retries: int = 5  # 最大重试次数
+    """LLM 配置 - 从环境变量读取默认值"""
+    base_url: str = field(default_factory=lambda: get_env_str("LLM_BASE_URL", "http://10.17.2.29:31277/v1"))
+    api_key: str = field(default_factory=lambda: get_env_str("LLM_API_KEY", ""))
+    model: str = field(default_factory=lambda: get_env_str("LLM_MODEL", "Qwen2.5-32B-Instruct"))
+    max_concurrent: int = field(default_factory=lambda: get_env_int("LLM_MAX_CONCURRENT", 100))
+    timeout: int = field(default_factory=lambda: get_env_int("LLM_TIMEOUT", 60))
+    max_retries: int = field(default_factory=lambda: get_env_int("LLM_MAX_RETRIES", 5))
     temperature: float = 0.7
     max_tokens: int = 150
 

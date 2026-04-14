@@ -100,11 +100,8 @@ async def start_simulation(params: StartRequest):
     max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
     logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {params.population_size})")
 
-    # 从请求参数获取LLM配置
+    # 使用环境变量中的LLM配置，仅覆盖并发数和超时参数
     llm_config = LLMConfig(
-        base_url="http://10.17.2.29:31277/v1",
-        api_key="R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs",
-        model="Qwen2.5-32B-Instruct",
         max_concurrent=max_concurrent,
         timeout=params.timeout,
         max_retries=params.max_retries,
@@ -545,10 +542,8 @@ async def websocket_simulation(websocket: WebSocket):
                 logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {population_size})")
 
                 # 从前端获取LLM并发参数
+                # 使用环境变量中的LLM配置，仅覆盖并发数和超时参数
                 llm_config = LLMConfig(
-                    base_url="http://10.17.2.29:31277/v1",
-                    api_key="R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs",
-                    model="Qwen2.5-32B-Instruct",
                     max_concurrent=max_concurrent,
                     timeout=params.get("timeout", 60),
                     max_retries=params.get("max_retries", 5),
