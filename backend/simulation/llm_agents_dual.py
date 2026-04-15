@@ -56,7 +56,7 @@ TA说这事关你们的切身利益，让你务必注意。
 """
 
 
-# Agent 决策 Prompt 模板 (双层模态版本 + 观点变化限制)
+# Agent 决策 Prompt 模板 (双层模态版本 + 观点变化限制 + 知识图谱)
 AGENT_PROMPT_TEMPLATE_DUAL = """你是一个社交媒体用户，正在关注一个热点事件的讨论。
 观点范围: -1(完全相信谣言) 到 1(完全相信真相)，0 表示中立。
 
@@ -71,6 +71,9 @@ AGENT_PROMPT_TEMPLATE_DUAL = """你是一个社交媒体用户，正在关注一
 - 你的信念强度为 {belief_strength:.2f}，因此你本轮观点最大变化幅度为 {max_change:.2f}
 - 如果你选择沉默(is_silent=true)，观点变化幅度会进一步降低到 {max_change_silent:.2f}
 - 请在限制范围内选择合理的新观点值
+
+## 知识图谱上下文（事件结构化分析）
+{graph_section}
 
 ## 你收到的信息
 {info_section}
@@ -161,6 +164,90 @@ class LLMAgent:
         self.received_public_info: List[Dict] = []
         self.received_private_info: List[Dict] = []
 
+    def _build_graph_section(self, knowledge_graph: Dict) -> str:
+        """
+        构建知识图谱上下文段落
+
+        Args:
+            knowledge_graph: 知识图谱数据
+
+        Returns:
+            格式化的图谱上下文文本
+        """
+        lines = []
+        
+        # 事件摘要
+        summary = knowledge_graph.get("summary", "")
+        if summary:
+            lines.append(f"- 事件摘要: {summary}")
+        
+        # 实体列表
+        entities = knowledge_graph.get("entities", [])
+        if entities:
+            lines.append(f"- 涉及实体 ({len(entities)}个):")
+            # 根据人设选择最相关的2-3个实体
+            relevant_entities = self._select_relevant_entities(entities)
+            for entity in relevant_entities[:3]:
+                entity_type = entity.get("type", "其他")
+                entity_name = entity.get("name", "未知")
+                lines.append(f"  • {entity_name} ({entity_type})")
+        
+        # 关键关系
+        relations = knowledge_graph.get("relations", [])
+        if relations:
+            lines.append(f"- 关键关系 ({len(relations)}条):")
+            for rel in relations[:3]:
+                source = rel.get("source", "?")
+                target = rel.get("target", "?")
+                action = rel.get("action", "关联")
+                lines.append(f"  • {source} → {target}: {action}")
+        
+        # 注意力引导指令
+        lines.append("")
+        lines.append("【重要】请根据你的个人特征，从上述实体中选择你最关注的2-3个核心节点，")
+        lines.append("基于这部分局部信息做出你的反应判断。")
+        
+        return "\n".join(lines)
+
+    def _select_relevant_entities(self, entities: List[Dict]) -> List[Dict]:
+        """
+        根据人设选择最相关的实体
+
+        Args:
+            entities: 实体列表
+
+        Returns:
+            筛选后的实体列表
+        """
+        # 根据人设类型筛选相关实体
+        persona_type = self.persona.get("type", "")
+        
+        priority_types = []
+        if "低媒介素养" in persona_type or "从众" in persona_type:
+            # 关注人物和情绪化内容
+            priority_types = ["人物", "事件", "其他"]
+        elif "理性" in persona_type:
+            # 关注组织和时间
+            priority_types = ["组织", "地点", "时间"]
+        elif "意见领袖" in persona_type:
+            # 关注影响力和传播
+            priority_types = ["人物", "组织", "概念"]
+        else:
+            priority_types = ["人物", "事件", "组织"]
+        
+        # 按优先级排序
+        prioritized = []
+        for entity in entities:
+            entity_type = entity.get("type", "其他")
+            if entity_type in priority_types:
+                prioritized.append(entity)
+        
+        # 如果筛选后的数量不足，返回原列表的前几个
+        if len(prioritized) < 2:
+            return entities[:3]
+        
+        return prioritized[:3]
+
     def scan_public_climate(
         self,
         public_neighbors: List['LLMAgent'],
@@ -233,11 +320,12 @@ class LLMAgent:
         news_source: str,
         debunk_released: bool,
         cocoon_strength: float,
-        opinion_snapshot: Optional[Dict] = None
+        opinion_snapshot: Optional[Dict] = None,
+        knowledge_graph: Optional[Dict] = None
     ) -> Tuple[str, List[str]]:
         """
         构建双模态决策 Prompt
-        
+
         Args:
             public_neighbors: 公域邻居列表
             private_neighbors: 私域邻居列表
@@ -246,11 +334,18 @@ class LLMAgent:
             debunk_released: 是否已辟谣
             cocoon_strength: 茧房强度
             opinion_snapshot: 观点快照，用于并发一致性
+            knowledge_graph: 知识图谱数据（可选）
         """
         # 计算观点变化限制
         max_change = 0.3 * (1 - self.belief_strength * 0.5)
         max_change_silent = 0.1 * (1 - self.belief_strength * 0.5)
-        
+
+        # 构建知识图谱上下文
+        if knowledge_graph:
+            graph_section = self._build_graph_section(knowledge_graph)
+        else:
+            graph_section = "- 暂无结构化分析"
+
         info_lines = []
 
         # 构建信息来源情境
@@ -342,6 +437,7 @@ class LLMAgent:
             max_change=max_change,
             max_change_silent=max_change_silent,
             is_influencer="是（大V）" if self.is_influencer else "否",
+            graph_section=graph_section,
             info_section=info_section,
             source_section=source_section,
             public_climate_section=public_climate_section,
@@ -357,14 +453,15 @@ class LLMAgent:
         private_neighbors: List['LLMAgent'],
         news_content: str,
         news_source: str,
-        debunk_released: bool,
-        cocoon_strength: float,
+        knowledge_graph: Optional[Dict] = None,
+        debunk_released: bool = False,
+        cocoon_strength: float = 0.5,
         opinion_snapshot: Optional[Dict] = None
     ) -> Dict:
         """双模态决策（支持快照一致性）"""
         prompt, received_news = self.build_prompt_dual(
             public_neighbors, private_neighbors, news_content, news_source,
-            debunk_released, cocoon_strength, opinion_snapshot
+            debunk_released, cocoon_strength, opinion_snapshot, knowledge_graph
         )
 
         messages = [{"role": "user", "content": prompt}]
@@ -560,8 +657,9 @@ class LLMAgentPopulationDual:
         llm_client: LLMClient,
         news_content: str,
         news_source: str,
-        debunk_released: bool,
-        cocoon_strength: float,
+        knowledge_graph: Optional[Dict] = None,
+        debunk_released: bool = False,
+        cocoon_strength: float = 0.5,
         progress_callback=None
     ) -> List[Dict]:
         """批量双模态决策（使用观点快照保证并发一致性）"""
@@ -580,6 +678,7 @@ class LLMAgentPopulationDual:
                 private_neighbors,
                 news_content,
                 news_source,
+                knowledge_graph,
                 debunk_released,
                 cocoon_strength,
                 opinion_snapshot  # 传入快照

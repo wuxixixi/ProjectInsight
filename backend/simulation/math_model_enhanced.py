@@ -181,8 +181,11 @@ class EnhancedMathModel:
             weights = effective_influence * similarity_weights
             if weights.sum() > 0:
                 weights = weights / weights.sum()
-            else:
+            elif len(neighbor_list) > 0:
                 weights = np.ones(len(neighbor_list)) / len(neighbor_list)
+            else:
+                # 无邻居，跳过此节点
+                continue
 
             # 加权平均观点
             weighted_opinion = np.sum(neighbor_opinions * weights)

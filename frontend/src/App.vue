@@ -1,5 +1,30 @@
 <template>
   <div class="dashboard-container">
+    <!-- 顶部流程引导 -->
+    <div class="workflow-guide">
+      <div class="workflow-steps">
+        <div :class="['workflow-step', { active: !isRunning && currentStep === 0, completed: currentStep > 0 }]">
+          <span class="step-number">1</span>
+          <span class="step-text">配置参数</span>
+        </div>
+        <div class="step-connector" :class="{ active: currentStep > 0 }"></div>
+        <div :class="['workflow-step', { active: isRunning, completed: currentStep > 0 && !isRunning }]">
+          <span class="step-number">2</span>
+          <span class="step-text">开始推演</span>
+        </div>
+        <div class="step-connector" :class="{ active: currentStep > 0 }"></div>
+        <div :class="['workflow-step', { active: currentStep > 0, completed: knowledgeGraph.entities && knowledgeGraph.entities.length > 0 }]">
+          <span class="step-number">3</span>
+          <span class="step-text">注入事件</span>
+        </div>
+        <div class="step-connector" :class="{ active: knowledgeGraph.entities && knowledgeGraph.entities.length > 0 }"></div>
+        <div :class="['workflow-step', { active: reportGenerated }]">
+          <span class="step-number">4</span>
+          <span class="step-text">生成报告</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 左侧控制面板 -->
     <aside class="control-panel">
       <!-- 标题 -->
@@ -9,6 +34,48 @@
         <a href="https://github.com/wuxixixi/ProjectInsight" target="_blank" class="project-link">
           <span>📖 项目文档</span>
         </a>
+      </div>
+
+      <!-- 帮助说明（可折叠） -->
+      <div class="help-section">
+        <div class="help-header" @click="showHelp = !showHelp">
+          <span>💡 使用说明</span>
+          <span :class="['help-toggle', { expanded: showHelp }]">▼</span>
+        </div>
+        <div v-if="showHelp" class="help-content">
+          <div class="help-item">
+            <strong>推演模式：</strong>
+            <p>• <b>LLM驱动</b>：Agent由大语言模型决策，行为更真实</p>
+            <p>• <b>数学模型</b>：基于社会心理学公式快速计算</p>
+          </div>
+          <div class="help-item">
+            <strong>六大机制：</strong>
+            <p>• <b>社交传播</b>：受邻居观点影响</p>
+            <p>• <b>算法茧房</b>：推荐强化既有立场</p>
+            <p>• <b>沉默螺旋</b>：少数派因恐惧孤立</p>
+            <p>• <b>群体极化</b>：讨论导致观点极端</p>
+            <p>• <b>逆火效应</b>：辟谣反而强化谣言</p>
+            <p>• <b>认知失调</b>：矛盾信息强化信念</p>
+          </div>
+          <div class="help-item">
+            <strong>核心参数：</strong>
+            <p>• <b>茧房强度</b>：算法推荐强化观点的程度</p>
+            <p>• <b>辟谣延迟</b>：谣言传播多久后官方介入</p>
+            <p>• <b>双层网络</b>：模拟公域（微博）+私域（微信群）</p>
+          </div>
+          <div class="help-item">
+            <strong>操作流程：</strong>
+            <p>1. 调整参数 → 2. 开始推演 → 3. 注入事件 → 4. 生成报告</p>
+          </div>
+          <div class="help-item">
+            <strong>知识图谱：</strong>
+            <p>输入新闻文本，系统自动提取实体和关系，用于影响Agent决策</p>
+          </div>
+          <div class="help-item">
+            <strong>观点范围：</strong>
+            <p>-1（完全信谣言）→ 0（中立）→ +1（完全信真相）</p>
+          </div>
+        </div>
       </div>
 
       <!-- 连接状态 -->
@@ -36,7 +103,10 @@
       <div class="control-section">
         <div class="param-item">
           <div class="param-header">
-            <span class="param-label">算法茧房强度</span>
+            <div class="param-label-with-help">
+              <span class="param-label">算法茧房强度</span>
+              <span class="param-help" title="模拟推荐算法强化既有观点的程度。0=无茧房，1=完全茧房（只看到同温层内容）。建议：探索辟谣效果时设0.3-0.5">❓</span>
+            </div>
             <span class="param-value">{{ cocoonStrength.toFixed(2) }}</span>
           </div>
           <input type="range" v-model.number="cocoonStrength" min="0" max="1" step="0.05" :disabled="isRunning" />
@@ -45,7 +115,10 @@
 
         <div class="param-item">
           <div class="param-header">
-            <span class="param-label">官方辟谣延迟</span>
+            <div class="param-label-with-help">
+              <span class="param-label">官方辟谣延迟</span>
+              <span class="param-help" title="谣言传播多少步后发布辟谣。延迟越长，谣言传播范围越广，辟谣效果越差。建议：对比0步和10步的差异">❓</span>
+            </div>
             <span class="param-value">{{ debunkDelay }} 步</span>
           </div>
           <input type="range" v-model.number="debunkDelay" min="0" max="30" step="1" :disabled="isRunning" />
@@ -54,7 +127,10 @@
 
         <div class="param-item">
           <div class="param-header">
-            <span class="param-label">初始谣言传播率</span>
+            <div class="param-label-with-help">
+              <span class="param-label">初始谣言传播率</span>
+              <span class="param-help" title="推演开始时已相信谣言的人群比例">❓</span>
+            </div>
             <span class="param-value">{{ (initialRumorSpread * 100).toFixed(0) }}%</span>
           </div>
           <input type="range" v-model.number="initialRumorSpread" min="0.1" max="0.6" step="0.05" :disabled="isRunning" />
@@ -62,7 +138,10 @@
 
         <div class="param-item">
           <div class="param-header">
-            <span class="param-label">Agent数量</span>
+            <div class="param-label-with-help">
+              <span class="param-label">Agent数量</span>
+              <span class="param-help" title="模拟的智能体数量。LLM模式建议50-100以控制成本，数学模型模式可设200-500">❓</span>
+            </div>
             <span class="param-value">{{ populationSize }}</span>
           </div>
           <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning" />
@@ -71,7 +150,10 @@
         <!-- 双层网络开关 -->
         <div class="param-item">
           <div class="param-header">
-            <span class="param-label">双层网络模式</span>
+            <div class="param-label-with-help">
+              <span class="param-label">双层网络模式</span>
+              <span class="param-help" title="模拟公域（微博）+私域（微信）。公域存在大V，信息传播快；私域分成多个社群，跨社群传播难">❓</span>
+            </div>
             <label class="switch">
               <input type="checkbox" v-model="useDualNetwork" :disabled="isRunning" />
               <span class="slider"></span>
@@ -134,28 +216,68 @@
         </div>
       </div>
 
-      <!-- 底部操作 -->
-      <div class="panel-footer">
-        <button v-if="currentStep > 0 && !isRunning" class="btn-report" @click="generateReport">
-          <span>📄</span> 生成报告
-        </button>
-        <button v-if="currentStep > 0 && !isRunning && useLLM" class="btn-intelligence" @click="generateIntelligenceReport" :disabled="reportGenerating">
-          <span>🧠</span> {{ reportGenerating ? '撰写中...' : '智库专报' }}
-        </button>
-        <button v-if="!useLLM" class="btn-theory" @click="showMathModelDrawer = true">
-          <span>📚</span> 模型说明
-        </button>
-        <button class="btn-history" @click="fetchReportList">
-          <span>📚</span> 历史报告
-        </button>
-        <button class="btn-settings" @click="showSettingsDrawer = true">
-          <span>⚙️</span> 设置
-        </button>
+      <!-- 底部功能面板（分组折叠） -->
+      <div class="panel-footer-grouped">
+        <!-- 知识图谱组 -->
+        <div class="footer-group">
+          <div class="group-header" @click="toggleGroup('kg')">
+            <span>🕸️ 知识图谱</span>
+            <span :class="['group-toggle', { expanded: expandedGroups.kg }]">▼</span>
+          </div>
+          <div v-if="expandedGroups.kg" class="group-buttons">
+            <button class="btn-group" @click="showNewsParser = true">
+              <span>📰</span> 解析新闻
+            </button>
+            <button v-if="currentStep > 0" class="btn-group" @click="showEventAirdrop = true">
+              <span>📢</span> 注入事件
+            </button>
+            <button v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0" class="btn-group" @click="showKnowledgeGraph = true">
+              <span>🔍</span> 查看图谱
+            </button>
+          </div>
+        </div>
+
+        <!-- 报告分析组 -->
+        <div class="footer-group">
+          <div class="group-header" @click="toggleGroup('report')">
+            <span>📊 报告分析</span>
+            <span :class="['group-toggle', { expanded: expandedGroups.report }]">▼</span>
+          </div>
+          <div v-if="expandedGroups.report" class="group-buttons">
+            <button v-if="currentStep > 0 && !isRunning" class="btn-group" @click="generateReport">
+              <span>📄</span> 生成报告
+            </button>
+            <button v-if="currentStep > 0 && !isRunning && useLLM" class="btn-group" @click="generateIntelligenceReport" :disabled="reportGenerating">
+              <span>🧠</span> {{ reportGenerating ? '撰写中...' : '智库专报' }}
+            </button>
+            <button class="btn-group" @click="fetchReportList">
+              <span>📚</span> 历史报告
+            </button>
+            <button v-if="!useLLM" class="btn-group" @click="showMathModelDrawer = true">
+              <span>📖</span> 模型说明
+            </button>
+          </div>
+        </div>
+
+        <!-- 系统设置组 -->
+        <div class="footer-group">
+          <div class="group-header" @click="toggleGroup('settings')">
+            <span>⚙️ 系统设置</span>
+            <span :class="['group-toggle', { expanded: expandedGroups.settings }]">▼</span>
+          </div>
+          <div v-if="expandedGroups.settings" class="group-buttons">
+            <button class="btn-group" @click="showSettingsDrawer = true">
+              <span>🔧</span> 高级设置
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
 
-    <!-- 右侧主内容区 -->
+    <!-- 右侧主内容区（含图表区和说明栏） -->
     <main class="main-content">
+      <!-- 图表区域 -->
+      <div class="charts-area">
       <!-- 顶部核心指标卡 -->
       <div class="kpi-cards">
         <div class="kpi-card">
@@ -165,35 +287,35 @@
             <span class="kpi-value">{{ animatedStep }}</span>
           </div>
         </div>
-        <div class="kpi-card danger">
+        <div class="kpi-card danger" title="当前相信谣言的人群比例（opinion < -0.2）。辟谣后应逐渐下降。">
           <div class="kpi-icon">📢</div>
           <div class="kpi-content">
             <span class="kpi-label">谣言传播率</span>
             <span class="kpi-value">{{ (rumorSpreadRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card success">
+        <div class="kpi-card success" title="当前相信真相的人群比例（opinion > 0.2）。辟谣后应逐渐上升。">
           <div class="kpi-icon">✓</div>
           <div class="kpi-content">
             <span class="kpi-label">真相接受率</span>
             <span class="kpi-value">{{ (truthAcceptanceRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card info">
+        <div class="kpi-card info" title="群体观点平均值。负值=倾向谣言，正值=倾向真相。范围：-1 ~ +1">
           <div class="kpi-icon">⚖️</div>
           <div class="kpi-content">
             <span class="kpi-label">平均观点</span>
             <span class="kpi-value">{{ avgOpinion.toFixed(3) }}</span>
           </div>
         </div>
-        <div class="kpi-card purple">
+        <div class="kpi-card purple" title="不敢表达观点的人群比例。反映'沉默的螺旋'效应，高值可能导致极端观点主导。">
           <div class="kpi-icon">🤫</div>
           <div class="kpi-content">
             <span class="kpi-label">沉默率</span>
             <span class="kpi-value">{{ (silenceRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card warning">
+        <div class="kpi-card warning" title="群体观点分歧程度（0~1）。高值表示社会撕裂，双方互不信任。">
           <div class="kpi-icon">⚡</div>
           <div class="kpi-content">
             <span class="kpi-label">极化指数</span>
@@ -252,6 +374,154 @@
           </div>
         </div>
       </div>
+      <!-- 图表区域结束 -->
+      </div>
+
+      <!-- 右侧说明栏（可折叠） -->
+      <aside class="info-panel" :class="{ collapsed: !showInfoPanel }">
+        <div class="info-panel-toggle" @click="showInfoPanel = !showInfoPanel">
+          <span v-if="showInfoPanel">◀ 收起</span>
+          <span v-else>▶ 说明</span>
+        </div>
+        <div v-if="showInfoPanel" class="info-panel-content">
+          <!-- 当前关注区域 -->
+          <div class="info-section">
+            <h4 class="info-section-title">📊 指标解读</h4>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">谣言传播率</span>
+                <span class="info-item-value danger">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
+              </div>
+              <p class="info-item-desc">当前相信谣言的人群比例（opinion &lt; -0.2）。辟谣后应逐渐下降。</p>
+            </div>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">真相接受率</span>
+                <span class="info-item-value success">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
+              </div>
+              <p class="info-item-desc">当前相信真相的人群比例（opinion &gt; 0.2）。辟谣后应逐渐上升。</p>
+            </div>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">平均观点</span>
+                <span class="info-item-value info">{{ avgOpinion.toFixed(3) }}</span>
+              </div>
+              <p class="info-item-desc">群体观点平均值。负值=倾向谣言，正值=倾向真相。范围：-1 ~ +1</p>
+            </div>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">沉默率</span>
+                <span class="info-item-value purple">{{ (silenceRate * 100).toFixed(1) }}%</span>
+              </div>
+              <p class="info-item-desc">不敢表达观点的人群比例。反映"沉默的螺旋"效应，高值可能导致极端观点主导。</p>
+            </div>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">极化指数</span>
+                <span class="info-item-value warning">{{ polarizationIndex.toFixed(3) }}</span>
+              </div>
+              <p class="info-item-desc">群体观点分歧程度（0~1）。高值表示社会撕裂，双方互不信任。</p>
+            </div>
+          </div>
+
+          <!-- 推演机制 -->
+          <div class="info-section">
+            <h4 class="info-section-title">🔬 推演机制</h4>
+            <div class="mechanism-list">
+              <div class="mechanism-item">
+                <span class="mechanism-icon">👥</span>
+                <div class="mechanism-content">
+                  <strong>社交传播影响</strong>
+                  <p>Agent受邻居观点影响，权重由邻居影响力决定</p>
+                </div>
+              </div>
+              <div class="mechanism-item">
+                <span class="mechanism-icon">📱</span>
+                <div class="mechanism-content">
+                  <strong>算法茧房效应</strong>
+                  <p>推荐算法强化既有观点，形成回音室</p>
+                </div>
+              </div>
+              <div class="mechanism-item">
+                <span class="mechanism-icon">🤫</span>
+                <div class="mechanism-content">
+                  <strong>沉默的螺旋</strong>
+                  <p>少数派因恐惧孤立而选择沉默</p>
+                </div>
+              </div>
+              <div class="mechanism-item">
+                <span class="mechanism-icon">⚡</span>
+                <div class="mechanism-content">
+                  <strong>群体极化</strong>
+                  <p>群体讨论导致观点向极端方向移动</p>
+                </div>
+              </div>
+              <div class="mechanism-item">
+                <span class="mechanism-icon">🔥</span>
+                <div class="mechanism-content">
+                  <strong>逆火效应</strong>
+                  <p>辟谣可能与强信念冲突，反而强化谣言</p>
+                </div>
+              </div>
+              <div class="mechanism-item">
+                <span class="mechanism-icon">🧠</span>
+                <div class="mechanism-content">
+                  <strong>认知失调</strong>
+                  <p>面对矛盾信息时可能强化原有信念</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图表阅读指南 -->
+          <div class="info-section">
+            <h4 class="info-section-title">📖 图表阅读指南</h4>
+            <div class="guide-item">
+              <strong>观点分布图</strong>
+              <ul>
+                <li>红色柱子 = 相信谣言的人群</li>
+                <li>橙色柱子 = 中立人群</li>
+                <li>绿色柱子 = 相信真相的人群</li>
+                <li>观察分布如何随推演变化</li>
+              </ul>
+            </div>
+            <div class="guide-item">
+              <strong>网络拓扑图</strong>
+              <ul>
+                <li>节点颜色 = Agent观点（红=谣言立场）</li>
+                <li>节点大小 = 影响力（大=意见领袖）</li>
+                <li>连线 = 信息传播路径</li>
+                <li>点击节点查看Agent决策详情</li>
+              </ul>
+            </div>
+            <div class="guide-item">
+              <strong>趋势曲线图</strong>
+              <ul>
+                <li>观察谣言率和真相率的此消彼长</li>
+                <li>辟谣发布点会有标记</li>
+                <li>极化指数上升=群体观点分化</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 操作提示 -->
+          <div class="info-section tips-section">
+            <h4 class="info-section-title">💡 操作提示</h4>
+            <div class="tip-item" v-if="currentStep === 0 && !isRunning">
+              <span class="tip-icon">1️⃣</span>
+              <span>调整左侧参数，然后点击"开始推演"</span>
+            </div>
+            <div class="tip-item" v-else-if="isRunning">
+              <span class="tip-icon">2️⃣</span>
+              <span>观察图表实时变化，可点击网络节点查看Agent决策</span>
+            </div>
+            <div class="tip-item" v-else-if="currentStep > 0 && !isRunning">
+              <span class="tip-icon">3️⃣</span>
+              <span>可注入事件或生成报告分析推演结果</span>
+            </div>
+          </div>
+        </div>
+      </aside>
     </main>
 
     <!-- 高级设置抽屉 -->
@@ -620,6 +890,141 @@
         </div>
       </div>
     </div>
+
+    <!-- 知识图谱解析弹窗 -->
+    <div v-if="showKnowledgeGraph" class="kg-modal-overlay" @click.self="showKnowledgeGraph = false">
+      <div class="kg-modal">
+        <div class="kg-modal-header">
+          <h3>🕸️ 知识图谱解析</h3>
+          <button class="report-close-btn" @click="showKnowledgeGraph = false">✕</button>
+        </div>
+        <div class="kg-modal-body">
+          <div v-if="knowledgeGraphLoading" class="kg-loading">
+            <div class="loading-spinner"></div>
+            <p>正在解析新闻结构...</p>
+          </div>
+          <div v-else class="kg-content">
+            <!-- 事件摘要 -->
+            <div v-if="knowledgeGraph.summary" class="kg-section">
+              <h4>📝 事件摘要</h4>
+              <p class="kg-summary">{{ knowledgeGraph.summary }}</p>
+            </div>
+            <!-- 实体列表 -->
+            <div v-if="knowledgeGraph.entities && knowledgeGraph.entities.length" class="kg-section">
+              <h4>🔷 实体 ({{ knowledgeGraph.entities.length }})</h4>
+              <div class="kg-entities">
+                <span v-for="(entity, idx) in knowledgeGraph.entities" :key="idx" class="kg-entity-tag">
+                  {{ entity.name }}
+                  <span class="kg-entity-type">{{ entity.type }}</span>
+                </span>
+              </div>
+            </div>
+            <!-- 关系列表 -->
+            <div v-if="knowledgeGraph.relations && knowledgeGraph.relations.length" class="kg-section">
+              <h4>🔗 关系 ({{ knowledgeGraph.relations.length }})</h4>
+              <div class="kg-relations">
+                <div v-for="(rel, idx) in knowledgeGraph.relations" :key="idx" class="kg-relation-item">
+                  <span class="kg-relation-source">{{ rel.source }}</span>
+                  <span class="kg-relation-action">{{ rel.action }}</span>
+                  <span class="kg-relation-target">{{ rel.target }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- 原始JSON -->
+            <div class="kg-section">
+              <h4>📄 原始JSON</h4>
+              <pre class="kg-json">{{ JSON.stringify(knowledgeGraph, null, 2) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新闻解析弹窗 -->
+    <div v-if="showNewsParser" class="kg-modal-overlay" @click.self="showNewsParser = false">
+      <div class="kg-modal">
+        <div class="kg-modal-header">
+          <h3>🕸️ 新闻解析为知识图谱</h3>
+          <button class="report-close-btn" @click="showNewsParser = false">✕</button>
+        </div>
+        <div class="kg-modal-body">
+          <!-- 功能说明 -->
+          <div class="kg-section kg-info-box">
+            <p><strong>功能说明：</strong>输入新闻文本，系统将自动提取实体（人物、组织、地点等）和关系，生成结构化知识图谱。</p>
+            <p class="kg-info-hint">💡 解析后的知识图谱可在推演中影响Agent的决策行为</p>
+          </div>
+          <div class="kg-section">
+            <h4>📰 输入新闻内容</h4>
+            <textarea 
+              v-model="newsContent" 
+              class="news-input" 
+              placeholder="请输入要解析的新闻内容..."
+              rows="5"
+            ></textarea>
+            <button class="btn-parse-news" @click="parseNews" :disabled="newsParsing || !newsContent.trim()">
+              {{ newsParsing ? '解析中...' : '🔍 开始解析' }}
+            </button>
+          </div>
+          <div v-if="newsParseError" class="kg-section">
+            <p class="kg-error">{{ newsParseError }}</p>
+          </div>
+          <div v-if="parsedKnowledgeGraph && parsedKnowledgeGraph.entities && parsedKnowledgeGraph.entities.length" class="kg-section">
+            <h4>✅ 解析成功！</h4>
+            <button class="btn-view-graph" @click="viewParsedGraph">
+              查看知识图谱 →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 事件注入弹窗 -->
+    <div v-if="showEventAirdrop" class="kg-modal-overlay" @click.self="showEventAirdrop = false">
+      <div class="kg-modal">
+        <div class="kg-modal-header">
+          <h3>📢 注入突发事件</h3>
+          <button class="report-close-btn" @click="showEventAirdrop = false">✕</button>
+        </div>
+        <div class="kg-modal-body">
+          <!-- 功能说明 -->
+          <div class="kg-section kg-info-box">
+            <p><strong>功能说明：</strong>在推演过程中注入突发事件，系统将解析为知识图谱并广播给所有Agent，影响其后续决策。</p>
+            <p class="kg-info-hint">⚡ 仅在推演进行中可用，事件会立即生效</p>
+          </div>
+          <div class="kg-section">
+            <h4>📰 事件内容</h4>
+            <textarea
+              v-model="airdropContent"
+              class="news-input"
+              placeholder="请输入要注入的事件内容..."
+              rows="5"
+            ></textarea>
+          </div>
+          <div class="kg-section">
+            <h4>🌐 传播领域</h4>
+            <div class="airdrop-source-options">
+              <label class="source-option">
+                <input type="radio" v-model="airdropSource" value="public" />
+                <span>公域 (公开传播)</span>
+              </label>
+              <label class="source-option">
+                <input type="radio" v-model="airdropSource" value="private" />
+                <span>私域 (好友传播)</span>
+              </label>
+            </div>
+          </div>
+          <div v-if="airdropError" class="kg-section">
+            <p class="kg-error">{{ airdropError }}</p>
+          </div>
+          <div class="kg-section">
+            <p class="airdrop-hint">💡 事件将被解析为知识图谱，Agent会根据图谱中的实体和关系理解事件内容</p>
+            <button class="btn-parse-news" @click="injectEvent" :disabled="airdropLoading || !airdropContent.trim()">
+              {{ airdropLoading ? '注入中...' : '🚀 注入事件' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -635,6 +1040,17 @@ export default {
       // 连接状态
       isConnected: false,
       ws: null,
+      wsReconnectCount: 0,
+      wsMaxReconnectAttempts: 5,
+
+      // UI状态
+      showHelp: true,  // 帮助说明默认展开
+      showInfoPanel: true,  // 右侧说明栏默认展开
+      expandedGroups: {
+        kg: true,      // 知识图谱组默认展开
+        report: false,
+        settings: false
+      },
 
       // 基础参数
       cocoonStrength: 0.5,
@@ -718,6 +1134,26 @@ export default {
       // 历史报告列表
       showReportList: false,
       reportList: [],
+
+      // 知识图谱解析
+      showKnowledgeGraph: false,
+      knowledgeGraph: { entities: [], relations: [], summary: '' },
+      knowledgeGraphLoading: false,
+      
+      // 新闻解析
+      showNewsParser: false,
+      newsContent: '',
+      newsParsing: false,
+      newsParseError: '',
+      parsedKnowledgeGraph: null,
+      
+      // 事件注入
+      showEventAirdrop: false,
+      airdropContent: '',
+      airdropSource: 'public',
+      airdropLoading: false,
+      airdropError: '',
+      
       reportListLoading: false,
 
       // 智库专报
@@ -848,6 +1284,12 @@ export default {
   },
 
   methods: {
+    // ==================== UI 辅助方法 ====================
+
+    toggleGroup(group) {
+      this.expandedGroups[group] = !this.expandedGroups[group]
+    },
+
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
@@ -859,17 +1301,25 @@ export default {
 
         this.ws.onopen = () => {
           this.isConnected = true
+          this.wsReconnectCount = 0
           console.log('WebSocket 已连接')
         }
 
         this.ws.onclose = (event) => {
           this.isConnected = false
           console.log('WebSocket 已断开', event.code, event.reason)
-          setTimeout(() => {
-            if (!this.isConnected) {
-              this.connectWebSocket()
-            }
-          }, 3000)
+          if (this.wsReconnectCount < this.wsMaxReconnectAttempts) {
+            this.wsReconnectCount++
+            console.log(`WebSocket 重连尝试 ${this.wsReconnectCount}/${this.wsMaxReconnectAttempts}`)
+            setTimeout(() => {
+              if (!this.isConnected) {
+                this.connectWebSocket()
+              }
+            }, 3000)
+          } else {
+            console.error('WebSocket 重连次数已达上限，停止重连')
+            alert('WebSocket 连接失败，请刷新页面重试')
+          }
         }
 
         this.ws.onerror = (error) => {
@@ -1032,6 +1482,81 @@ export default {
         }
       } finally {
         this.mathModelLoading = false
+      }
+    },
+
+    // ==================== 新闻解析功能 ====================
+
+    async parseNews() {
+      if (!this.newsContent.trim()) return
+      
+      this.newsParsing = true
+      this.newsParseError = ''
+      this.parsedKnowledgeGraph = null
+      
+      try {
+        const response = await fetch(window.location.origin + '/api/event/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: this.newsContent })
+        })
+        const data = await response.json()
+        
+        if (data.success) {
+          this.parsedKnowledgeGraph = data.data
+          this.knowledgeGraph = data.data
+        } else {
+          this.newsParseError = data.error || '解析失败'
+        }
+      } catch (error) {
+        console.error('解析新闻失败:', error)
+        this.newsParseError = '网络错误: ' + error.message
+      } finally {
+        this.newsParsing = false
+      }
+    },
+
+    viewParsedGraph() {
+      this.showNewsParser = false
+      this.showKnowledgeGraph = true
+    },
+
+    // ==================== 事件注入功能 ====================
+
+    async injectEvent() {
+      if (!this.airdropContent.trim()) return
+      
+      this.airdropLoading = true
+      this.airdropError = ''
+      
+      try {
+        const response = await fetch(
+          window.location.origin + '/api/event/airdrop',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: this.airdropContent, source: this.airdropSource })
+          }
+        )
+        const data = await response.json()
+        
+        if (data.success) {
+          this.showEventAirdrop = false
+          this.airdropContent = ''
+          // 更新当前知识图谱显示
+          if (data.knowledge_graph) {
+            this.knowledgeGraph = data.knowledge_graph
+          }
+          // 显示成功提示
+          alert('事件注入成功！已解析知识图谱。')
+        } else {
+          this.airdropError = data.error || '注入失败'
+        }
+      } catch (error) {
+        console.error('注入事件失败:', error)
+        this.airdropError = '网络错误: ' + error.message
+      } finally {
+        this.airdropLoading = false
       }
     },
 
@@ -2078,6 +2603,219 @@ export default {
   cursor: not-allowed;
 }
 
+/* ==================== 顶部流程引导 ==================== */
+.workflow-guide {
+  position: fixed;
+  top: 0;
+  left: 320px;
+  right: 0;
+  height: 50px;
+  background: rgba(15, 23, 42, 0.98);
+  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.workflow-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(51, 65, 85, 0.5);
+  color: #94a3b8;
+  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.workflow-step.active {
+  background: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.workflow-step.completed {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.step-number {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(51, 65, 85, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.workflow-step.active .step-number {
+  background: #3b82f6;
+  color: white;
+}
+
+.workflow-step.completed .step-number {
+  background: #22c55e;
+  color: white;
+}
+
+.step-connector {
+  width: 40px;
+  height: 2px;
+  background: rgba(51, 65, 85, 0.5);
+  transition: background 0.3s ease;
+}
+
+.step-connector.active {
+  background: linear-gradient(90deg, #22c55e, #3b82f6);
+}
+
+/* ==================== 帮助说明面板 ==================== */
+.help-section {
+  background: rgba(30, 41, 59, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+  overflow: hidden;
+}
+
+.help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.help-header:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.help-toggle {
+  font-size: 10px;
+  transition: transform 0.3s ease;
+}
+
+.help-toggle.expanded {
+  transform: rotate(180deg);
+}
+
+.help-content {
+  padding: 12px;
+  border-top: 1px solid rgba(100, 181, 246, 0.1);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.help-item {
+  margin-bottom: 10px;
+}
+
+.help-item:last-child {
+  margin-bottom: 0;
+}
+
+.help-item strong {
+  color: #60a5fa;
+  font-size: 12px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.help-item p {
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 2px 0;
+}
+
+/* ==================== 分组功能面板 ==================== */
+.panel-footer-grouped {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer-group {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.group-header:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.group-toggle {
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.3s ease;
+}
+
+.group-toggle.expanded {
+  transform: rotate(180deg);
+}
+
+.group-buttons {
+  padding: 8px;
+  border-top: 1px solid rgba(100, 181, 246, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(51, 65, 85, 0.6);
+  color: #e2e8f0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.btn-group:hover {
+  background: rgba(59, 130, 246, 0.3);
+  transform: translateX(2px);
+}
+
+.btn-group:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .dashboard-container {
   display: flex;
   width: 100vw;
@@ -2183,6 +2921,24 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* 参数标签与帮助图标 */
+.param-label-with-help {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.param-help {
+  font-size: 12px;
+  color: #6b7280;
+  cursor: help;
+  transition: color 0.2s;
+}
+
+.param-help:hover {
+  color: #60a5fa;
 }
 
 .section-label {
@@ -2391,14 +3147,7 @@ export default {
   to { transform: rotate(360deg); }
 }
 
-/* 面板底部 */
-.panel-footer {
-  display: flex;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(100, 181, 246, 0.1);
-}
-
+/* 面板底部按钮样式（保留兼容） */
 .btn-report, .btn-settings {
   flex: 1;
   display: flex;
@@ -2421,14 +3170,7 @@ export default {
 }
 
 /* ==================== 右侧主内容区 ==================== */
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  gap: 16px;
-  overflow: hidden;
-}
+/* 注意：.main-content 样式已移至文件末尾，这里保留图表子区域样式 */
 
 /* KPI指标卡 */
 .kpi-cards {
@@ -4021,5 +4763,511 @@ export default {
     height: 36px;
     font-size: 16px;
   }
+}
+
+/* ==================== 知识图谱模态框 ==================== */
+.kg-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.kg-modal {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  width: 80%;
+  max-width: 900px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.kg-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.kg-modal-header h3 {
+  margin: 0;
+  color: #e0e0e0;
+  font-size: 18px;
+}
+
+.kg-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.kg-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #a0a0a0;
+}
+
+.kg-content {
+  color: #e0e0e0;
+}
+
+.kg-section {
+  margin-bottom: 20px;
+}
+
+.kg-info-box {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.kg-info-box p {
+  margin: 0 0 8px 0;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.kg-info-box p:last-child {
+  margin-bottom: 0;
+}
+
+.kg-info-hint {
+  color: #94a3b8;
+  font-size: 12px !important;
+}
+
+.kg-section h4 {
+  margin: 0 0 10px 0;
+  color: #a78bfa;
+  font-size: 14px;
+}
+
+.kg-summary {
+  background: rgba(139, 92, 246, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid #8b5cf6;
+  line-height: 1.6;
+}
+
+.kg-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kg-entity-tag {
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #60a5fa;
+}
+
+.kg-entity-type {
+  color: #a0a0a0;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.kg-relations {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kg-relation-item {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.kg-relation-source {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.kg-relation-action {
+  color: #a0a0a0;
+  margin: 0 8px;
+}
+
+.kg-relation-target {
+  color: #22c55e;
+  font-weight: 500;
+}
+
+.kg-json {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  color: #a0a0a0;
+  overflow-x: auto;
+  max-height: 200px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ==================== 新闻解析输入 ==================== */
+.news-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.news-input:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.6);
+}
+
+.news-input::placeholder {
+  color: #6b7280;
+}
+
+.btn-parse-news {
+  margin-top: 12px;
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-parse-news:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.btn-parse-news:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kg-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid #ef4444;
+}
+
+.btn-view-graph {
+  margin-top: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-view-graph:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+/* ==================== 事件注入 ==================== */
+.btn-airdrop {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  color: #1f2937;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-airdrop:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+.airdrop-source-options {
+  display: flex;
+  gap: 20px;
+  margin: 12px 0;
+}
+
+.source-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #e0e0e0;
+  font-size: 14px;
+}
+
+.source-option input {
+  accent-color: #8b5cf6;
+}
+
+.airdrop-hint {
+  color: #9ca3af;
+  font-size: 13px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.btn-knowledge-graph {
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-knowledge-graph:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+/* ==================== 右侧说明栏 ==================== */
+.info-panel {
+  width: 280px;
+  min-width: 280px;
+  background: rgba(15, 23, 42, 0.95);
+  border-left: 1px solid rgba(100, 181, 246, 0.15);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.info-panel.collapsed {
+  width: 40px;
+  min-width: 40px;
+}
+
+.info-panel-toggle {
+  padding: 12px;
+  text-align: center;
+  background: rgba(100, 181, 246, 0.1);
+  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
+  color: #60a5fa;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.info-panel-toggle:hover {
+  background: rgba(100, 181, 246, 0.2);
+}
+
+.info-panel.collapsed .info-panel-toggle {
+  padding: 10px 0;
+}
+
+.info-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #60a5fa;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.info-item {
+  padding: 10px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 181, 246, 0.08);
+}
+
+.info-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.info-item-label {
+  font-size: 12px;
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.info-item-value {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.info-item-value.danger { color: #ef4444; }
+.info-item-value.success { color: #22c55e; }
+.info-item-value.info { color: #3b82f6; }
+.info-item-value.purple { color: #a78bfa; }
+.info-item-value.warning { color: #f59e0b; }
+
+.info-item-desc {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* 推演机制列表 */
+.mechanism-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mechanism-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 181, 246, 0.06);
+}
+
+.mechanism-icon {
+  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(100, 181, 246, 0.1);
+  border-radius: 6px;
+}
+
+.mechanism-content {
+  flex: 1;
+}
+
+.mechanism-content strong {
+  font-size: 12px;
+  color: #e2e8f0;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.mechanism-content p {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
+/* 图表阅读指南 */
+.guide-item {
+  padding: 10px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 181, 246, 0.06);
+}
+
+.guide-item strong {
+  font-size: 12px;
+  color: #e2e8f0;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.guide-item ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.guide-item li {
+  margin-bottom: 2px;
+}
+
+/* 操作提示 */
+.tips-section {
+  background: rgba(34, 197, 94, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.15);
+}
+
+.tip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.tip-icon {
+  font-size: 14px;
+}
+
+/* 图表区域容器调整 */
+.charts-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  padding-top: 70px;
+  gap: 16px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* 主内容区布局调整 */
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 </style>

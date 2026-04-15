@@ -14,6 +14,7 @@ from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
 from .llm_agents_dual import LLMAgentPopulationDual
 from .dual_network import DualLayerNetwork
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
+from .graph_parser_agent import GraphParserAgent, get_graph_parser
 from ..models.schemas import SimulationState
 from ..llm.client import LLMClient, LLMConfig
 
@@ -108,19 +109,41 @@ class SimulationEngineDual:
         # 新闻内容（模拟热点事件）
         self.news_content = "某地发生重大事件，网络上流传各种说法..."
         self.news_source = "public"  # 默认公域信息
+        self.knowledge_graph: Dict = {}  # 知识图谱数据
+        self._graph_parser: Optional[GraphParserAgent] = None  # 图谱解析器
 
         # === 事件注入池 ===
         self.event_pool: List[Dict] = []  # 存储所有注入的事件
         self.pending_events: List[Dict] = []  # 待处理的事件（将在下一步推演时应用）
 
+    @property
+    def graph_parser(self) -> GraphParserAgent:
+        """获取图谱解析器（延迟初始化）"""
+        if self._graph_parser is None:
+            self._graph_parser = get_graph_parser(self.llm_config)
+        return self._graph_parser
+
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
         self.progress_callback = callback
 
-    def set_news(self, content: str, source: str = "public"):
-        """设置新闻内容和来源"""
+    async def set_news(self, content: str, source: str = "public", parse_graph: bool = True):
+        """
+        设置新闻内容和来源，并解析知识图谱
+
+        Args:
+            content: 新闻内容
+            source: 来源 (public/private)
+            parse_graph: 是否解析知识图谱
+        """
         self.news_content = content
         self.news_source = source
+        
+        if parse_graph:
+            # 解析知识图谱
+            logger.info("正在解析新闻知识图谱...")
+            self.knowledge_graph = await self.graph_parser.parse(content)
+            logger.info(f"知识图谱解析完成: {len(self.knowledge_graph.get('entities', []))} 个实体")
 
     def broadcast_event(
         self,
@@ -284,11 +307,12 @@ class SimulationEngineDual:
         pop = self.llm_population
 
         async with self.llm_client:
-            # 批量异步决策
+            # 批量异步决策（包含知识图谱）
             await pop.batch_decide_dual(
                 self.llm_client,
                 news_content=self.news_content,
                 news_source=self.news_source,
+                knowledge_graph=self.knowledge_graph,
                 debunk_released=self.debunked,
                 cocoon_strength=self.cocoon_strength,
                 progress_callback=self.progress_callback

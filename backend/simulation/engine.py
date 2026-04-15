@@ -97,10 +97,50 @@ class SimulationEngine:
 
         # 进度回调
         self.progress_callback: Optional[Callable] = None
+        
+        # 新闻和知识图谱
+        self.news_content: str = ""
+        self.news_source: str = "public"
+        self.knowledge_graph: Dict = {}
 
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
         self.progress_callback = callback
+
+    def set_news(self, content: str, source: str = "public", parse_graph: bool = True):
+        """
+        设置新闻内容和来源
+
+        Args:
+            content: 新闻内容
+            source: 来源 (public/private)
+            parse_graph: 是否解析知识图谱（数学模型不使用）
+        """
+        self.news_content = content
+        self.news_source = source
+        # 注意：数学模型模式不解析知识图谱
+
+    def broadcast_event(
+        self,
+        content: str,
+        target_scope: str = "all"
+    ) -> Dict:
+        """
+        向全网或特定圈层广播突发事件
+
+        Args:
+            content: 事件内容
+            target_scope: 目标范围 (all/public/private)
+
+        Returns:
+            事件数据
+        """
+        event = {
+            "content": content,
+            "scope": target_scope,
+            "step": self.step_count
+        }
+        return event
 
     def initialize(self) -> SimulationState:
         """初始化模拟"""
@@ -283,13 +323,16 @@ class SimulationEngine:
 
             # 1. 社交影响分析
             if neighbors:
-                neighbor_opinions = old_opinions[neighbors]
-                avg_neighbor_op = np.mean(neighbor_opinions)
-                opinion_gap = avg_neighbor_op - old_op
+                # 过滤无效的邻居索引，防止越界
+                valid_neighbors = [n for n in neighbors if 0 <= n < len(old_opinions)]
+                if valid_neighbors:
+                    neighbor_opinions = old_opinions[valid_neighbors]
+                    avg_neighbor_op = np.mean(neighbor_opinions)
+                    opinion_gap = avg_neighbor_op - old_op
 
-                if abs(opinion_gap) > 0.1:
-                    direction = "真相" if opinion_gap > 0 else "谣言"
-                    reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
+                    if abs(opinion_gap) > 0.1:
+                        direction = "真相" if opinion_gap > 0 else "谣言"
+                        reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
 
                 # 检查意见领袖影响
                 influencer_neighbors = [n for n in neighbors if n in influencer_ids]

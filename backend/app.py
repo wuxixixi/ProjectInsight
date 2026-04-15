@@ -81,6 +81,17 @@ class StartRequest(BaseModel):
     echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
 
 
+class ParseRequest(BaseModel):
+    """知识图谱解析请求参数"""
+    content: str  # 新闻文本内容
+
+
+class AirdropRequest(BaseModel):
+    """事件注入请求参数"""
+    content: str  # 事件文本内容
+    source: str = "public"  # 来源 (public/private)
+
+
 def _is_local_llm_runtime(llm_config: LLMConfig) -> bool:
     """根据 LLM 配置判断是否本地推理环境（如 Ollama）。"""
     base_url = (llm_config.base_url or "").lower()
@@ -630,6 +641,103 @@ async def stream_intelligence_report():
     )
 
 
+@app.post("/api/event/parse")
+async def parse_news_event(req: ParseRequest):
+    """
+    解析新闻文本为知识图谱
+
+    Request Body:
+        content: 新闻文本内容
+    """
+    from .simulation.graph_parser_agent import get_graph_parser
+
+    try:
+        graph_parser = get_graph_parser()
+        knowledge_graph = await graph_parser.parse(req.content)
+
+        return {
+            "success": True,
+            "data": knowledge_graph
+        }
+    except Exception as e:
+        logger.error(f"知识图谱解析失败: {e}")
+        return JSONResponse(
+            content={"success": False, "error": str(e)},
+            status_code=500
+        )
+
+
+@app.post("/api/event/airdrop")
+async def airdrop_event(req: AirdropRequest):
+    """
+    注入突发事件（触发知识图谱解析）
+
+    Request Body:
+        content: 事件文本内容
+        source: 来源 (public/private)
+    """
+    global engine
+
+    if engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化"},
+            status_code=400
+        )
+
+    try:
+        # 解析知识图谱
+        from .simulation.graph_parser_agent import get_graph_parser
+        graph_parser = get_graph_parser()
+        knowledge_graph = await graph_parser.parse(req.content)
+
+        # 更新引擎的新闻和图谱
+        if hasattr(engine, 'set_news'):
+            # 检查 set_news 是否是异步方法
+            import inspect
+            if inspect.iscoroutinefunction(engine.set_news):
+                await engine.set_news(req.content, req.source, parse_graph=False)
+            else:
+                engine.set_news(req.content, req.source, parse_graph=False)
+        engine.knowledge_graph = knowledge_graph
+
+        # 广播事件
+        event = engine.broadcast_event(req.content, "all")
+        event["knowledge_graph"] = knowledge_graph
+        
+        return {
+            "success": True,
+            "data": {
+                "event": event,
+                "knowledge_graph": knowledge_graph
+            }
+        }
+    except Exception as e:
+        logger.error(f"事件注入失败: {e}")
+        return JSONResponse(
+            content={"success": False, "error": str(e)},
+            status_code=500
+        )
+
+
+@app.get("/api/event/knowledge-graph")
+async def get_current_knowledge_graph():
+    """
+    获取当前推演的知识图谱
+    """
+    global engine
+    
+    if engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化"},
+            status_code=400
+        )
+    
+    return {
+        "success": True,
+        "data": engine.knowledge_graph
+    }
+
+
 @app.websocket("/ws/simulation")
 async def websocket_simulation(websocket: WebSocket):
     """
@@ -662,8 +770,8 @@ async def websocket_simulation(websocket: WebSocket):
                 "total": total,
                 "message": f"Agent {step}/{total}"
             })
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"发送进度失败: {e}")
 
     async def auto_step_loop(interval: int):
         """自动推演循环"""

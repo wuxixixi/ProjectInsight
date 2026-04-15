@@ -261,6 +261,84 @@
 
 ---
 
+### 知识图谱
+
+#### POST /api/event/parse
+
+解析新闻文本为知识图谱
+
+**查询参数:**
+- `content`: 新闻文本内容
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "data": {
+    "entities": [
+      {"name": "王某杞", "type": "人物", "description": "某科技公司CEO"},
+      {"name": "某科技公司", "type": "组织", "description": "新闻中提及的科技公司"},
+      {"name": "北京", "type": "地点", "description": "发布会举办地点"},
+      {"name": "100亿元", "type": "概念", "description": "公司计划投资的金额"}
+    ],
+    "relations": [
+      {"source": "王某杞", "target": "某科技公司", "action": "担任CEO", "type": "关联"},
+      {"source": "某科技公司", "target": "100亿元", "action": "计划投资", "type": "影响"}
+    ],
+    "summary": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元。"
+  }
+}
+```
+
+---
+
+#### POST /api/event/airdrop
+
+注入突发事件，触发知识图谱解析并在推演中使用
+
+**查询参数:**
+- `content`: 事件文本内容
+- `source`: 来源 (public/private)，默认 "public"
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "data": {
+    "event": {
+      "content": "某科技公司CEO王某杞在北京发帨会上宣希公司将投资100亿元",
+      "step": 0,
+      "knowledge_graph": {...}
+    },
+    "knowledge_graph": {
+      "entities": [...],
+      "relations": [...],
+      "summary": "..."
+    }
+  }
+}
+```
+
+---
+
+#### GET /api/event/knowledge-graph
+
+获取当前推演的知识图谱
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "data": {
+    "entities": [...],
+    "relations": [...],
+    "summary": "..."
+  }
+}
+```
+
+---
+
 ### 数学模型
 
 #### GET /api/math-model/explanation
