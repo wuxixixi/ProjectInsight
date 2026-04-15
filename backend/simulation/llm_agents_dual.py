@@ -417,7 +417,7 @@ class LLMAgent:
                 "old_opinion": float(self.opinion),
                 "new_opinion": float(new_opinion),
                 "received_news": received_news,
-                "llm_raw_response": result,
+                "llm_raw_response": result.get("_raw_response", result),  # 保存原始响应
                 "emotion": emotion,
                 "action": action,
                 "generated_comment": generated_comment,

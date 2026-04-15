@@ -250,11 +250,22 @@ class LLMClient:
     ) -> Dict[str, Any]:
         """
         聊天并解析 JSON 响应
-        自动提取 JSON 内容
+        自动提取 JSON 内容，同时保留原始响应信息
         """
         response = await self.chat(messages, **kwargs)
         content = response["choices"][0]["message"]["content"]
-        return self._parse_json_content(content)
+        parsed = self._parse_json_content(content)
+
+        # 返回解析后的 JSON，同时保留原始响应信息
+        return {
+            **parsed,  # 解析后的字段（new_opinion, reasoning等）
+            "_raw_response": {
+                "content": content,
+                "model": response.get("model"),
+                "usage": response.get("usage"),
+                "id": response.get("id")
+            }
+        }
 
     async def batch_chat(
         self,
