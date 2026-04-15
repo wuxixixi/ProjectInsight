@@ -1,27 +1,47 @@
 #!/usr/bin/env python3
 """
-部署脚本 - 将项目部署到腾讯云服务器
+部署脚本 - 将项目部署到多台服务器
 """
 import paramiko
 import os
 import sys
 from pathlib import Path
 
-# 服务器配置
-SERVER_HOST = "101.34.62.149"
-SERVER_USER = "ubuntu"
-SERVER_PASS = "Wuxi,62047720"
-REMOTE_DIR = "/home/ubuntu/ProjectInsight"
+# 多服务器配置
+SERVERS = [
+    {
+        "host": "101.34.62.149",
+        "user": "ubuntu",
+        "password": "Wuxi,62047720",
+        "remote_dir": "/home/ubuntu/ProjectInsight",
+        "name": "腾讯云服务器"
+    },
+    {
+        "host": "172.16.128.44",
+        "user": "dev",
+        "password": "dev@sass.",
+        "remote_dir": "/home/dev/ProjectInsight",
+        "name": "院服务器2"
+    }
+]
 
-def create_ssh_client():
+def create_ssh_client(host, user, password):
     """创建SSH连接"""
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(SERVER_HOST, username=SERVER_USER, password=SERVER_PASS, timeout=30)
-    return client
+    try:
+        client.connect(host, username=user, password=password, timeout=30)
+        return client
+    except Exception as e:
+        print(f"连接失败: {e}")
+        return None
 
-def run_command(client, cmd, show_output=True):
+def run_command(client, cmd, show_output=True, sudo_password=None):
     """执行远程命令"""
+    # 如果需要sudo且有密码，使用 -S 选项
+    if sudo_password and 'sudo' in cmd:
+        cmd = f"echo '{sudo_password}' | sudo -S {cmd.replace('sudo ', '', 1)}"
+
     print(f"[CMD] {cmd}")
     stdin, stdout, stderr = client.exec_command(cmd)
     out = stdout.read().decode('utf-8', errors='replace')
@@ -33,7 +53,7 @@ def run_command(client, cmd, show_output=True):
                 print(out)
             except UnicodeEncodeError:
                 print(out.encode('gbk', errors='replace').decode('gbk'))
-        if err:
+        if err and '[sudo]' not in err:  # 过滤sudo密码提示
             try:
                 print(f"[ERR] {err}")
             except UnicodeEncodeError:
@@ -88,22 +108,37 @@ def upload_directory(client, local_dir, remote_dir):
 
     sftp.close()
 
-def main():
+def deploy_to_server(server_config):
+    """部署到单个服务器"""
+    host = server_config["host"]
+    user = server_config["user"]
+    password = server_config["password"]
+    remote_dir = server_config["remote_dir"]
+    name = server_config["name"]
+    sudo_password = server_config.get("sudo_password", password)  # 默认使用登录密码
+
+    def run_cmd(cmd, show_output=True):
+        """带sudo密码支持的命令执行"""
+        return run_command(client, cmd, show_output, sudo_password)
+
     print("=" * 60)
-    print("开始部署到腾讯云服务器")
-    print(f"服务器: {SERVER_HOST}")
-    print(f"用户: {SERVER_USER}")
+    print(f"开始部署到 {name}")
+    print(f"服务器: {host}")
+    print(f"用户: {user}")
     print("=" * 60)
 
     # 连接服务器
     print("\n[1] 连接服务器...")
-    client = create_ssh_client()
+    client = create_ssh_client(host, user, password)
+    if client is None:
+        print(f"连接 {name} 失败，跳过")
+        return False
     print("连接成功!")
 
     # 检查系统环境
     print("\n[2] 检查系统环境...")
-    run_command(client, "cat /etc/os-release | head -3")
-    run_command(client, "python3 --version || python --version || echo 'Python not found'")
+    run_cmd("cat /etc/os-release | head -3")
+    run_cmd("python3 --version || python --version || echo 'Python not found'")
 
     # 安装必要软件
     print("\n[3] 安装依赖软件...")
@@ -112,38 +147,38 @@ def main():
         "sudo apt-get install -y -qq python3 python3-pip python3-venv nodejs npm git",
     ]
     for cmd in commands:
-        run_command(client, cmd)
+        run_cmd(cmd)
 
     # 检查Node.js版本，如果太旧则安装新版本
     print("\n[4] 检查Node.js版本...")
-    out, _, _ = run_command(client, "node --version || echo 'none'", show_output=False)
+    out, _, _ = run_cmd("node --version || echo 'none'", show_output=False)
     node_version = out.strip()
     print(f"Node版本: {node_version}")
 
     if node_version in ('none', ''):
         # 安装Node.js 18
-        run_command(client, "curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -")
-        run_command(client, "sudo apt-get install -y nodejs")
+        run_cmd("curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -")
+        run_cmd("sudo apt-get install -y nodejs")
 
     # 创建项目目录
     print("\n[5] 创建项目目录...")
-    run_command(client, f"mkdir -p {REMOTE_DIR}")
+    run_cmd(f"mkdir -p {remote_dir}")
 
     # 上传项目文件
     print("\n[6] 上传项目文件...")
     local_dir = os.path.dirname(os.path.abspath(__file__))
-    upload_directory(client, local_dir, REMOTE_DIR)
+    upload_directory(client, local_dir, remote_dir)
 
     # 安装Python依赖
     print("\n[7] 安装Python依赖...")
-    run_command(client, f"cd {REMOTE_DIR} && pip3 install fastapi uvicorn numpy networkx pydantic python-multipart websockets scipy aiohttp")
+    run_cmd(f"cd {remote_dir} && pip3 install fastapi uvicorn numpy networkx pydantic python-multipart websockets scipy aiohttp")
 
     # 安装前端依赖并构建
     print("\n[8] 安装前端依赖...")
-    run_command(client, f"cd {REMOTE_DIR}/frontend && npm install")
+    run_cmd(f"cd {remote_dir}/frontend && npm install")
 
     print("\n[9] 构建前端...")
-    run_command(client, f"cd {REMOTE_DIR}/frontend && npm run build")
+    run_cmd(f"cd {remote_dir}/frontend && npm run build")
 
     # 配置systemd服务
     print("\n[10] 配置后端服务...")
@@ -153,8 +188,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory={REMOTE_DIR}
+User={user}
+WorkingDirectory={remote_dir}
 ExecStart=/usr/bin/python3 -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
@@ -163,22 +198,22 @@ RestartSec=3
 WantedBy=multi-user.target
 """
     # 写入服务文件
-    run_command(client, f"echo '{backend_service}' | sudo tee /etc/systemd/system/info-cocoon.service")
-    run_command(client, "sudo systemctl daemon-reload")
-    run_command(client, "sudo systemctl enable info-cocoon")
-    run_command(client, "sudo systemctl restart info-cocoon")
+    run_cmd(f"echo '{backend_service}' | sudo tee /etc/systemd/system/info-cocoon.service")
+    run_cmd("sudo systemctl daemon-reload")
+    run_cmd("sudo systemctl enable info-cocoon")
+    run_cmd("sudo systemctl restart info-cocoon")
 
     # 配置nginx
     print("\n[11] 配置Nginx...")
-    run_command(client, "sudo apt-get install -y nginx")
+    run_cmd("sudo apt-get install -y nginx")
 
     nginx_config = f"""server {{
     listen 80;
-    server_name {SERVER_HOST};
+    server_name {host};
 
     # 前端静态文件
     location / {{
-        root {REMOTE_DIR}/frontend/dist;
+        root {remote_dir}/frontend/dist;
         try_files $uri $uri/ /index.html;
     }}
 
@@ -202,21 +237,44 @@ WantedBy=multi-user.target
         proxy_read_timeout 86400;
     }}
 }}"""
-    run_command(client, f"echo '{nginx_config}' | sudo tee /etc/nginx/sites-available/info-cocoon")
-    run_command(client, "sudo rm -f /etc/nginx/sites-enabled/default")
-    run_command(client, "sudo ln -sf /etc/nginx/sites-available/info-cocoon /etc/nginx/sites-enabled/")
-    run_command(client, "sudo nginx -t && sudo systemctl restart nginx")
+    run_cmd(f"echo '{nginx_config}' | sudo tee /etc/nginx/sites-available/info-cocoon")
+    run_cmd("sudo rm -f /etc/nginx/sites-enabled/default")
+    run_cmd("sudo ln -sf /etc/nginx/sites-available/info-cocoon /etc/nginx/sites-enabled/")
+    run_cmd("sudo nginx -t && sudo systemctl restart nginx")
 
     # 检查服务状态
     print("\n[12] 检查服务状态...")
-    run_command(client, "sudo systemctl status info-cocoon --no-pager || true")
-    run_command(client, "sudo systemctl status nginx --no-pager || true")
+    run_cmd("sudo systemctl status info-cocoon --no-pager || true")
+    run_cmd("sudo systemctl status nginx --no-pager || true")
 
     client.close()
 
     print("\n" + "=" * 60)
-    print("部署完成!")
-    print(f"访问地址: http://{SERVER_HOST}")
+    print(f"{name} 部署完成!")
+    print(f"访问地址: http://{host}")
+    print("=" * 60)
+    return True
+
+
+def main():
+    print("=" * 60)
+    print("开始部署到多台服务器")
+    print(f"服务器数量: {len(SERVERS)}")
+    for s in SERVERS:
+        print(f"  - {s['name']}: {s['host']}")
+    print("=" * 60)
+
+    results = []
+    for server in SERVERS:
+        success = deploy_to_server(server)
+        results.append((server["name"], server["host"], success))
+
+    print("\n" + "=" * 60)
+    print("部署汇总")
+    print("=" * 60)
+    for name, host, success in results:
+        status = "成功" if success else "失败"
+        print(f"  {name} ({host}): {status}")
     print("=" * 60)
 
 if __name__ == "__main__":

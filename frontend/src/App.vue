@@ -209,6 +209,7 @@
           <div class="chart-card opinion-chart">
             <div class="chart-header">
               <h3>群体观点分布</h3>
+              <button class="chart-zoom-btn" @click="openChartModal('opinion')" title="放大">🔍</button>
               <div class="chart-legend">
                 <span class="legend-item rumor">谣言</span>
                 <span class="legend-item neutral">中立</span>
@@ -220,6 +221,7 @@
           <div class="chart-card network-chart">
             <div class="chart-header">
               <h3>信息传播网络</h3>
+              <button class="chart-zoom-btn" @click="openChartModal('network')" title="放大">🔍</button>
               <div class="network-tabs" v-if="useDualNetwork">
                 <button :class="['tab-btn', { active: activeNetworkTab === 'public' }]" @click="activeNetworkTab = 'public'">
                   🏛️ 公域广场
@@ -243,6 +245,7 @@
           <div class="chart-card trend-chart">
             <div class="chart-header">
               <h3>舆论演化趋势</h3>
+              <button class="chart-zoom-btn" @click="openChartModal('trend')" title="放大">🔍</button>
               <span v-if="debunked" class="debunk-badge">辟谣已发布</span>
             </div>
             <div class="chart-body" ref="trendChart"></div>
@@ -522,6 +525,17 @@
       </div>
     </div>
 
+    <!-- 图表放大弹窗 -->
+    <div v-if="chartModalOpen" class="chart-modal-overlay" @click.self="closeChartModal">
+      <div class="chart-modal">
+        <div class="chart-modal-header">
+          <h3>{{ chartModalTitle }}</h3>
+          <button class="chart-modal-close" @click="closeChartModal">✕</button>
+        </div>
+        <div class="chart-modal-body" ref="chartModalBody"></div>
+      </div>
+    </div>
+
     <!-- 报告弹窗 -->
     <div v-if="reportGenerated" class="report-modal-overlay" @click.self="closeReport">
       <div class="report-modal">
@@ -687,6 +701,12 @@ export default {
       opinionChartInstance: null,
       networkChartInstance: null,
       trendChartInstance: null,
+
+      // 图表放大模态框
+      chartModalOpen: false,
+      chartModalType: 'opinion',  // 'opinion' | 'network' | 'trend'
+      chartModalTitle: '',
+      chartModalInstance: null,
 
       // 报告相关
       reportGenerated: false,
@@ -1254,6 +1274,401 @@ export default {
       this.opinionChartInstance?.resize()
       this.networkChartInstance?.resize()
       this.trendChartInstance?.resize()
+      if (this.chartModalInstance) {
+        this.chartModalInstance.resize()
+      }
+    },
+
+    openChartModal(type) {
+      this.chartModalType = type
+      const titles = {
+        opinion: '群体观点分布',
+        network: '信息传播网络',
+        trend: '舆论演化趋势'
+      }
+      this.chartModalTitle = titles[type] || '图表'
+      this.chartModalOpen = true
+
+      this.$nextTick(() => {
+        this.chartModalInstance = echarts.init(this.$refs.chartModalBody)
+        this.renderModalChart()
+      })
+    },
+
+    closeChartModal() {
+      this.chartModalOpen = false
+      if (this.chartModalInstance) {
+        this.chartModalInstance.dispose()
+        this.chartModalInstance = null
+      }
+    },
+
+    renderModalChart() {
+      if (!this.chartModalInstance) return
+
+      let option = null
+
+      if (this.chartModalType === 'opinion') {
+        option = this.getOpinionChartOption()
+      } else if (this.chartModalType === 'network') {
+        option = this.getNetworkChartOption()
+      } else if (this.chartModalType === 'trend') {
+        option = this.getTrendChartOption()
+      }
+
+      if (option) {
+        this.chartModalInstance.setOption(option)
+      }
+
+      // 为网络图添加点击事件（查看Agent详情）
+      if (this.chartModalType === 'network') {
+        this.chartModalInstance.off('click')
+        this.chartModalInstance.on('click', (params) => {
+          if (params.dataType === 'node') {
+            const agentId = parseInt(params.data.id)
+            this.inspectAgent(agentId)
+          }
+        })
+      }
+
+      // 为趋势图添加全选/反选功能
+      if (this.chartModalType === 'trend') {
+        this.chartModalInstance.off('legendselectchanged')
+        this.chartModalInstance.on('legendselectchanged', (params) => {
+          const selected = params.selected
+          if (!selected) return
+          
+          const legendData = ['谣言传播率', '真相接受率', '平均观点', '极化指数', '沉默率', '公域谣言率', '私域谣言率']
+          const visibleCount = legendData.filter(name => selected[name]).length
+          
+          // 全选：使用延时确保图例状态已更新
+          if (visibleCount === legendData.length) {
+            setTimeout(() => {
+              legendData.forEach(name => {
+                this.chartModalInstance.dispatchAction({ type: 'legendSelect', name: name })
+              })
+            }, 50)
+          }
+          // 反选（全不选）
+          else if (visibleCount === 0) {
+            setTimeout(() => {
+              legendData.forEach(name => {
+                this.chartModalInstance.dispatchAction({ type: 'legendUnSelect', name: name })
+              })
+            }, 50)
+          }
+        })
+      }
+    },
+
+    getOpinionChartOption() {
+      const data = this.opinionDist.counts.map((count, i) => ({
+        value: count,
+        center: this.opinionDist.centers?.[i] || i
+      }))
+
+      return {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(20, 25, 40, 0.95)',
+          borderColor: 'rgba(100, 181, 246, 0.3)',
+          textStyle: { color: '#e0e0e0' }
+        },
+        grid: {
+          left: '8%',
+          right: '4%',
+          top: '10%',
+          bottom: '12%'
+        },
+        xAxis: {
+          type: 'category',
+          data: this.opinionDist.centers?.map(c => c.toFixed(2)) || [],
+          axisLabel: { color: '#6b7280', fontSize: 10 },
+          axisLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.2)' } },
+          name: '观点值',
+          nameTextStyle: { color: '#6b7280', fontSize: 11 }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: { color: '#6b7280' },
+          splitLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.1)' } },
+          axisLine: { show: false }
+        },
+        series: [{
+          type: 'bar',
+          data: data.map((d, i) => {
+            const center = d.center
+            let color
+            if (center < -0.2) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#ef4444' },
+              { offset: 1, color: '#dc2626' }
+            ])
+            else if (center > 0.2) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#22c55e' },
+              { offset: 1, color: '#16a34a' }
+            ])
+            else color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#f59e0b' },
+              { offset: 1, color: '#d97706' }
+            ])
+            return {
+              value: d.value,
+              itemStyle: { color, borderRadius: [4, 4, 0, 0] }
+            }
+          }),
+          barWidth: '70%'
+        }]
+      }
+    },
+
+    getNetworkChartOption() {
+      if (!this.agents || !this.agents.length) {
+        return { backgroundColor: 'transparent', title: { text: '暂无数据', style: { color: '#9ca3af' } } }
+      }
+
+      const edges = this.useDualNetwork
+        ? (this.activeNetworkTab === 'public' ? this.publicEdges : this.privateEdges)
+        : (this.edges || [])
+
+      const communityColors = [
+        '#60a5fa', '#a78bfa', '#f472b6', '#fb923c',
+        '#4ade80', '#22d3ee', '#facc15', '#e879f9'
+      ]
+
+      const nodes = this.agents.map(agent => {
+        let color
+        if (agent.opinion < -0.2) color = '#ef4444'
+        else if (agent.opinion > 0.2) color = '#22c55e'
+        else color = '#f59e0b'
+
+        const opacity = agent.is_silent ? 0.3 : 1.0
+
+        let symbolSize
+        if (this.useDualNetwork && this.activeNetworkTab === 'public') {
+          symbolSize = agent.is_influencer
+            ? 12 + (agent.influence || 0) * 15
+            : 4 + (agent.influence || 0) * 6
+        } else if (this.useDualNetwork) {
+          color = communityColors[agent.community_id % 8] || color
+          symbolSize = agent.is_silent ? 3 : 5
+        } else {
+          symbolSize = 5 + (agent.influence || 0) * 10
+        }
+
+        return {
+          id: agent.id.toString(),
+          name: `#${agent.id}`,
+          symbolSize: symbolSize,
+          itemStyle: {
+            color: color,
+            opacity: opacity,
+            borderColor: agent.is_influencer ? '#fcd34d' : null,
+            borderWidth: agent.is_influencer ? 2 : 0
+          },
+          x: Math.random() * 800,
+          y: Math.random() * 500
+        }
+      })
+
+      const sampledEdges = edges
+        .filter(() => Math.random() < 0.3)
+        .slice(0, 500)
+        .map(([source, target]) => ({ source: source.toString(), target: target.toString() }))
+
+      return {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: 'rgba(30, 41, 59, 0.9)',
+          borderColor: 'rgba(100, 181, 246, 0.3)',
+          textStyle: { color: '#e2e8f0' },
+          formatter: (params) => {
+            if (params.dataType === 'node') {
+              return `Agent #${params.data.id}<br/>观点: ${params.data.name}`
+            }
+            return ''
+          }
+        },
+        series: [{
+          type: 'graph',
+          layout: 'force',
+          data: nodes,
+          links: sampledEdges,
+          roam: true,
+          label: { show: false },
+          force: {
+            repulsion: 100,
+            gravity: 0.1,
+            edgeLength: 30
+          },
+          lineStyle: {
+            color: 'rgba(100, 181, 246, 0.2)',
+            width: 0.5,
+            curveness: 0.1
+          }
+        }]
+      }
+    },
+
+    getTrendChartOption() {
+      const hasDualData = this.trendHistory.publicRumorRates.length > 0 &&
+                          this.publicRumorRates !== this.trendHistory.rumorRates
+
+      return {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(20, 25, 40, 0.95)',
+          borderColor: 'rgba(100, 181, 246, 0.3)',
+          textStyle: { color: '#e0e0e0' }
+        },
+        legend: {
+          data: ['谣言传播率', '真相接受率', '平均观点', '极化指数', '沉默率', '公域谣言率', '私域谣言率'],
+          textStyle: { color: '#6b7280', fontSize: 11 },
+          top: 5,
+          itemWidth: 16,
+          itemHeight: 8,
+          selectedMode: 'multiple',
+          selector: true,
+          selectorPosition: 'end',
+          triggerEvent: true
+        },
+        grid: {
+          left: '6%',
+          right: '6%',
+          top: '22%',
+          bottom: '10%'
+        },
+        xAxis: {
+          type: 'category',
+          data: this.trendHistory.steps,
+          axisLabel: { color: '#6b7280', fontSize: 10 },
+          axisLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.2)' } },
+          name: '步数',
+          nameTextStyle: { color: '#6b7280', fontSize: 11 }
+        },
+        yAxis: [
+          {
+            type: 'value',
+            position: 'left',
+            axisLabel: { color: '#6b7280', fontSize: 10 },
+            splitLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.1)' } },
+            axisLine: { show: false },
+            min: -1,
+            max: 1
+          },
+          {
+            type: 'value',
+            position: 'right',
+            axisLabel: { color: '#6b7280', fontSize: 10 },
+            splitLine: { show: false },
+            axisLine: { show: false },
+            min: 0,
+            max: 1
+          }
+        ],
+        series: [
+          {
+            name: '谣言传播率',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.rumorRates,
+            lineStyle: { color: '#ef4444', width: 2 },
+            itemStyle: { color: '#ef4444' },
+            smooth: true,
+            symbol: 'none',
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(239, 68, 68, 0.3)' },
+                { offset: 1, color: 'rgba(239, 68, 68, 0.05)' }
+              ])
+            }
+          },
+          {
+            name: '真相接受率',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.truthRates,
+            lineStyle: { color: '#22c55e', width: 2 },
+            itemStyle: { color: '#22c55e' },
+            smooth: true,
+            symbol: 'none',
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(34, 197, 94, 0.3)' },
+                { offset: 1, color: 'rgba(34, 197, 94, 0.05)' }
+              ])
+            }
+          },
+          {
+            name: '平均观点',
+            type: 'line',
+            yAxisIndex: 0,
+            data: this.trendHistory.avgOpinions,
+            lineStyle: { color: '#3b82f6', width: 2 },
+            itemStyle: { color: '#3b82f6' },
+            smooth: true,
+            symbol: 'none'
+          },
+          {
+            name: '极化指数',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.polarization,
+            lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
+            itemStyle: { color: '#f59e0b' },
+            smooth: true,
+            symbol: 'none'
+          },
+          {
+            name: '沉默率',
+            type: 'line',
+            yAxisIndex: 1,
+            data: this.trendHistory.silenceRates,
+            lineStyle: { color: '#8b5cf6', width: 2, type: 'dotted' },
+            itemStyle: { color: '#8b5cf6' },
+            smooth: true,
+            symbol: 'none',
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(139, 92, 246, 0.2)' },
+                { offset: 1, color: 'rgba(139, 92, 246, 0.02)' }
+              ])
+            }
+          },
+          // 双层网络：公域/私域谣言率曲线
+          ...(hasDualData ? [
+            {
+              name: '公域谣言率',
+              type: 'line',
+              yAxisIndex: 1,
+              data: this.trendHistory.publicRumorRates,
+              lineStyle: { color: '#f97316', width: 2, type: 'dashed' },
+              itemStyle: { color: '#f97316' },
+              smooth: true,
+              symbol: 'circle',
+              symbolSize: 4
+            },
+            {
+              name: '私域谣言率',
+              type: 'line',
+              yAxisIndex: 1,
+              data: this.trendHistory.privateRumorRates,
+              lineStyle: { color: '#dc2626', width: 2, type: 'solid' },
+              itemStyle: { color: '#dc2626' },
+              smooth: true,
+              symbol: 'circle',
+              symbolSize: 4
+            }
+          ] : [])
+        ]
+      }
+    },
+
+    getCommunityColor(community) {
+      const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899']
+      return colors[community % colors.length]
     },
 
     renderOpinionChart() {
@@ -1463,7 +1878,11 @@ export default {
           textStyle: { color: '#6b7280', fontSize: 11 },
           top: 5,
           itemWidth: 16,
-          itemHeight: 8
+          itemHeight: 8,
+          selectedMode: 'multiple',
+          selector: true,
+          selectorPosition: 'end',
+          triggerEvent: true
         },
         grid: {
           left: '6%',
@@ -2187,12 +2606,14 @@ export default {
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid rgba(100, 181, 246, 0.1);
+  gap: 8px;
 }
 
 .chart-header h3 {
   font-size: 14px;
   font-weight: 600;
   color: #e2e8f0;
+  flex-shrink: 0;
 }
 
 .chart-legend {
@@ -2566,7 +2987,7 @@ export default {
   inset: 0;
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(4px);
-  z-index: 200;
+  z-index: 500;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2990,6 +3411,84 @@ export default {
   word-break: break-all;
   max-height: 150px;
   overflow-y: auto;
+}
+
+/* ==================== 图表放大弹窗 ==================== */
+.chart-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(8px);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-modal {
+  width: 90vw;
+  height: 80vh;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(100, 181, 246, 0.3);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chart-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(100, 181, 246, 0.2);
+}
+
+.chart-modal-header h3 {
+  font-size: 18px;
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.chart-modal-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.chart-modal-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.chart-modal-body {
+  flex: 1;
+  width: 100%;
+  padding: 16px;
+}
+
+/* ==================== 图表放大按钮 ==================== */
+.chart-zoom-btn {
+  background: transparent;
+  border: 1px solid rgba(100, 181, 246, 0.3);
+  color: #9ca3af;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.chart-zoom-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
 }
 
 /* ==================== 报告弹窗 ==================== */
