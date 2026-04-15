@@ -50,6 +50,11 @@ app.add_middleware(
 # 全局模拟引擎实例
 engine: Optional[SimulationEngine] = None
 
+# 待注入的事件/知识图谱（推演开始前可预先准备）
+pending_knowledge_graph: Optional[dict] = None
+pending_event_content: Optional[str] = None
+pending_event_source: Optional[str] = None
+
 
 class StartRequest(BaseModel):
     """推演启动请求参数"""
@@ -233,9 +238,10 @@ async def root():
 async def start_simulation(params: StartRequest):
     """
     启动新的推演模拟
+    如果有待注入的事件/知识图谱，会自动注入到引擎中
     返回初始状态
     """
-    global engine
+    global engine, pending_knowledge_graph, pending_event_content, pending_event_source
 
     # 自动计算并发数（如果未指定）
     max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
@@ -288,6 +294,35 @@ async def start_simulation(params: StartRequest):
         )
 
     initial_state = engine.initialize()
+    
+    # ==================== 自动注入待处理的事件 ====================
+    if pending_knowledge_graph and pending_event_content:
+        logger.info(f"检测到待注入事件，自动注入到引擎: {pending_event_content[:50]}...")
+        engine.knowledge_graph = pending_knowledge_graph
+        
+        # 如果引擎支持设置新闻
+        if hasattr(engine, 'set_news'):
+            import inspect
+            if inspect.iscoroutinefunction(engine.set_news):
+                await engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
+            else:
+                engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
+        
+        # 广播事件
+        target_scope = "all"
+        if pending_event_source == "public":
+            target_scope = "public_only"
+        elif pending_event_source == "private":
+            target_scope = "private_only"
+        engine.broadcast_event(pending_event_content, target_scope)
+        
+        logger.info(f"待注入事件已成功注入，图谱包含 {len(pending_knowledge_graph.get('entities', []))} 个实体")
+        
+        # 清空待注入数据
+        pending_knowledge_graph = None
+        pending_event_content = None
+        pending_event_source = None
+    
     return JSONResponse(content=initial_state.to_dict())
 
 
@@ -670,51 +705,122 @@ async def parse_news_event(req: ParseRequest):
 @app.post("/api/event/airdrop")
 async def airdrop_event(req: AirdropRequest):
     """
-    注入突发事件（触发知识图谱解析）
-
+    注入突发事件 - "解析-注入-推演"三段式管线
+    
+    第一阶段（解析）：调用 GraphParserAgent 提取结构化知识图谱
+    第二阶段（封装）：将图谱+原始文本封装成结构化的 EventMsg
+    第三阶段（广播）：将 EventMsg 发送给网络中的节点
+    
     Request Body:
         content: 事件文本内容
         source: 来源 (public/private)
-    """
-    global engine
 
-    if engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化"},
-            status_code=400
-        )
+    Response:
+        success: 是否成功
+        knowledge_graph: 解析后的知识图谱 JSON
+        event: 事件记录
+    """
+    global engine, pending_knowledge_graph, pending_event_content, pending_event_source
+
+    # ==================== 第一阶段：解析（挂起并调用大模型）====================
+    logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
 
     try:
-        # 解析知识图谱
         from .simulation.graph_parser_agent import get_graph_parser
         graph_parser = get_graph_parser()
         knowledge_graph = await graph_parser.parse(req.content)
 
+        entity_count = len(knowledge_graph.get('entities', []))
+        relation_count = len(knowledge_graph.get('relations', []))
+        logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
+
+    except Exception as e:
+        logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
+        # 即使解析失败，也继续流程，使用空图谱
+        knowledge_graph = {
+            "entities": [],
+            "relations": [],
+            "summary": req.content[:100],
+            "parse_error": True,
+            "error_message": str(e)
+        }
+
+    # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
+    logger.info(f"[管线阶段2] 封装结构化事件消息...")
+
+    # 构建结构化事件消息
+    event_msg = {
+        "type": "breaking_news",
+        "content": req.content,  # 原始文本
+        "source": req.source,    # 来源
+        "knowledge_graph": knowledge_graph,  # 解析后的图谱
+        "summary": knowledge_graph.get("summary", ""),
+        "keywords": knowledge_graph.get("keywords", []),
+        "sentiment": knowledge_graph.get("sentiment", "中性"),
+        "credibility_hint": knowledge_graph.get("credibility_hint", "不确定"),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    # 确定广播范围
+    target_scope = "all"
+    if req.source == "public":
+        target_scope = "public_only"
+    elif req.source == "private":
+        target_scope = "private_only"
+
+    # ==================== 处理推演未开始的情况 ====================
+    if engine is None:
+        logger.info("[管线阶段3] 推演引擎未初始化，存储待注入事件供后续使用")
+        # 存储待注入的事件
+        pending_knowledge_graph = knowledge_graph
+        pending_event_content = req.content
+        pending_event_source = req.source
+        
+        return {
+            "success": True,
+            "data": {
+                "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True},
+                "knowledge_graph": knowledge_graph,
+                "event_msg": event_msg,
+                "message": "事件已解析并存储，将在推演开始时自动注入"
+            }
+        }
+
+    # ==================== 第三阶段：广播（发送给推演引擎）====================
+    logger.info(f"[管线阶段3] 广播事件到推演引擎, 范围: {target_scope}")
+    
+    try:
         # 更新引擎的新闻和图谱
         if hasattr(engine, 'set_news'):
-            # 检查 set_news 是否是异步方法
             import inspect
             if inspect.iscoroutinefunction(engine.set_news):
                 await engine.set_news(req.content, req.source, parse_graph=False)
             else:
                 engine.set_news(req.content, req.source, parse_graph=False)
+        
+        # 更新引擎的知识图谱
         engine.knowledge_graph = knowledge_graph
 
-        # 广播事件
-        event = engine.broadcast_event(req.content, "all")
+        # 广播事件（包含图谱信息）
+        event = engine.broadcast_event(req.content, target_scope)
         event["knowledge_graph"] = knowledge_graph
+        event["event_msg"] = event_msg
         
+        logger.info(f"[管线完成] 事件注入成功，已广播给所有Agent")
+
         return {
             "success": True,
             "data": {
                 "event": event,
-                "knowledge_graph": knowledge_graph
+                "knowledge_graph": knowledge_graph,
+                "event_msg": event_msg
             }
         }
+        
     except Exception as e:
-        logger.error(f"事件注入失败: {e}")
+        logger.error(f"[管线阶段3] 事件广播失败: {e}")
         return JSONResponse(
-            content={"success": False, "error": str(e)},
+            content={"success": False, "error": f"事件广播失败: {str(e)}"},
             status_code=500
         )
 
@@ -761,15 +867,37 @@ async def websocket_simulation(websocket: WebSocket):
     auto_mode = False
     auto_task: Optional[asyncio.Task] = None
 
-    async def send_progress(step: int, total: int):
+    async def send_progress(step: int, total: int, agent_id: int = None, agent_opinion: float = None):
         """发送进度更新"""
         try:
-            await websocket.send_json({
+            # 构建进度消息
+            progress_data = {
                 "type": "progress",
                 "step": step,
                 "total": total,
-                "message": f"Agent {step}/{total}"
-            })
+                "percentage": round(step / total * 100, 1) if total > 0 else 0,
+                "current_step": engine.step_count if engine else 0,
+                "max_steps": max_steps if 'max_steps' in dir() else 50
+            }
+
+            # 添加 Agent 详细信息
+            if agent_id is not None:
+                progress_data["agent_id"] = agent_id
+                progress_data["agent_opinion"] = round(agent_opinion, 2) if agent_opinion is not None else 0
+
+                # 根据观点值判断立场
+                if agent_opinion is not None:
+                    if agent_opinion < -0.3:
+                        stance = "信谣言"
+                    elif agent_opinion > 0.3:
+                        stance = "信真相"
+                    else:
+                        stance = "中立"
+                    progress_data["agent_stance"] = stance
+
+            progress_data["message"] = f"正在推演 Agent {step}/{total}" + (f" (ID:{agent_id})" if agent_id is not None else "")
+
+            await websocket.send_json(progress_data)
         except Exception as e:
             logger.debug(f"发送进度失败: {e}")
 

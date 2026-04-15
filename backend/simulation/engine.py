@@ -229,12 +229,13 @@ class SimulationEngine:
         pop = self.llm_population
 
         async with self.llm_client:
-            # 批量异步决策
+            # 批量异步决策（传入知识图谱）
             await pop.batch_decide(
                 self.llm_client,
                 debunk_released=self.debunked,
                 cocoon_strength=self.cocoon_strength,
-                progress_callback=self.progress_callback
+                progress_callback=self.progress_callback,
+                knowledge_graph=self.knowledge_graph  # 传入知识图谱
             )
 
         # 随机扰动

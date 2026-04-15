@@ -166,7 +166,7 @@ class LLMAgent:
 
     def _build_graph_section(self, knowledge_graph: Dict) -> str:
         """
-        构建知识图谱上下文段落
+        构建知识图谱上下文段落（含注意力过滤指令）
 
         Args:
             knowledge_graph: 知识图谱数据
@@ -175,38 +175,63 @@ class LLMAgent:
             格式化的图谱上下文文本
         """
         lines = []
-        
+
         # 事件摘要
         summary = knowledge_graph.get("summary", "")
         if summary:
             lines.append(f"- 事件摘要: {summary}")
-        
+
+        # 关键词
+        keywords = knowledge_graph.get("keywords", [])
+        if keywords:
+            lines.append(f"- 关键词: {', '.join(keywords[:5])}")
+
+        # 情感倾向和可信度
+        sentiment = knowledge_graph.get("sentiment", "")
+        credibility = knowledge_graph.get("credibility_hint", "")
+        if sentiment:
+            lines.append(f"- 情感倾向: {sentiment}")
+        if credibility:
+            lines.append(f"- 可信度: {credibility}")
+
         # 实体列表
         entities = knowledge_graph.get("entities", [])
         if entities:
-            lines.append(f"- 涉及实体 ({len(entities)}个):")
-            # 根据人设选择最相关的2-3个实体
+            lines.append(f"\n**涉及实体 ({len(entities)}个):**")
+            # 根据人设选择最相关的实体
             relevant_entities = self._select_relevant_entities(entities)
-            for entity in relevant_entities[:3]:
+            for i, entity in enumerate(relevant_entities[:5]):  # 显示最多5个相关实体
                 entity_type = entity.get("type", "其他")
                 entity_name = entity.get("name", "未知")
-                lines.append(f"  • {entity_name} ({entity_type})")
-        
+                entity_desc = entity.get("description", "")
+                importance = entity.get("importance", 3)
+                importance_marker = "⭐" * min(importance, 5)
+                lines.append(f"  {i+1}. [{entity_type}] {entity_name} - {entity_desc} {importance_marker}")
+
         # 关键关系
         relations = knowledge_graph.get("relations", [])
         if relations:
-            lines.append(f"- 关键关系 ({len(relations)}条):")
-            for rel in relations[:3]:
+            lines.append(f"\n**实体关系 ({len(relations)}条):**")
+            for rel in relations[:4]:
                 source = rel.get("source", "?")
                 target = rel.get("target", "?")
-                action = rel.get("action", "关联")
-                lines.append(f"  • {source} → {target}: {action}")
-        
-        # 注意力引导指令
+                action = rel.get("action", rel.get("type", "关联"))
+                lines.append(f"  • {source} --[{action}]--> {target}")
+
+        # ==================== 注意力过滤指令 ====================
         lines.append("")
-        lines.append("【重要】请根据你的个人特征，从上述实体中选择你最关注的2-3个核心节点，")
-        lines.append("基于这部分局部信息做出你的反应判断。")
-        
+        lines.append("---")
+        lines.append("⚠️ **注意力过滤指令（重要）**:")
+        lines.append(f"你的【人设类型】是「{self.persona.get('type', '普通用户')}」: {self.persona.get('desc', '')}")
+        lines.append("请严格根据你的人设特征，从上述图谱中挑选出你最关心的 2-3 个实体节点及其关系，忽略其他你不在乎的节点。")
+        lines.append("基于这部分残缺的局部信息，做出你的立场判断和评论。")
+        lines.append("")
+        lines.append("例如：")
+        lines.append("- 「易恐慌型」用户应更关注负面信息和风险相关实体")
+        lines.append("- 「理性分析型」用户应关注事实性信息和权威来源")
+        lines.append("- 「从众型」用户应关注大多数人关注的实体")
+        lines.append("- 「怀疑论者」应关注矛盾和可疑之处")
+
         return "\n".join(lines)
 
     def _select_relevant_entities(self, entities: List[Dict]) -> List[Dict]:
@@ -684,7 +709,8 @@ class LLMAgentPopulationDual:
                 opinion_snapshot  # 传入快照
             )
             if progress_callback:
-                await progress_callback(index, self.size)
+                # 传递 Agent 详细信息：index, total, agent_id, agent_opinion
+                await progress_callback(index, self.size, agent.id, agent.opinion)
             return result
 
         tasks = [decide_one(agent, i) for i, agent in enumerate(self.agents)]

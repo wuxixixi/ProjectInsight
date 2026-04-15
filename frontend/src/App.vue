@@ -3,25 +3,71 @@
     <!-- 顶部流程引导 -->
     <div class="workflow-guide">
       <div class="workflow-steps">
-        <div :class="['workflow-step', { active: !isRunning && currentStep === 0, completed: currentStep > 0 }]">
+        <div :class="['workflow-step', { active: !isRunning && currentStep === 0 && pendingEvents.length === 0, completed: pendingEvents.length > 0 || currentStep > 0 }]">
           <span class="step-number">1</span>
           <span class="step-text">配置参数</span>
         </div>
+        <div class="step-connector" :class="{ active: pendingEvents.length > 0 || currentStep > 0 }"></div>
+        <div :class="['workflow-step', { active: !isRunning && currentStep === 0 && pendingEvents.length > 0, completed: currentStep > 0 }]">
+          <span class="step-number">2</span>
+          <span class="step-text">注入事件</span>
+        </div>
         <div class="step-connector" :class="{ active: currentStep > 0 }"></div>
         <div :class="['workflow-step', { active: isRunning, completed: currentStep > 0 && !isRunning }]">
-          <span class="step-number">2</span>
+          <span class="step-number">3</span>
           <span class="step-text">开始推演</span>
         </div>
         <div class="step-connector" :class="{ active: currentStep > 0 }"></div>
-        <div :class="['workflow-step', { active: currentStep > 0, completed: knowledgeGraph.entities && knowledgeGraph.entities.length > 0 }]">
-          <span class="step-number">3</span>
-          <span class="step-text">注入事件</span>
-        </div>
-        <div class="step-connector" :class="{ active: knowledgeGraph.entities && knowledgeGraph.entities.length > 0 }"></div>
         <div :class="['workflow-step', { active: reportGenerated }]">
           <span class="step-number">4</span>
           <span class="step-text">生成报告</span>
         </div>
+      </div>
+    </div>
+
+    <!-- 事件注入引导卡片（推演未开始时显示） -->
+    <div v-if="currentStep === 0" class="event-inject-panel">
+      <!-- 有待注入事件时显示 -->
+      <div v-if="pendingEvents.length > 0" class="pending-events-banner">
+        <div class="pending-banner-header">
+          <span class="pending-icon">📦</span>
+          <span class="pending-title">待注入事件 ({{ pendingEvents.length }})</span>
+          <span class="pending-hint">将在推演开始时自动注入</span>
+        </div>
+        <div class="pending-events-list">
+          <div class="pending-event-item" v-for="(event, index) in pendingEvents" :key="index">
+            <div class="pending-event-content">
+              <span class="pending-event-index">#{{ index + 1 }}</span>
+              <span class="pending-event-text">{{ event.content.substring(0, 60) }}{{ event.content.length > 60 ? '...' : '' }}</span>
+            </div>
+            <div class="pending-event-meta">
+              <span class="pending-event-entities" v-if="event.knowledgeGraph?.entities?.length">
+                📊 {{ event.knowledgeGraph.entities.length }}个实体
+              </span>
+              <span class="pending-event-source" :class="'source-' + event.source">
+                {{ event.source === 'public' ? '📢 公域' : '🏠 私域' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="pending-actions">
+          <button class="btn-add-event" @click="showEventAirdrop = true">
+            ➕ 添加更多事件
+          </button>
+          <button class="pending-start-btn" @click="startSimulation">
+            🚀 开始推演
+          </button>
+        </div>
+      </div>
+      
+      <!-- 无待注入事件时显示引导 -->
+      <div v-else class="no-event-guide">
+        <div class="guide-icon">📰</div>
+        <div class="guide-title">请先注入事件</div>
+        <div class="guide-desc">推演需要一个新闻事件作为基础，系统将解析事件提取知识图谱，作为Agent认知的上下文</div>
+        <button class="guide-inject-btn" @click="showEventAirdrop = true">
+          📝 注入第一个事件
+        </button>
       </div>
     </div>
 
@@ -65,11 +111,11 @@
           </div>
           <div class="help-item">
             <strong>操作流程：</strong>
-            <p>1. 调整参数 → 2. 开始推演 → 3. 注入事件 → 4. 生成报告</p>
+            <p>1. 配置参数 → 2. 注入事件 → 3. 开始推演 → 4. 生成报告</p>
           </div>
           <div class="help-item">
-            <strong>知识图谱：</strong>
-            <p>输入新闻文本，系统自动提取实体和关系，用于影响Agent决策</p>
+            <strong>事件注入：</strong>
+            <p>必须先注入新闻事件，系统将解析提取知识图谱，作为推演的基础</p>
           </div>
           <div class="help-item">
             <strong>观点范围：</strong>
@@ -200,7 +246,7 @@
 
       <!-- 推演控制 -->
       <div class="control-actions">
-        <button v-if="!isRunning" class="btn-start" @click="startSimulation" :disabled="!isConnected">
+        <button v-if="!isRunning" class="btn-start" @click="startSimulation" :disabled="!isConnected || pendingEvents.length === 0">
           <span class="btn-icon">▶</span>
           开始推演
         </button>
@@ -208,11 +254,35 @@
           <span class="btn-icon">■</span>
           停止推演
         </button>
+        
+        <!-- 提示：需要先注入事件 -->
+        <div v-if="!isRunning && pendingEvents.length === 0" class="start-hint">
+          ⚠️ 请先在上方注入事件
+        </div>
 
         <!-- 进度显示 -->
-        <div v-if="isRunning && agentProgress" class="progress-notice">
-          <div class="progress-spinner"></div>
-          <span>{{ agentProgress }}</span>
+        <div v-if="isRunning" class="progress-container">
+          <div class="progress-header">
+            <div class="progress-spinner"></div>
+            <span class="progress-title">推演进行中...</span>
+            <span class="progress-step">步骤 {{ progressData.currentStep }}/{{ progressData.maxSteps }}</span>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar" :style="{ width: progressData.percentage + '%' }"></div>
+          </div>
+          <div class="progress-info">
+            <span class="progress-agent" v-if="progressData.agentId !== null">
+              <span class="agent-label">当前Agent:</span>
+              <span class="agent-id">#{{ progressData.agentId }}</span>
+              <span class="agent-opinion" :class="getOpinionClass(progressData.agentOpinion)">
+                (观点: {{ progressData.agentOpinion > 0 ? '+' : '' }}{{ progressData.agentOpinion }})
+              </span>
+              <span class="agent-stance" :class="'stance-' + progressData.agentStance">
+                {{ progressData.agentStance }}
+              </span>
+            </span>
+            <span class="progress-count">{{ progressData.step }}/{{ progressData.total }}</span>
+          </div>
         </div>
       </div>
 
@@ -228,7 +298,7 @@
             <button class="btn-group" @click="showNewsParser = true">
               <span>📰</span> 解析新闻
             </button>
-            <button v-if="currentStep > 0" class="btn-group" @click="showEventAirdrop = true">
+            <button class="btn-group" @click="showEventAirdrop = true">
               <span>📢</span> 注入事件
             </button>
             <button v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0" class="btn-group" @click="showKnowledgeGraph = true">
@@ -256,6 +326,44 @@
             <button v-if="!useLLM" class="btn-group" @click="showMathModelDrawer = true">
               <span>📖</span> 模型说明
             </button>
+          </div>
+        </div>
+
+        <!-- 事件日志组（透明化展示） -->
+        <div class="footer-group" v-if="eventLogs.length > 0">
+          <div class="group-header" @click="toggleGroup('eventLog')">
+            <span>📜 事件日志</span>
+            <span class="event-log-count">{{ eventLogs.length }}</span>
+            <span :class="['group-toggle', { expanded: expandedGroups.eventLog }]">▼</span>
+          </div>
+          <div v-if="expandedGroups.eventLog !== false" class="event-log-list">
+            <div class="event-log-item" v-for="(log, index) in eventLogs" :key="index">
+              <div class="event-log-header">
+                <span class="event-log-time">{{ log.timestamp }}</span>
+                <span class="event-log-status" :class="log.pending ? 'status-pending' : 'status-injected'">
+                  {{ log.pending ? '⏳ 待注入' : '✅ 已注入' }}
+                </span>
+                <span class="event-log-source" :class="'source-' + log.source">
+                  {{ log.source === 'public' ? '📢 公域' : '🏠 私域' }}
+                </span>
+              </div>
+              <div class="event-log-content">{{ log.content.slice(0, 50) }}{{ log.content.length > 50 ? '...' : '' }}</div>
+              <div class="event-log-graph" v-if="log.knowledgeGraph">
+                <div class="graph-summary-line">
+                  <span class="summary-icon">📝</span>
+                  {{ log.knowledgeGraph.summary || '无摘要' }}
+                </div>
+                <div class="graph-entities-line">
+                  <span class="entities-icon">🏷️</span>
+                  {{ formatEntitiesForLog(log.knowledgeGraph.entities) }}
+                </div>
+                <div class="graph-stats-line">
+                  <span>{{ log.knowledgeGraph.entities?.length || 0 }} 实体</span>
+                  <span>·</span>
+                  <span>{{ log.knowledgeGraph.relations?.length || 0 }} 关系</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -980,7 +1088,7 @@
 
     <!-- 事件注入弹窗 -->
     <div v-if="showEventAirdrop" class="kg-modal-overlay" @click.self="showEventAirdrop = false">
-      <div class="kg-modal">
+      <div class="kg-modal kg-modal-event">
         <div class="kg-modal-header">
           <h3>📢 注入突发事件</h3>
           <button class="report-close-btn" @click="showEventAirdrop = false">✕</button>
@@ -988,38 +1096,101 @@
         <div class="kg-modal-body">
           <!-- 功能说明 -->
           <div class="kg-section kg-info-box">
-            <p><strong>功能说明：</strong>在推演过程中注入突发事件，系统将解析为知识图谱并广播给所有Agent，影响其后续决策。</p>
-            <p class="kg-info-hint">⚡ 仅在推演进行中可用，事件会立即生效</p>
+            <p><strong>"解析-注入-推演"三段式管线：</strong></p>
+            <ol class="pipeline-steps">
+              <li><span class="step-num">1</span> 解析：大模型提取结构化知识图谱</li>
+              <li><span class="step-num">2</span> 封装：构建结构化 EventMsg</li>
+              <li><span class="step-num">3</span> 注入：作为推演的新闻源</li>
+            </ol>
+            <p class="kg-info-hint" v-if="currentStep === 0">
+              ⚡ 当前推演未开始，事件将被存储并在推演开始时自动注入
+            </p>
+            <p class="kg-info-hint" v-else>
+              ⚡ 事件将立即广播给所有Agent
+            </p>
           </div>
-          <div class="kg-section">
+          
+          <!-- 输入区域 -->
+          <div class="kg-section" v-if="!airdropLoading">
             <h4>📰 事件内容</h4>
             <textarea
               v-model="airdropContent"
               class="news-input"
-              placeholder="请输入要注入的事件内容..."
+              placeholder="请输入要注入的事件内容，例如：'某科技公司被曝数据泄露，涉及百万用户隐私信息...'"
               rows="5"
             ></textarea>
           </div>
-          <div class="kg-section">
+          
+          <!-- 传播领域选择 -->
+          <div class="kg-section" v-if="!airdropLoading">
             <h4>🌐 传播领域</h4>
             <div class="airdrop-source-options">
               <label class="source-option">
                 <input type="radio" v-model="airdropSource" value="public" />
-                <span>公域 (公开传播)</span>
+                <span>📢 公域 (微博热搜)</span>
               </label>
               <label class="source-option">
                 <input type="radio" v-model="airdropSource" value="private" />
-                <span>私域 (好友传播)</span>
+                <span>🏠 私域 (微信群)</span>
               </label>
             </div>
           </div>
-          <div v-if="airdropError" class="kg-section">
-            <p class="kg-error">{{ airdropError }}</p>
+          
+          <!-- Loading 状态显示 -->
+          <div class="kg-section airdrop-loading-section" v-if="airdropLoading">
+            <div class="airdrop-loading-animation">
+              <div class="loading-spinner-large"></div>
+              <div class="loading-text">{{ airdropLoadingStage }}</div>
+            </div>
+            <div class="loading-progress">
+              <div class="progress-bar-loading"></div>
+            </div>
+            <p class="loading-hint">大模型正在解析事件图谱，预计需要 3-5 秒...</p>
           </div>
-          <div class="kg-section">
-            <p class="airdrop-hint">💡 事件将被解析为知识图谱，Agent会根据图谱中的实体和关系理解事件内容</p>
-            <button class="btn-parse-news" @click="injectEvent" :disabled="airdropLoading || !airdropContent.trim()">
-              {{ airdropLoading ? '注入中...' : '🚀 注入事件' }}
+          
+          <!-- 解析成功后的图谱展示 -->
+          <div class="kg-section parsed-graph-display" v-if="parsedGraphDisplay && !airdropLoading">
+            <h4>📊 解析结果预览</h4>
+            <div class="graph-preview">
+              <div class="graph-summary">
+                <span class="summary-label">事件摘要:</span>
+                <span class="summary-text">{{ parsedGraphDisplay.summary }}</span>
+              </div>
+              <div class="graph-stats">
+                <span class="stat-item">
+                  <span class="stat-icon">🏷️</span>
+                  <span class="stat-value">{{ parsedGraphDisplay.entities?.length || 0 }} 个实体</span>
+                </span>
+                <span class="stat-item">
+                  <span class="stat-icon">🔗</span>
+                  <span class="stat-value">{{ parsedGraphDisplay.relations?.length || 0 }} 个关系</span>
+                </span>
+                <span class="stat-item" v-if="parsedGraphDisplay.sentiment">
+                  <span class="stat-icon">💭</span>
+                  <span class="stat-value">{{ parsedGraphDisplay.sentiment }}</span>
+                </span>
+              </div>
+              <div class="graph-entities-preview" v-if="parsedGraphDisplay.entities?.length">
+                <div class="entity-tag" v-for="entity in parsedGraphDisplay.entities.slice(0, 5)" :key="entity.id">
+                  <span class="entity-type">[{{ entity.type }}]</span>
+                  <span class="entity-name">{{ entity.name }}</span>
+                </div>
+                <span class="entity-more" v-if="parsedGraphDisplay.entities.length > 5">
+                  +{{ parsedGraphDisplay.entities.length - 5 }} 更多
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 错误显示 -->
+          <div v-if="airdropError" class="kg-section">
+            <p class="kg-error">❌ {{ airdropError }}</p>
+          </div>
+          
+          <!-- 操作按钮 -->
+          <div class="kg-section" v-if="!airdropLoading">
+            <button class="btn-parse-news" @click="injectEvent" :disabled="!airdropContent.trim()">
+              🚀 立即空投事件
             </button>
           </div>
         </div>
@@ -1049,7 +1220,8 @@ export default {
       expandedGroups: {
         kg: true,      // 知识图谱组默认展开
         report: false,
-        settings: false
+        settings: false,
+        eventLog: true  // 事件日志默认展开
       },
 
       // 基础参数
@@ -1077,6 +1249,18 @@ export default {
       currentStep: 0,
       debunked: false,
       agentProgress: '',
+
+      // 进度条详细数据
+      progressData: {
+        step: 0,           // 当前Agent序号
+        total: 0,          // Agent总数
+        percentage: 0,     // 百分比
+        agentId: null,     // 当前Agent ID
+        agentOpinion: 0,   // Agent观点
+        agentStance: '',   // Agent立场
+        currentStep: 0,    // 当前推演步数
+        maxSteps: 50       // 最大步数
+      },
 
       // 统计数据
       rumorSpreadRate: 0,
@@ -1152,7 +1336,13 @@ export default {
       airdropContent: '',
       airdropSource: 'public',
       airdropLoading: false,
+      airdropLoadingStage: '',  // Loading阶段提示
       airdropError: '',
+      airdropSuccess: false,    // 是否成功
+      parsedGraphDisplay: null, // 解析后的图谱数据（用于展示）
+      
+      // 事件日志（透明化展示）
+      eventLogs: [],  // 存储所有注入事件的日志
       
       reportListLoading: false,
 
@@ -1210,6 +1400,10 @@ export default {
     renderedIntelligence() {
       if (!this.intelligenceContent) return ''
       return marked(this.intelligenceContent)
+    },
+    // 待注入事件（推演未开始时注入的事件）
+    pendingEvents() {
+      return this.eventLogs.filter(log => log.pending)
     },
     // 兼容单层和双层网络的 perceived_climate
     normalizedClimate() {
@@ -1290,6 +1484,12 @@ export default {
       this.expandedGroups[group] = !this.expandedGroups[group]
     },
 
+    getOpinionClass(opinion) {
+      if (opinion < -0.3) return 'opinion-rumor'
+      if (opinion > 0.3) return 'opinion-truth'
+      return 'opinion-neutral'
+    },
+
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
@@ -1350,7 +1550,18 @@ export default {
           this.updateState(msg.data)
           break
         case 'progress':
+          // 更新进度数据
           this.agentProgress = msg.message
+          this.progressData = {
+            step: msg.step || 0,
+            total: msg.total || 0,
+            percentage: msg.percentage || 0,
+            agentId: msg.agent_id,
+            agentOpinion: msg.agent_opinion || 0,
+            agentStance: msg.agent_stance || '',
+            currentStep: msg.current_step || 0,
+            maxSteps: msg.max_steps || 50
+          }
           break
         case 'error':
           console.error('服务端错误:', msg.message)
@@ -1401,6 +1612,13 @@ export default {
       this.privateRumorRate = 0
       this.numCommunities = 0
       this.numInfluencers = 0
+
+      // 更新事件日志中待注入事件的状态
+      this.eventLogs.forEach(log => {
+        if (log.pending) {
+          log.pending = false
+        }
+      })
 
       this.sendAction('start', {
         params: {
@@ -1525,11 +1743,17 @@ export default {
 
     async injectEvent() {
       if (!this.airdropContent.trim()) return
-      
+
       this.airdropLoading = true
+      this.airdropLoadingStage = '正在调用大模型解析事件图谱...'
       this.airdropError = ''
-      
+      this.airdropSuccess = false
+      this.parsedGraphDisplay = null
+
       try {
+        // 第一阶段：解析（显示Loading状态）
+        this.airdropLoadingStage = '⏳ 阶段1/3: 大模型正在解析事件图谱...'
+        
         const response = await fetch(
           window.location.origin + '/api/event/airdrop',
           {
@@ -1539,25 +1763,80 @@ export default {
           }
         )
         const data = await response.json()
-        
+
         if (data.success) {
-          this.showEventAirdrop = false
-          this.airdropContent = ''
-          // 更新当前知识图谱显示
-          if (data.knowledge_graph) {
-            this.knowledgeGraph = data.knowledge_graph
+          // 更新Loading状态
+          this.airdropLoadingStage = '✅ 阶段2/3: 知识图谱解析完成'
+          
+          // 保存解析后的图谱数据用于展示
+          if (data.data && data.data.knowledge_graph) {
+            this.parsedGraphDisplay = data.data.knowledge_graph
+            this.knowledgeGraph = data.data.knowledge_graph
           }
-          // 显示成功提示
-          alert('事件注入成功！已解析知识图谱。')
+
+          // 更新Loading状态到第三阶段
+          this.airdropLoadingStage = '✅ 阶段3/3: 事件处理完成'
+          
+          // 添加到事件日志（透明化展示）
+          this.addEventLog({
+            content: this.airdropContent,
+            source: this.airdropSource,
+            knowledgeGraph: this.parsedGraphDisplay,
+            timestamp: new Date().toLocaleString('zh-CN'),
+            pending: this.currentStep === 0  // 标记是否为待注入
+          })
+          
+          // 短暂延迟后关闭弹窗
+          setTimeout(() => {
+            this.showEventAirdrop = false
+            this.airdropContent = ''
+            this.airdropLoading = false
+            this.airdropLoadingStage = ''
+            this.airdropSuccess = true
+            
+            // 显示成功提示（包含图谱信息）
+            const entityCount = this.parsedGraphDisplay?.entities?.length || 0
+            const relationCount = this.parsedGraphDisplay?.relations?.length || 0
+            
+            if (this.currentStep === 0) {
+              // 推演未开始，事件将被存储
+              alert(`事件解析成功！\n\n📊 解析结果：${entityCount}个实体, ${relationCount}个关系\n📝 摘要：${this.parsedGraphDisplay?.summary || '无'}\n\n✅ 事件已存储，将在推演开始时自动注入`)
+            } else {
+              // 推演已开始，事件已广播
+              alert(`事件注入成功！\n\n📊 解析结果：${entityCount}个实体, ${relationCount}个关系\n📝 摘要：${this.parsedGraphDisplay?.summary || '无'}`)
+            }
+          }, 500)
         } else {
           this.airdropError = data.error || '注入失败'
+          this.airdropLoading = false
+          this.airdropLoadingStage = ''
         }
       } catch (error) {
         console.error('注入事件失败:', error)
         this.airdropError = '网络错误: ' + error.message
-      } finally {
         this.airdropLoading = false
+        this.airdropLoadingStage = ''
       }
+    },
+    
+    // 添加事件日志
+    addEventLog(eventData) {
+      console.log('[addEventLog] 添加事件日志:', eventData)
+      console.log('[addEventLog] 当前currentStep:', this.currentStep)
+      console.log('[addEventLog] pending状态:', eventData.pending)
+      this.eventLogs.unshift(eventData)  // 新事件放前面
+      console.log('[addEventLog] eventLogs总数:', this.eventLogs.length)
+      console.log('[addEventLog] pendingEvents:', this.eventLogs.filter(log => log.pending))
+      // 最多保留10条日志
+      if (this.eventLogs.length > 10) {
+        this.eventLogs.pop()
+      }
+    },
+    
+    // 格式化实体列表用于日志显示
+    formatEntitiesForLog(entities) {
+      if (!entities || entities.length === 0) return '无'
+      return entities.slice(0, 5).map(e => e.name).join(', ') + (entities.length > 5 ? ` +${entities.length - 5}` : '')
     },
 
     // ==================== 历史报告功能 ====================
@@ -1775,6 +2054,11 @@ export default {
       if (data.step >= this.maxSteps) {
         this.isRunning = false
         this.sendAction('stop')
+        // 重置进度数据
+        this.progressData = {
+          step: 0, total: 0, percentage: 0, agentId: null,
+          agentOpinion: 0, agentStance: '', currentStep: 0, maxSteps: 50
+        }
       }
 
       this.renderOpinionChart()
@@ -2681,6 +2965,206 @@ export default {
   background: linear-gradient(90deg, #22c55e, #3b82f6);
 }
 
+/* ==================== 待注入事件提示卡片 ==================== */
+.pending-events-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+}
+
+.pending-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pending-icon {
+  font-size: 24px;
+}
+
+.pending-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.pending-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.pending-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.pending-event-item {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.pending-event-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.pending-event-index {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.pending-event-text {
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.pending-event-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.pending-event-entities {
+  color: #60a5fa;
+}
+
+.pending-event-source {
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.pending-event-source.source-public {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.pending-event-source.source-private {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.pending-start-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pending-start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+/* ==================== 事件注入面板 ==================== */
+.event-inject-panel {
+  position: fixed;
+  top: 60px;
+  left: 320px;
+  right: 20px;
+  z-index: 99;
+}
+
+.pending-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.btn-add-event {
+  flex: 1;
+  padding: 10px 16px;
+  background: rgba(51, 65, 85, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-add-event:hover {
+  background: rgba(51, 65, 85, 0.8);
+  color: #e2e8f0;
+}
+
+/* 无事件时的引导卡片 */
+.no-event-guide {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  padding: 24px 30px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+}
+
+.guide-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.guide-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #60a5fa;
+  margin-bottom: 8px;
+}
+
+.guide-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.guide-inject-btn {
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.guide-inject-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+/* 开始推演按钮提示 */
+.start-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #f59e0b;
+  text-align: center;
+}
+
 /* ==================== 帮助说明面板 ==================== */
 .help-section {
   background: rgba(30, 41, 59, 0.6);
@@ -3121,17 +3605,123 @@ export default {
   font-size: 14px;
 }
 
-.progress-notice {
+.progress-container {
+  width: 100%;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.progress-header {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 10px;
-  padding: 12px;
-  background: rgba(96, 165, 250, 0.1);
-  border: 1px solid rgba(96, 165, 250, 0.3);
-  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.progress-title {
   color: #60a5fa;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.progress-step {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 12px;
+  background: rgba(96, 165, 250, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.progress-bar-wrapper {
+  width: 100%;
+  height: 6px;
+  background: rgba(100, 116, 139, 0.3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #93c5fd 100%);
+  border-radius: 3px;
+  transition: width 0.15s ease-out;
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.progress-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e2e8f0;
+}
+
+.agent-label {
+  color: #94a3b8;
+}
+
+.agent-id {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.agent-opinion {
+  font-family: monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.agent-opinion.opinion-rumor {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.agent-opinion.opinion-truth {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.agent-opinion.opinion-neutral {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.agent-stance {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.agent-stance.stance-信谣言 {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.agent-stance.stance-信真相 {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.2);
+}
+
+.agent-stance.stance-中立 {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.2);
+}
+
+.progress-count {
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .progress-spinner {
@@ -4978,6 +5568,300 @@ export default {
   padding: 12px;
   border-radius: 8px;
   border-left: 3px solid #ef4444;
+}
+
+/* ==================== 事件注入三段式管线样式 ==================== */
+.kg-modal-event {
+  max-width: 600px;
+}
+
+.pipeline-steps {
+  margin: 10px 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.pipeline-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.pipeline-steps .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 50%;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.airdrop-loading-section {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.airdrop-loading-animation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.loading-spinner-large {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(139, 92, 246, 0.2);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  color: #e2e8f0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.loading-progress {
+  width: 100%;
+  max-width: 300px;
+  height: 4px;
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 16px auto;
+}
+
+.progress-bar-loading {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa, #c4b5fd);
+  border-radius: 2px;
+  animation: loading-slide 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-slide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+  100% { transform: translateX(-100%); }
+}
+
+.loading-hint {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+/* 解析结果预览样式 */
+.parsed-graph-display {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.parsed-graph-display h4 {
+  color: #4ade80;
+  margin-bottom: 12px;
+}
+
+.graph-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.graph-summary {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.summary-label {
+  color: #94a3b8;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.summary-text {
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.graph-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-icon {
+  font-size: 14px;
+}
+
+.stat-value {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.graph-entities-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.entity-tag {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 16px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.entity-type {
+  color: #60a5fa;
+  margin-right: 4px;
+}
+
+.entity-name {
+  color: #e2e8f0;
+}
+
+.entity-more {
+  color: #94a3b8;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+/* ==================== 事件日志样式 ==================== */
+.event-log-count {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  color: #1f2937;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+.event-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.event-log-item {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.event-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.event-log-time {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.event-log-status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.event-log-status.status-pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.event-log-status.status-injected {
+  background: rgba(16, 185, 129, 0.2);
+  color: #4ade80;
+}
+
+.event-log-source {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.event-log-source.source-public {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.event-log-source.source-private {
+  background: rgba(16, 185, 129, 0.2);
+  color: #4ade80;
+}
+
+.event-log-content {
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.event-log-graph {
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.graph-summary-line,
+.graph-entities-line,
+.graph-stats-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.summary-icon,
+.entities-icon {
+  color: #a78bfa;
+}
+
+.graph-summary-line {
+  color: #cbd5e1;
+}
+
+.graph-entities-line {
+  color: #60a5fa;
+}
+
+.graph-stats-line {
+  color: #94a3b8;
 }
 
 .btn-view-graph {
