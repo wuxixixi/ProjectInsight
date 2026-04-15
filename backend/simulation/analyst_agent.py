@@ -136,6 +136,7 @@ class DataSampler:
                     "susceptibility": float(agent.susceptibility),
                     "old_opinion": old_op,
                     "new_opinion": new_op,
+                    "opinion_change": abs(new_op - old_op),
                     "emotion": snapshot.get('emotion', ''),
                     "action": snapshot.get('action', ''),
                     "generated_comment": snapshot.get('generated_comment', ''),
@@ -152,6 +153,7 @@ class DataSampler:
                     "susceptibility": float(agent.susceptibility),
                     "old_opinion": old_op,
                     "new_opinion": new_op,
+                    "opinion_change": abs(new_op - old_op),
                     "emotion": snapshot.get('emotion', ''),
                     "action": snapshot.get('action', ''),
                     "generated_comment": snapshot.get('generated_comment', ''),
@@ -169,24 +171,80 @@ class DataSampler:
             "stubborn": safe_sample(stubborn_agents, n)
         }
 
+    @staticmethod
+    def sample_extreme_changes(population, n: int = 5) -> List[Dict]:
+        """
+        抽取观点变化最剧烈的样本，供 AnalystAgent 深度解剖
+
+        根据用户需求，专门挑选出观点变化（|new_opinion - old_opinion|）最剧烈的
+        N 个样本，这些样本代表了舆论演化中的"关键转折点"。
+
+        Args:
+            population: LLMAgentPopulation 实例
+            n: 抽取样本数量，默认 5 个
+
+        Returns:
+            按观点变化幅度降序排列的样本列表
+        """
+        all_changes = []
+
+        for agent in population.agents:
+            if agent.last_decision_snapshot is None:
+                continue
+
+            snapshot = agent.last_decision_snapshot
+            old_op = snapshot.get('old_opinion', 0)
+            new_op = snapshot.get('new_opinion', 0)
+            opinion_change = abs(new_op - old_op)
+
+            # 记录完整信息
+            all_changes.append({
+                "agent_id": agent.id,
+                "persona": agent.persona,
+                "persona_str": snapshot.get('persona_str', ''),
+                "belief_strength": float(agent.belief_strength),
+                "susceptibility": float(agent.susceptibility),
+                "influence": float(agent.influence),
+                "old_opinion": old_op,
+                "new_opinion": new_op,
+                "opinion_change": opinion_change,
+                "change_direction": "positive" if new_op > old_op else ("negative" if new_op < old_op else "neutral"),
+                "emotion": snapshot.get('emotion', ''),
+                "action": snapshot.get('action', ''),
+                "generated_comment": snapshot.get('generated_comment', ''),
+                "reasoning": snapshot.get('reasoning', ''),
+                "fear_of_isolation": float(agent.fear_of_isolation),
+                "is_silent": bool(agent.is_silent)
+            })
+
+        # 按观点变化幅度降序排序
+        all_changes.sort(key=lambda x: x['opinion_change'], reverse=True)
+
+        # 返回前 n 个最剧烈的变化
+        return all_changes[:n]
+
     @classmethod
-    def build_context(cls, engine, population) -> Dict[str, Any]:
+    def build_context(cls, engine, population, extreme_change_n: int = 5) -> Dict[str, Any]:
         """
         构建完整上下文
 
         Args:
             engine: SimulationEngine 实例
             population: LLMAgentPopulation 实例
+            extreme_change_n: 极端观点变化样本数量，默认 5 个
 
         Returns:
             完整上下文字典
         """
         macro_data = cls.extract_macro_data(engine)
         agent_samples = cls.sample_agents(population)
+        # 新增：观点变化最剧烈的样本
+        extreme_samples = cls.sample_extreme_changes(population, extreme_change_n)
 
         return {
             "macro": macro_data,
             "agents": agent_samples,
+            "extreme_changes": extreme_samples,  # 新增：极端变化样本
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -221,10 +279,13 @@ ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库
 顽固样本:
 {stubborn_samples}
 
+极端观点变化样本（关键转折点）:
+{extreme_samples}
+
 报告结构（共4节，每节150-200字）:
 一、核心摘要 - 关键发现与结论
 二、参数影响分析 - 茧房强度、辟谣时机对舆论的影响
-三、个体认知分析 - 分析上述样本的心理机制
+三、个体认知分析 - 分析上述极端转折点样本的心理机制和行为模式
 四、政策建议 - 3条可行的干预建议
 
 请直接输出报告内容，使用中文撰写。"""
@@ -274,6 +335,32 @@ class AnalystAgent:
 
         return "\n".join(lines)
 
+    def _format_extreme_samples(self, samples: List[Dict]) -> str:
+        """
+        格式化极端观点变化样本为可读文本
+
+        这些样本代表舆论演化中的"关键转折点"
+        """
+        if not samples:
+            return "（无极端变化样本）"
+
+        lines = []
+        for i, s in enumerate(samples, 1):
+            direction = "↑转向真相" if s.get('change_direction') == 'positive' else (
+                "↓陷入谣言" if s.get('change_direction') == 'negative' else "→维持中立"
+            )
+            comment_part = f"，评论：「{s['generated_comment']}」" if s.get('generated_comment') else ""
+            lines.append(
+                f"转折点{i}: Agent #{s['agent_id']}，人设「{s['persona_str']}」，"
+                f"信念{s['belief_strength']:.0%}，易感{s['susceptibility']:.0%}，"
+                f"影响力{s['influence']:.0%}，"
+                f"观点变化{s['old_opinion']:.2f}→{s['new_opinion']:.2f}（变化{s['opinion_change']:.2f}，{direction}），"
+                f"情绪「{s['emotion']}」，行动「{s['action']}」，"
+                f"理由：{s['reasoning']}{comment_part}"
+            )
+
+        return "\n".join(lines)
+
     async def generate_report(self, context: Dict[str, Any]) -> str:
         """
         生成智库专报
@@ -295,6 +382,10 @@ class AnalystAgent:
         stubborn_samples = self._format_agent_samples(
             context['agents']['stubborn'],
             "顽固坚持谣言"
+        )
+        # 格式化极端变化样本（新增）
+        extreme_samples = self._format_extreme_samples(
+            context.get('extreme_changes', [])
         )
 
         # 提取参数
@@ -320,7 +411,8 @@ class AnalystAgent:
             final_polarization=final['polarization_index'],
             initial_polarization=initial['polarization_index'],
             converted_samples=converted_samples,
-            stubborn_samples=stubborn_samples
+            stubborn_samples=stubborn_samples,
+            extreme_samples=extreme_samples
         )
 
         messages = [
@@ -374,6 +466,10 @@ class AnalystAgent:
             context['agents']['stubborn'],
             "顽固坚持谣言"
         )
+        # 格式化极端变化样本（新增）
+        extreme_samples = self._format_extreme_samples(
+            context.get('extreme_changes', [])
+        )
 
         # 提取参数
         params = context['macro']['parameters']
@@ -398,7 +494,8 @@ class AnalystAgent:
             final_polarization=final['polarization_index'],
             initial_polarization=initial['polarization_index'],
             converted_samples=converted_samples,
-            stubborn_samples=stubborn_samples
+            stubborn_samples=stubborn_samples,
+            extreme_samples=extreme_samples
         )
 
         messages = [

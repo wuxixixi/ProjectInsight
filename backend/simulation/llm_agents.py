@@ -132,11 +132,14 @@ class LLMAgent:
     ) -> Dict:
         """
         扫描邻居状态，计算感知到的舆论气候
-        
+
+        重要：根据沉默的螺旋理论，沉默者的观点不应影响他人的决策过程。
+        因此，在计算邻居平均观点和观点分布时，自动忽略 is_silent=true 的节点。
+
         Args:
             neighbors: 邻居 Agent 列表
             opinion_snapshot: 观点快照 {agent_id: opinion}，用于并发一致性
-            
+
         Returns:
             包含邻居统计信息的字典
         """
@@ -147,32 +150,57 @@ class LLMAgent:
                 "pro_truth_ratio": 0.0,
                 "neutral_ratio": 1.0,
                 "silent_ratio": 0.0,
-                "avg_opinion": 0.0
+                "avg_opinion": 0.0,
+                "active_total": 0
             }
 
-        total = len(neighbors)
-        
-        # 使用快照中的观点（如果提供），否则使用实时观点
+        # 使用快照或实时状态判断邻居是否沉默
         if opinion_snapshot:
+            is_silent_map = {
+                n.id: opinion_snapshot.get(f"{n.id}_is_silent", n.is_silent)
+                for n in neighbors
+            }
             opinions = [opinion_snapshot.get(n.id, n.opinion) for n in neighbors]
-            silent_count = sum(
-                1 for n in neighbors 
-                if opinion_snapshot.get(f"{n.id}_is_silent", n.is_silent)
-            )
         else:
+            is_silent_map = {n.id: n.is_silent for n in neighbors}
             opinions = [n.opinion for n in neighbors]
-            silent_count = sum(1 for n in neighbors if n.is_silent)
-        
-        pro_rumor = sum(1 for o in opinions if o < -0.2)
-        pro_truth = sum(1 for o in opinions if o > 0.2)
-        neutral = total - pro_rumor - pro_truth
-        avg_opinion = sum(opinions) / total
+
+        # 根据沉默的螺旋理论：忽略沉默节点，只计算活跃邻居
+        active_neighbors = [
+            (n, op) for n, op in zip(neighbors, opinions)
+            if not is_silent_map.get(n.id, False)
+        ]
+
+        if not active_neighbors:
+            # 所有邻居都沉默
+            return {
+                "total": len(neighbors),
+                "pro_rumor_ratio": 0.0,
+                "pro_truth_ratio": 0.0,
+                "neutral_ratio": 1.0,
+                "silent_ratio": 1.0,
+                "avg_opinion": 0.0,
+                "active_total": 0
+            }
+
+        active_count = len(active_neighbors)
+        active_opinions = [op for _, op in active_neighbors]
+
+        # 计算活跃邻居的统计
+        total = len(neighbors)
+        silent_count = total - active_count
+
+        pro_rumor = sum(1 for o in active_opinions if o < -0.2)
+        pro_truth = sum(1 for o in active_opinions if o > 0.2)
+        neutral = active_count - pro_rumor - pro_truth
+        avg_opinion = sum(active_opinions) / active_count
 
         climate = {
             "total": total,
-            "pro_rumor_ratio": pro_rumor / total,
-            "pro_truth_ratio": pro_truth / total,
-            "neutral_ratio": neutral / total,
+            "active_total": active_count,  # 新增：活跃邻居数量
+            "pro_rumor_ratio": pro_rumor / active_count if active_count > 0 else 0.0,
+            "pro_truth_ratio": pro_truth / active_count if active_count > 0 else 0.0,
+            "neutral_ratio": neutral / active_count if active_count > 0 else 0.0,
             "silent_ratio": silent_count / total,
             "avg_opinion": avg_opinion
         }
@@ -321,21 +349,46 @@ class LLMAgent:
             # 确保在有效范围内
             new_opinion = np.clip(new_opinion, -1, 1)
 
+            # 判断 action 类型
+            action_normalized = action.strip().lower() if action else ""
+            is_debunking = "辟谣" in action  # 主动辟谣
+            is_reversing = "立场反转" in action or "反转" in action  # 立场反转
+
+            # 记录观点变化幅度
+            change = new_opinion - self.opinion
+            abs_change = abs(change)
+
             # 如果选择沉默，观点变化应该更小（保持原有观点）
             if is_silent:
                 # 沉默时观点变化幅度降低到原来的30%
                 max_change = 0.1 * (1 - self.belief_strength * 0.5)
-                change = new_opinion - self.opinion
-                if abs(change) > max_change:
+                if abs_change > max_change:
                     new_opinion = self.opinion + np.sign(change) * max_change
                     new_opinion = np.clip(new_opinion, -1, 1)
+                    change = new_opinion - self.opinion
             else:
                 # 信念强度约束：观点变化幅度受信念强度限制
                 max_change = 0.3 * (1 - self.belief_strength * 0.5)
-                change = new_opinion - self.opinion
-                if abs(change) > max_change:
-                    new_opinion = self.opinion + np.sign(change) * max_change
-                    new_opinion = np.clip(new_opinion, -1, 1)
+
+                # === 关键修改：辟谣/立场反转 action 应允许突破限制 ===
+                if is_debunking or is_reversing:
+                    # 辟谣或立场反转时，允许更大的观点变化（放宽到1.5倍）
+                    # 同时需要调整 belief_strength 以保持逻辑一致
+                    relaxed_max_change = min(0.5, max_change * 1.5)
+                    if abs_change > relaxed_max_change:
+                        new_opinion = self.opinion + np.sign(change) * relaxed_max_change
+                        new_opinion = np.clip(new_opinion, -1, 1)
+                        change = new_opinion - self.opinion
+
+                    # 辟谣/反转后，降低信念强度（因为行动与原观点不一致）
+                    belief_reduction = 0.1
+                    self.belief_strength = max(0.1, self.belief_strength - belief_reduction)
+                else:
+                    # 普通情况：严格限制观点变化幅度
+                    if abs_change > max_change:
+                        new_opinion = self.opinion + np.sign(change) * max_change
+                        new_opinion = np.clip(new_opinion, -1, 1)
+                        change = new_opinion - self.opinion
 
             # 更新沉默状态
             self.is_silent = bool(is_silent)

@@ -109,6 +109,10 @@ class SimulationEngineDual:
         self.news_content = "某地发生重大事件，网络上流传各种说法..."
         self.news_source = "public"  # 默认公域信息
 
+        # === 事件注入池 ===
+        self.event_pool: List[Dict] = []  # 存储所有注入的事件
+        self.pending_events: List[Dict] = []  # 待处理的事件（将在下一步推演时应用）
+
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
         self.progress_callback = callback
@@ -117,6 +121,66 @@ class SimulationEngineDual:
         """设置新闻内容和来源"""
         self.news_content = content
         self.news_source = source
+
+    def broadcast_event(
+        self,
+        content: str,
+        target_scope: str = "all"
+    ) -> Dict:
+        """
+        向全网或特定圈层广播突发事件
+
+        Args:
+            content: 事件文本内容
+            target_scope: 投放范围
+                - "all": 全网广播
+                - "public_only": 仅公域广场
+                - "private_only": 仅私域茧房
+
+        Returns:
+            事件记录字典
+        """
+        event = {
+            "step": self.step_count,
+            "content": content,
+            "target_scope": target_scope,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        # 添加到事件池
+        self.event_pool.append(event)
+        self.pending_events.append(event)
+
+        logger.info(f"Step {self.step_count}: 注入突发事件 [{target_scope}] {content[:50]}...")
+
+        return event
+
+    def consume_pending_events(self) -> List[Dict]:
+        """
+        获取并清空待处理的事件列表
+
+        Returns:
+            待处理的事件列表
+        """
+        events = self.pending_events.copy()
+        self.pending_events = []
+        return events
+
+    def get_event_timeline(self) -> List[Dict]:
+        """
+        获取事件时间线（用于前端 MarkLine 显示）
+
+        Returns:
+            事件列表，每个事件包含 step 和 content
+        """
+        return [
+            {
+                "step": e["step"],
+                "content": e["content"],
+                "scope": e["target_scope"]
+            }
+            for e in self.event_pool
+        ]
 
     def initialize(self) -> SimulationState:
         """初始化模拟"""

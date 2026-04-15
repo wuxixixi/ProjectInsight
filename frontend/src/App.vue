@@ -68,7 +68,34 @@
           <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning" />
         </div>
 
+        <!-- 双层网络开关 -->
         <div class="param-item">
+          <div class="param-header">
+            <span class="param-label">双层网络模式</span>
+            <label class="switch">
+              <input type="checkbox" v-model="useDualNetwork" :disabled="isRunning" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <p class="param-desc">{{ useDualNetwork ? '模拟公域+私域信息传播' : '单层社交网络' }}</p>
+        </div>
+
+        <!-- 私域网络类型（双层模式时显示） -->
+        <div class="param-item" v-if="useDualNetwork">
+          <div class="param-header">
+            <span class="param-label">私域网络类型</span>
+          </div>
+          <select v-model="networkType" :disabled="isRunning" class="network-select">
+            <option value="small_world">小世界网络</option>
+            <option value="scale_free">无标度网络</option>
+            <option value="random">随机网络</option>
+          </select>
+          <p class="param-desc">{{ networkTypeDesc }}</p>
+          <p class="param-hint">注：公域广场固定为无标度模型以模拟大V效应</p>
+        </div>
+
+        <!-- 社交网络类型（单层模式时显示） -->
+        <div class="param-item" v-if="!useDualNetwork">
           <div class="param-header">
             <span class="param-label">社交网络类型</span>
           </div>
@@ -193,7 +220,7 @@
           <div class="chart-card network-chart">
             <div class="chart-header">
               <h3>信息传播网络</h3>
-              <div class="network-tabs">
+              <div class="network-tabs" v-if="useDualNetwork">
                 <button :class="['tab-btn', { active: activeNetworkTab === 'public' }]" @click="activeNetworkTab = 'public'">
                   🏛️ 公域广场
                 </button>
@@ -204,8 +231,9 @@
             </div>
             <div class="chart-body" ref="networkChart"></div>
             <div class="network-info">
-              <span v-if="activeNetworkTab === 'public'">大V数量: {{ numInfluencers }} | 节点大小表示影响力</span>
-              <span v-else>社群数量: {{ numCommunities }} | 不同颜色代表不同社群</span>
+              <span v-if="useDualNetwork && activeNetworkTab === 'public'">大V数量: {{ numInfluencers }} | 节点大小表示影响力</span>
+              <span v-else-if="useDualNetwork">社群数量: {{ numCommunities }} | 不同颜色代表不同社群</span>
+              <span v-else>单层网络 | 节点大小表示影响力</span>
             </div>
           </div>
         </div>
@@ -916,7 +944,7 @@ export default {
           connection_pool_size: this.connectionPoolSize,
           timeout: this.timeout,
           max_retries: this.maxRetries,
-          use_dual_network: true,  // 启用双层网络模式
+          use_dual_network: this.useDualNetwork,  // 双层网络开关
           num_communities: 8,      // 私域社群数量
           public_m: 3              // 公域网络参数
         }
@@ -1580,6 +1608,57 @@ export default {
   box-sizing: border-box;
 }
 
+/* ==================== 开关样式 ==================== */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #374151;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.switch input:checked + .slider {
+  background-color: #3b82f6;
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.switch input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .dashboard-container {
   display: flex;
   width: 100vw;
@@ -1793,6 +1872,13 @@ export default {
   font-size: 11px;
   color: #6b7280;
   margin-top: 6px;
+}
+
+.param-hint {
+  font-size: 11px;
+  color: #f59e0b;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 .network-select {
