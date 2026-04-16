@@ -699,7 +699,12 @@ class LLMAgentPopulation:
             opinion_snapshot[agent.id] = float(agent.opinion)
             opinion_snapshot[f"{agent.id}_is_silent"] = agent.is_silent
 
-        async def decide_one(agent: LLMAgent, index: int):
+        # 使用计数器跟踪已完成的agent数量
+        completed_count = 0
+        completed_lock = asyncio.Lock()
+
+        async def decide_one(agent: LLMAgent):
+            nonlocal completed_count
             neighbor_agents = self.get_neighbor_agents(agent.id)
             result = await agent.decide_opinion(
                 llm_client,
@@ -709,14 +714,18 @@ class LLMAgentPopulation:
                 opinion_snapshot,  # 传入快照
                 knowledge_graph    # 传入知识图谱
             )
+            # 原子递增完成计数
+            async with completed_lock:
+                completed_count += 1
+                current_count = completed_count
             if progress_callback:
-                # 传递 Agent 详细信息：index, total, agent_id, agent_opinion
-                await progress_callback(index, self.size, agent.id, agent.opinion)
+                # 传递实际完成数量：completed, total, agent_id, agent_opinion
+                await progress_callback(current_count, self.size, agent.id, agent.opinion)
             return result
 
         tasks = [
-            decide_one(agent, i)
-            for i, agent in enumerate(self.agents)
+            decide_one(agent)
+            for agent in self.agents
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)

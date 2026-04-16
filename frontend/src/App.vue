@@ -25,52 +25,6 @@
       </div>
     </div>
 
-    <!-- 事件注入引导卡片（推演未开始时显示） -->
-    <div v-if="currentStep === 0" class="event-inject-panel">
-      <!-- 有待注入事件时显示 -->
-      <div v-if="pendingEvents.length > 0" class="pending-events-banner">
-        <div class="pending-banner-header">
-          <span class="pending-icon">📦</span>
-          <span class="pending-title">待注入事件 ({{ pendingEvents.length }})</span>
-          <span class="pending-hint">将在推演开始时自动注入</span>
-        </div>
-        <div class="pending-events-list">
-          <div class="pending-event-item" v-for="(event, index) in pendingEvents" :key="index">
-            <div class="pending-event-content">
-              <span class="pending-event-index">#{{ index + 1 }}</span>
-              <span class="pending-event-text">{{ event.content.substring(0, 60) }}{{ event.content.length > 60 ? '...' : '' }}</span>
-            </div>
-            <div class="pending-event-meta">
-              <span class="pending-event-entities" v-if="event.knowledgeGraph?.entities?.length">
-                📊 {{ event.knowledgeGraph.entities.length }}个实体
-              </span>
-              <span class="pending-event-source" :class="'source-' + event.source">
-                {{ event.source === 'public' ? '📢 公域' : '🏠 私域' }}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div class="pending-actions">
-          <button class="btn-add-event" @click="showEventAirdrop = true">
-            ➕ 添加更多事件
-          </button>
-          <button class="pending-start-btn" @click="startSimulation">
-            🚀 开始推演
-          </button>
-        </div>
-      </div>
-      
-      <!-- 无待注入事件时显示引导 -->
-      <div v-else class="no-event-guide">
-        <div class="guide-icon">📰</div>
-        <div class="guide-title">请先注入事件</div>
-        <div class="guide-desc">推演需要一个新闻事件作为基础，系统将解析事件提取知识图谱，作为Agent认知的上下文</div>
-        <button class="guide-inject-btn" @click="showEventAirdrop = true">
-          📝 注入第一个事件
-        </button>
-      </div>
-    </div>
-
     <!-- 左侧控制面板 -->
     <aside class="control-panel">
       <!-- 标题 -->
@@ -80,6 +34,39 @@
         <a href="https://github.com/wuxixixi/ProjectInsight" target="_blank" class="project-link">
           <span>📖 项目文档</span>
         </a>
+      </div>
+
+      <!-- 事件注入区块（核心流程） -->
+      <div class="event-inject-section">
+        <div class="section-header">
+          <span class="section-icon">📰</span>
+          <span class="section-title">事件注入</span>
+          <span v-if="pendingEvents.length > 0" class="event-count-badge">{{ pendingEvents.length }}</span>
+        </div>
+        
+        <!-- 有待注入事件 -->
+        <div v-if="pendingEvents.length > 0" class="pending-events-mini">
+          <div class="pending-mini-item" v-for="(event, index) in pendingEvents.slice(0, 3)" :key="index">
+            <span class="mini-index">#{{ index + 1 }}</span>
+            <span class="mini-content">{{ event.content.substring(0, 35) }}{{ event.content.length > 35 ? '...' : '' }}</span>
+            <span class="mini-entities" v-if="event.knowledgeGraph?.entities?.length">{{ event.knowledgeGraph.entities.length }}实体</span>
+          </div>
+          <div v-if="pendingEvents.length > 3" class="more-events">
+            +{{ pendingEvents.length - 3 }} 更多事件
+          </div>
+          <div class="event-actions-row">
+            <button class="btn-event-add" @click="showEventAirdrop = true">➕ 添加</button>
+            <button class="btn-event-start" @click="startSimulation">🚀 开始推演</button>
+          </div>
+        </div>
+        
+        <!-- 无事件时引导 -->
+        <div v-else class="no-event-hint">
+          <div class="hint-text">⚠️ 必须先注入事件才能推演</div>
+          <button class="btn-inject-primary" @click="showEventAirdrop = true">
+            📝 注入新闻事件
+          </button>
+        </div>
       </div>
 
       <!-- 帮助说明（可折叠） -->
@@ -254,11 +241,6 @@
           <span class="btn-icon">■</span>
           停止推演
         </button>
-        
-        <!-- 提示：需要先注入事件 -->
-        <div v-if="!isRunning && pendingEvents.length === 0" class="start-hint">
-          ⚠️ 请先在上方注入事件
-        </div>
 
         <!-- 进度显示 -->
         <div v-if="isRunning" class="progress-container">
@@ -388,42 +370,42 @@
       <div class="charts-area">
       <!-- 顶部核心指标卡 -->
       <div class="kpi-cards">
-        <div class="kpi-card">
+        <div class="kpi-card clickable" @click="showInfoPanelWithHighlight('step')">
           <div class="kpi-icon">⏱️</div>
           <div class="kpi-content">
             <span class="kpi-label">当前步数</span>
             <span class="kpi-value">{{ animatedStep }}</span>
           </div>
         </div>
-        <div class="kpi-card danger" title="当前相信谣言的人群比例（opinion < -0.2）。辟谣后应逐渐下降。">
+        <div class="kpi-card danger clickable" @click="showInfoPanelWithHighlight('rumor')">
           <div class="kpi-icon">📢</div>
           <div class="kpi-content">
             <span class="kpi-label">谣言传播率</span>
             <span class="kpi-value">{{ (rumorSpreadRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card success" title="当前相信真相的人群比例（opinion > 0.2）。辟谣后应逐渐上升。">
+        <div class="kpi-card success clickable" @click="showInfoPanelWithHighlight('truth')">
           <div class="kpi-icon">✓</div>
           <div class="kpi-content">
             <span class="kpi-label">真相接受率</span>
             <span class="kpi-value">{{ (truthAcceptanceRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card info" title="群体观点平均值。负值=倾向谣言，正值=倾向真相。范围：-1 ~ +1">
+        <div class="kpi-card info clickable" @click="showInfoPanelWithHighlight('avgOpinion')">
           <div class="kpi-icon">⚖️</div>
           <div class="kpi-content">
             <span class="kpi-label">平均观点</span>
             <span class="kpi-value">{{ avgOpinion.toFixed(3) }}</span>
           </div>
         </div>
-        <div class="kpi-card purple" title="不敢表达观点的人群比例。反映'沉默的螺旋'效应，高值可能导致极端观点主导。">
+        <div class="kpi-card purple clickable" @click="showInfoPanelWithHighlight('silence')">
           <div class="kpi-icon">🤫</div>
           <div class="kpi-content">
             <span class="kpi-label">沉默率</span>
             <span class="kpi-value">{{ (silenceRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card warning" title="群体观点分歧程度（0~1）。高值表示社会撕裂，双方互不信任。">
+        <div class="kpi-card warning clickable" @click="showInfoPanelWithHighlight('polarization')">
           <div class="kpi-icon">⚡</div>
           <div class="kpi-content">
             <span class="kpi-label">极化指数</span>
@@ -488,42 +470,42 @@
       <!-- 右侧说明栏（可折叠） -->
       <aside class="info-panel" :class="{ collapsed: !showInfoPanel }">
         <div class="info-panel-toggle" @click="showInfoPanel = !showInfoPanel">
-          <span v-if="showInfoPanel">◀ 收起</span>
-          <span v-else>▶ 说明</span>
+          <span v-if="showInfoPanel">收起 ▶</span>
+          <span v-else>◀ 展开</span>
         </div>
         <div v-if="showInfoPanel" class="info-panel-content">
           <!-- 当前关注区域 -->
           <div class="info-section">
             <h4 class="info-section-title">📊 指标解读</h4>
-            <div class="info-item">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'rumor' }">
               <div class="info-item-header">
                 <span class="info-item-label">谣言传播率</span>
                 <span class="info-item-value danger">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
               </div>
               <p class="info-item-desc">当前相信谣言的人群比例（opinion &lt; -0.2）。辟谣后应逐渐下降。</p>
             </div>
-            <div class="info-item">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'truth' }">
               <div class="info-item-header">
                 <span class="info-item-label">真相接受率</span>
                 <span class="info-item-value success">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
               </div>
               <p class="info-item-desc">当前相信真相的人群比例（opinion &gt; 0.2）。辟谣后应逐渐上升。</p>
             </div>
-            <div class="info-item">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'avgOpinion' }">
               <div class="info-item-header">
                 <span class="info-item-label">平均观点</span>
                 <span class="info-item-value info">{{ avgOpinion.toFixed(3) }}</span>
               </div>
               <p class="info-item-desc">群体观点平均值。负值=倾向谣言，正值=倾向真相。范围：-1 ~ +1</p>
             </div>
-            <div class="info-item">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'silence' }">
               <div class="info-item-header">
                 <span class="info-item-label">沉默率</span>
                 <span class="info-item-value purple">{{ (silenceRate * 100).toFixed(1) }}%</span>
               </div>
               <p class="info-item-desc">不敢表达观点的人群比例。反映"沉默的螺旋"效应，高值可能导致极端观点主导。</p>
             </div>
-            <div class="info-item">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'polarization' }">
               <div class="info-item-header">
                 <span class="info-item-label">极化指数</span>
                 <span class="info-item-value warning">{{ polarizationIndex.toFixed(3) }}</span>
@@ -1216,7 +1198,8 @@ export default {
 
       // UI状态
       showHelp: true,  // 帮助说明默认展开
-      showInfoPanel: true,  // 右侧说明栏默认展开
+      showInfoPanel: false,  // 右侧说明栏默认收起
+      highlightedInfoItem: null,  // 当前高亮的信息项
       expandedGroups: {
         kg: true,      // 知识图谱组默认展开
         report: false,
@@ -1484,6 +1467,16 @@ export default {
       this.expandedGroups[group] = !this.expandedGroups[group]
     },
 
+    // 展开信息面板并高亮指定项
+    showInfoPanelWithHighlight(itemKey) {
+      this.showInfoPanel = true
+      this.highlightedInfoItem = itemKey
+      // 3秒后取消高亮
+      setTimeout(() => {
+        this.highlightedInfoItem = null
+      }, 3000)
+    },
+
     getOpinionClass(opinion) {
       if (opinion < -0.3) return 'opinion-rumor'
       if (opinion > 0.3) return 'opinion-truth'
@@ -1493,7 +1486,8 @@ export default {
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
-      const wsUrl = (window.location.origin.replace('http', 'ws')) + '/ws/simulation'
+      // 直接连接后端 8000 端口
+      const wsUrl = 'ws://localhost:8000/ws/simulation'
       console.log('连接 WebSocket:', wsUrl)
 
       try {
@@ -1662,7 +1656,7 @@ export default {
       this.reportContent = ''
       try {
         const response = await fetch(
-          window.location.origin + '/api/report/content?filename=' + encodeURIComponent(this.reportFilename)
+          'http://localhost:8000/api/report/content?filename=' + encodeURIComponent(this.reportFilename)
         )
         const data = await response.json()
         if (data.success) {
@@ -1689,7 +1683,7 @@ export default {
 
       this.mathModelLoading = true
       try {
-        const response = await fetch(window.location.origin + '/api/math-model/explanation')
+        const response = await fetch('http://localhost:8000' + '/api/math-model/explanation')
         const data = await response.json()
         this.mathModelExplanation = data
       } catch (error) {
@@ -1713,7 +1707,7 @@ export default {
       this.parsedKnowledgeGraph = null
       
       try {
-        const response = await fetch(window.location.origin + '/api/event/parse', {
+        const response = await fetch('http://localhost:8000' + '/api/event/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: this.newsContent })
@@ -1753,15 +1747,21 @@ export default {
       try {
         // 第一阶段：解析（显示Loading状态）
         this.airdropLoadingStage = '⏳ 阶段1/3: 大模型正在解析事件图谱...'
-        
+
+        // 创建带超时的 fetch 请求（120秒超时）
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 120000)
+
         const response = await fetch(
-          window.location.origin + '/api/event/airdrop',
+          'http://localhost:8000' + '/api/event/airdrop',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: this.airdropContent, source: this.airdropSource })
+            body: JSON.stringify({ content: this.airdropContent, source: this.airdropSource }),
+            signal: controller.signal
           }
         )
+        clearTimeout(timeoutId)
         const data = await response.json()
 
         if (data.success) {
@@ -1813,7 +1813,11 @@ export default {
         }
       } catch (error) {
         console.error('注入事件失败:', error)
-        this.airdropError = '网络错误: ' + error.message
+        if (error.name === 'AbortError') {
+          this.airdropError = '请求超时（120秒），请检查后端服务是否正常'
+        } else {
+          this.airdropError = '网络错误: ' + error.message
+        }
         this.airdropLoading = false
         this.airdropLoadingStage = ''
       }
@@ -1846,7 +1850,7 @@ export default {
       this.reportListLoading = true
       this.reportList = []
       try {
-        const response = await fetch(window.location.origin + '/api/report/list')
+        const response = await fetch('http://localhost:8000' + '/api/report/list')
         const data = await response.json()
         this.reportList = data.reports || []
       } catch (error) {
@@ -1879,7 +1883,7 @@ export default {
     downloadReport() {
       if (this.reportFilename) {
         const link = document.createElement('a')
-        link.href = window.location.origin + '/api/report/download?filename=' + encodeURIComponent(this.reportFilename)
+        link.href = 'http://localhost:8000' + '/api/report/download?filename=' + encodeURIComponent(this.reportFilename)
         link.download = this.reportFilename
         link.click()
       }
@@ -1895,7 +1899,7 @@ export default {
 
       try {
         // 使用 EventSource 进行流式接收
-        const eventSource = new EventSource(window.location.origin + '/api/report/stream')
+        const eventSource = new EventSource('http://localhost:8000' + '/api/report/stream')
 
         eventSource.onmessage = (event) => {
           try {
@@ -1969,7 +1973,7 @@ export default {
 
     async openReportInApp() {
       try {
-        const response = await fetch(window.location.origin + '/api/report/open', {
+        const response = await fetch('http://localhost:8000' + '/api/report/open', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: this.reportPath })
@@ -1993,7 +1997,7 @@ export default {
       this.agentSnapshot = null
 
       try {
-        const response = await fetch(`${window.location.origin}/api/agent/${agentId}/inspect`)
+        const response = await fetch(`${'http://localhost:8000'}/api/agent/${agentId}/inspect`)
         const data = await response.json()
         this.agentSnapshot = data
       } catch (error) {
@@ -2965,204 +2969,156 @@ export default {
   background: linear-gradient(90deg, #22c55e, #3b82f6);
 }
 
-/* ==================== 待注入事件提示卡片 ==================== */
-.pending-events-banner {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+/* ==================== 事件注入区块（左侧面板） ==================== */
+.event-inject-section {
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 10px;
   border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 12px;
-  padding: 16px 20px;
-  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+  padding: 12px;
 }
 
-.pending-banner-header {
+.section-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
-.pending-icon {
-  font-size: 24px;
-}
-
-.pending-title {
+.section-icon {
   font-size: 16px;
-  font-weight: 600;
-  color: #fbbf24;
 }
 
-.pending-hint {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-left: auto;
-}
-
-.pending-events-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.pending-event-item {
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 8px;
-  padding: 10px 14px;
-  border: 1px solid rgba(245, 158, 11, 0.2);
-}
-
-.pending-event-content {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.pending-event-index {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.pending-event-text {
-  font-size: 13px;
-  color: #e2e8f0;
-  line-height: 1.4;
-}
-
-.pending-event-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 11px;
-}
-
-.pending-event-entities {
-  color: #60a5fa;
-}
-
-.pending-event-source {
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.pending-event-source.source-public {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
-}
-
-.pending-event-source.source-private {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-}
-
-.pending-start-btn {
-  flex: 1;
-  padding: 12px 20px;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border: none;
-  border-radius: 8px;
-  color: white;
+.section-title {
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  color: #fbbf24;
 }
 
-.pending-start-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+.event-count-badge {
+  background: rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
-/* ==================== 事件注入面板 ==================== */
-.event-inject-panel {
-  position: fixed;
-  top: 60px;
-  left: 320px;
-  right: 20px;
-  z-index: 99;
-}
-
-.pending-actions {
+/* 待注入事件列表（紧凑版） */
+.pending-events-mini {
   display: flex;
-  gap: 12px;
-  margin-top: 14px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.btn-add-event {
+.pending-mini-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 6px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.mini-index {
+  font-size: 11px;
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.mini-content {
   flex: 1;
-  padding: 10px 16px;
+  font-size: 12px;
+  color: #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-entities {
+  font-size: 10px;
+  color: #94a3b8;
+  background: rgba(100, 181, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.more-events {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 4px;
+}
+
+.event-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-event-add {
+  flex: 1;
+  padding: 8px 12px;
   background: rgba(51, 65, 85, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s;
 }
 
-.btn-add-event:hover {
+.btn-event-add:hover {
   background: rgba(51, 65, 85, 0.8);
   color: #e2e8f0;
 }
 
-/* 无事件时的引导卡片 */
-.no-event-guide {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 12px;
-  padding: 24px 30px;
-  text-align: center;
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
-}
-
-.guide-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.guide-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #60a5fa;
-  margin-bottom: 8px;
-}
-
-.guide-desc {
-  font-size: 13px;
-  color: #94a3b8;
-  line-height: 1.6;
-  margin-bottom: 16px;
-}
-
-.guide-inject-btn {
-  padding: 14px 28px;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+.btn-event-start {
+  flex: 2;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: white;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s;
 }
 
-.guide-inject-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+.btn-event-start:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.4);
 }
 
-/* 开始推演按钮提示 */
-.start-hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #f59e0b;
+/* 无事件引导 */
+.no-event-hint {
   text-align: center;
+  padding: 12px;
+}
+
+.hint-text {
+  font-size: 13px;
+  color: #f59e0b;
+  margin-bottom: 10px;
+}
+
+.btn-inject-primary {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-inject-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
 /* ==================== 帮助说明面板 ==================== */
@@ -3778,6 +3734,16 @@ export default {
   border: 1px solid rgba(100, 181, 246, 0.15);
   border-radius: 12px;
   transition: all 0.3s ease;
+}
+
+.kpi-card.clickable {
+  cursor: pointer;
+}
+
+.kpi-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  border-color: rgba(100, 181, 246, 0.3);
 }
 
 .kpi-card:hover {
@@ -5949,38 +5915,48 @@ export default {
 
 /* ==================== 右侧说明栏 ==================== */
 .info-panel {
-  width: 280px;
-  min-width: 280px;
-  background: rgba(15, 23, 42, 0.95);
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  width: 320px;
+  background: rgba(15, 23, 42, 0.98);
   border-left: 1px solid rgba(100, 181, 246, 0.15);
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: width 0.3s ease;
   overflow: hidden;
+  z-index: 1000;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .info-panel.collapsed {
   width: 40px;
-  min-width: 40px;
+  box-shadow: none;
 }
 
 .info-panel-toggle {
-  padding: 12px;
+  flex-shrink: 0;
+  padding: 15px 8px;
   text-align: center;
-  background: rgba(100, 181, 246, 0.1);
-  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
-  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
 }
 
 .info-panel-toggle:hover {
-  background: rgba(100, 181, 246, 0.2);
+  background: rgba(59, 130, 246, 1);
 }
 
 .info-panel.collapsed .info-panel-toggle {
-  padding: 10px 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .info-panel-content {
@@ -6012,6 +5988,13 @@ export default {
   background: rgba(30, 41, 59, 0.5);
   border-radius: 8px;
   border: 1px solid rgba(100, 181, 246, 0.08);
+  transition: all 0.3s ease;
+}
+
+.info-item.highlighted {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
 }
 
 .info-item-header {
