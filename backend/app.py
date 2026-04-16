@@ -299,8 +299,16 @@ async def start_simulation(params: StartRequest):
     # ==================== 自动注入待处理的事件 ====================
     if pending_knowledge_graph and pending_event_content:
         logger.info(f"检测到待注入事件，自动注入到引擎: {pending_event_content[:50]}...")
-        engine.knowledge_graph = pending_knowledge_graph
         
+        # === Phase 1: 设置知识图谱，启用知识驱动演化 ===
+        entities = pending_knowledge_graph.get('entities', [])
+        relations = pending_knowledge_graph.get('relations', [])
+        if entities and hasattr(engine, 'set_knowledge_graph'):
+            engine.set_knowledge_graph(entities, relations)
+            logger.info(f"知识驱动演化已启用")
+        
+        engine.knowledge_graph = pending_knowledge_graph
+
         # 如果引擎支持设置新闻
         if hasattr(engine, 'set_news'):
             import inspect
@@ -308,7 +316,7 @@ async def start_simulation(params: StartRequest):
                 await engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
             else:
                 engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
-        
+
         # 广播事件
         target_scope = "all"
         if pending_event_source == "public":
@@ -316,9 +324,9 @@ async def start_simulation(params: StartRequest):
         elif pending_event_source == "private":
             target_scope = "private_only"
         engine.broadcast_event(pending_event_content, target_scope)
-        
+
         logger.info(f"待注入事件已成功注入，图谱包含 {len(pending_knowledge_graph.get('entities', []))} 个实体")
-        
+
         # 清空待注入数据
         pending_knowledge_graph = None
         pending_event_content = None
@@ -801,6 +809,13 @@ async def airdrop_event(req: AirdropRequest):
         
         # 更新引擎的知识图谱
         engine.knowledge_graph = knowledge_graph
+        
+        # === Phase 1: 设置知识图谱，启用知识驱动演化 ===
+        entities = knowledge_graph.get('entities', [])
+        relations = knowledge_graph.get('relations', [])
+        if entities and hasattr(engine, 'set_knowledge_graph'):
+            engine.set_knowledge_graph(entities, relations)
+            logger.info(f"知识驱动演化已启用")
 
         # 广播事件（包含图谱信息）
         event = engine.broadcast_event(req.content, target_scope)

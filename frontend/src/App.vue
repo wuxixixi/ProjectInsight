@@ -412,6 +412,13 @@
             <span class="kpi-value">{{ polarizationIndex.toFixed(3) }}</span>
           </div>
         </div>
+        <div class="kpi-card knowledge clickable" @click="showInfoPanelWithHighlight('knowledge')" v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0">
+          <div class="kpi-icon">🧠</div>
+          <div class="kpi-content">
+            <span class="kpi-label">知识驱动</span>
+            <span class="kpi-value">{{ knowledgeGraph.entities.length }}<small> 实体</small></span>
+          </div>
+        </div>
       </div>
 
       <!-- 图表区域 -->
@@ -558,6 +565,45 @@
                 <div class="mechanism-content">
                   <strong>认知失调</strong>
                   <p>面对矛盾信息时可能强化原有信念</p>
+                </div>
+              </div>
+              <div class="mechanism-item knowledge-mechanism" v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0">
+                <span class="mechanism-icon">🔗</span>
+                <div class="mechanism-content">
+                  <strong>知识驱动演化</strong>
+                  <p>实体影响力参与观点演化，权威实体影响更大</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 知识图谱实体影响力 -->
+          <div class="info-section" v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0" :class="{ highlighted: highlightedInfoItem === 'knowledge' }">
+            <h4 class="info-section-title">🧠 知识驱动演化</h4>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">实体数量</span>
+                <span class="info-item-value knowledge">{{ knowledgeGraph.entities.length }}</span>
+              </div>
+              <p class="info-item-desc">知识图谱中的实体数量，实体影响力参与观点演化计算。</p>
+            </div>
+            <div class="info-item">
+              <div class="info-item-header">
+                <span class="info-item-label">关系数量</span>
+                <span class="info-item-value knowledge">{{ knowledgeGraph.relations ? knowledgeGraph.relations.length : 0 }}</span>
+              </div>
+              <p class="info-item-desc">实体间的关系数量，支持立场传导计算。</p>
+            </div>
+            <!-- 高影响力实体展示 -->
+            <div class="entity-impact-list" v-if="topEntities.length > 0">
+              <div class="entity-impact-title">高影响力实体</div>
+              <div class="entity-impact-items">
+                <div v-for="entity in topEntities" :key="entity.name" class="entity-impact-item">
+                  <span class="entity-name">{{ entity.name }}</span>
+                  <span class="entity-type">{{ entity.type }}</span>
+                  <div class="entity-impact-bar">
+                    <div class="entity-impact-fill" :style="{ width: (entity.impact * 100) + '%' }"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1418,6 +1464,36 @@ export default {
       }
 
       return null
+    },
+    // 高影响力实体（用于知识驱动演化展示）
+    topEntities() {
+      if (!this.knowledgeGraph.entities || this.knowledgeGraph.entities.length === 0) {
+        return []
+      }
+      // 计算实体影响力并排序
+      const typeWeights = {
+        '媒体': 1.0,
+        '官方': 0.95,
+        '专家': 0.85,
+        '组织': 0.7,
+        '人物': 0.5,
+        'organization': 0.7,
+        'person': 0.5
+      }
+      const entitiesWithImpact = this.knowledgeGraph.entities.map(e => {
+        const type = e.type || '人物'
+        const importance = e.importance || 3
+        const typeWeight = typeWeights[type] || 0.5
+        const importanceWeight = (6 - importance) / 5
+        const impact = typeWeight * 0.4 + importanceWeight * 0.4 + 0.2
+        return {
+          name: e.name,
+          type: type,
+          impact: Math.min(1.0, Math.max(0.0, impact))
+        }
+      })
+      // 按影响力排序，取前5个
+      return entitiesWithImpact.sort((a, b) => b.impact - a.impact).slice(0, 5)
     }
   },
 
@@ -3817,6 +3893,19 @@ export default {
   color: #a78bfa;
 }
 
+.kpi-card.knowledge {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.kpi-card.knowledge .kpi-icon {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.kpi-card.knowledge .kpi-value {
+  color: #10b981;
+}
+
 .kpi-icon {
   width: 44px;
   height: 44px;
@@ -6021,11 +6110,79 @@ export default {
 .info-item-value.info { color: #3b82f6; }
 .info-item-value.purple { color: #a78bfa; }
 .info-item-value.warning { color: #f59e0b; }
+.info-item-value.knowledge { color: #10b981; }
 
 .info-item-desc {
   font-size: 11px;
   color: #6b7280;
   line-height: 1.4;
+}
+
+/* 实体影响力展示 */
+.entity-impact-list {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.entity-impact-title {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.entity-impact-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.entity-impact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entity-name {
+  font-size: 12px;
+  color: #e2e8f0;
+  min-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-type {
+  font-size: 10px;
+  color: #64748b;
+  background: rgba(100, 181, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.entity-impact-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.entity-impact-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* 知识驱动机制高亮 */
+.mechanism-item.knowledge-mechanism {
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 8px;
+  padding: 2px;
 }
 
 /* 推演机制列表 */

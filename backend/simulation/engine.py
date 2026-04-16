@@ -12,6 +12,7 @@ import logging
 from .agents import AgentPopulation
 from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
+from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionConfig
 from ..models.schemas import SimulationState
 from ..llm.client import LLMClient, LLMConfig
 
@@ -97,11 +98,15 @@ class SimulationEngine:
 
         # 进度回调
         self.progress_callback: Optional[Callable] = None
-        
+
         # 新闻和知识图谱
         self.news_content: str = ""
         self.news_source: str = "public"
         self.knowledge_graph: Dict = {}
+        
+        # 知识驱动演化器（Phase 1 新增）
+        self.knowledge_evolution: Optional[KnowledgeDrivenEvolution] = None
+        self.use_knowledge_evolution: bool = False
 
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
@@ -119,6 +124,38 @@ class SimulationEngine:
         self.news_content = content
         self.news_source = source
         # 注意：数学模型模式不解析知识图谱
+    
+    def set_knowledge_graph(
+        self,
+        entities: List[Dict],
+        relations: List[Dict],
+        config: KnowledgeEvolutionConfig = None
+    ):
+        """
+        设置知识图谱，启用知识驱动演化
+        
+        Args:
+            entities: 实体列表
+            relations: 关系列表
+            config: 知识演化配置
+        """
+        if not entities:
+            logger.warning("实体列表为空，不启用知识驱动演化")
+            return
+        
+        self.knowledge_evolution = KnowledgeDrivenEvolution(
+            entities=entities,
+            relations=relations,
+            config=config
+        )
+        self.use_knowledge_evolution = True
+        logger.info(f"知识图谱已设置，启用知识驱动演化: {len(entities)} 实体, {len(relations)} 关系")
+        
+        # 记录知识图谱
+        self.knowledge_graph = {
+            "entities": entities,
+            "relations": relations
+        }
 
     def broadcast_event(
         self,
@@ -254,6 +291,7 @@ class SimulationEngine:
         4. 群体极化效应
         5. 辟谣与逆火效应
         6. 认知失调
+        7. 知识图谱驱动演化（Phase 1 新增）
         """
         pop = self.population
         old_opinions = pop.opinions.copy()
@@ -273,6 +311,23 @@ class SimulationEngine:
             debunk_released=self.debunked,
             step_count=self.step_count
         )
+        
+        # === Phase 1: 知识图谱驱动演化 ===
+        if self.use_knowledge_evolution and self.knowledge_evolution:
+            personas = self._get_personas()
+            knowledge_influence = self.knowledge_evolution.compute_batch_influence(
+                opinions=new_opinions,
+                personas=personas,
+                cocoon_strength=self.cocoon_strength,
+                debunk_released=self.debunked
+            )
+            
+            # 应用知识影响
+            new_opinions = np.clip(new_opinions + knowledge_influence, -1, 1)
+            
+            avg_influence = np.mean(np.abs(knowledge_influence))
+            if avg_influence > 0.001:
+                logger.debug(f"知识驱动演化: 平均影响 {avg_influence:.4f}")
 
         # 更新状态
         pop.opinions = new_opinions
@@ -297,6 +352,33 @@ class SimulationEngine:
         pop = self.population
         threshold = np.percentile(pop.influence, 95)
         return list(np.where(pop.influence >= threshold)[0])
+    
+    def _get_personas(self) -> List[str]:
+        """
+        获取所有Agent的人设类型
+        
+        用于知识驱动演化的人设调节
+        """
+        if self.population is None:
+            return []
+        
+        # 从population获取人设，如果没有则返回默认值
+        personas = []
+        for i in range(self.population.size):
+            # 检查是否有personas属性
+            if hasattr(self.population, 'personas') and self.population.personas is not None:
+                personas.append(self.population.personas[i])
+            else:
+                # 基于影响力分配默认人设
+                influence = self.population.influence[i]
+                if influence > np.percentile(self.population.influence, 90):
+                    personas.append("意见领袖")
+                elif influence > np.percentile(self.population.influence, 70):
+                    personas.append("媒体账号")
+                else:
+                    personas.append("普通用户")
+        
+        return personas
 
     def _generate_math_snapshots(
         self,
