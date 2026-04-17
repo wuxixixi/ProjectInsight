@@ -23,6 +23,8 @@ from .simulation.agents import AgentPopulation
 from .simulation.llm_agents import get_agent_snapshot_global
 from .simulation.llm_agents_dual import get_agent_snapshot_global as get_agent_snapshot_global_dual
 from .simulation.analyst_agent import generate_intelligence_report, AnalystAgent, DataSampler
+from .simulation.prediction import PredictionModel, PredictionConfig
+from .simulation.risk_alert import get_risk_engine, RiskLevel
 from .models.schemas import SimulationParams, SimulationState
 from .llm.client import LLMConfig
 
@@ -56,9 +58,15 @@ pending_knowledge_graph: Optional[dict] = None
 pending_event_content: Optional[str] = None
 pending_event_source: Optional[str] = None
 
+# 预测模型和风险引擎
+prediction_model: Optional[PredictionModel] = None
+
 
 class StartRequest(BaseModel):
     """推演启动请求参数"""
+    # 推演模式
+    mode: str = "sandbox"  # sandbox(沙盘) / news(新闻)
+    
     # 基础参数
     cocoon_strength: float = 0.5
     debunk_delay: int = 10
@@ -85,6 +93,17 @@ class StartRequest(BaseModel):
     silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
     polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
     echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
+
+    # Phase 3: 新闻模式专用参数
+    init_distribution: Optional[Dict[str, float]] = None
+    """真实分布锚定，格式:
+    {
+        "believe_rumor": 0.25,  # 初始相信谣言比例
+        "believe_truth": 0.15,  # 初始相信真相比例
+        "neutral": 0.60         # 中立比例
+    }
+    """
+    time_acceleration: float = 1.0  # 时间加速比
 
 
 class ParseRequest(BaseModel):
@@ -244,6 +263,14 @@ async def start_simulation(params: StartRequest):
     """
     global engine, pending_knowledge_graph, pending_event_content, pending_event_source
 
+    # 如果有待注入事件，根据事件内容设置初始分布
+    if pending_knowledge_graph and pending_event_content:
+        sentiment = pending_knowledge_graph.get("sentiment", "中性")
+        credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
+        entity_count = len(pending_knowledge_graph.get('entities', []))
+        logger.info(f"检测到待注入事件，情感={sentiment}, 可信度={credibility}, 实体数={entity_count}")
+        # 注意：这里不直接设置initial_rumor_spread，而是在引擎创建后调用set_initial_distribution_from_news
+
     # 自动计算并发数（如果未指定）
     max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
     logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {params.population_size})")
@@ -291,22 +318,35 @@ async def start_simulation(params: StartRequest):
             backfire_strength=params.backfire_strength,
             silence_threshold=params.silence_threshold,
             polarization_factor=params.polarization_factor,
-            echo_chamber_factor=params.echo_chamber_factor
+            echo_chamber_factor=params.echo_chamber_factor,
+            # Phase 3: 运行模式参数
+            mode=params.mode,
+            init_distribution=params.init_distribution,
+            time_acceleration=params.time_acceleration
         )
+
+    # 如果有待注入事件，根据事件内容设置初始分布
+    if pending_knowledge_graph and pending_event_content:
+        sentiment = pending_knowledge_graph.get("sentiment", "中性")
+        credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
+        entity_count = len(pending_knowledge_graph.get('entities', []))
+        if hasattr(engine, 'set_initial_distribution_from_news'):
+            engine.set_initial_distribution_from_news(sentiment, credibility, entity_count)
+            logger.info(f"已根据新闻内容设置初始分布")
 
     initial_state = engine.initialize()
     
     # ==================== 自动注入待处理的事件 ====================
     if pending_knowledge_graph and pending_event_content:
         logger.info(f"检测到待注入事件，自动注入到引擎: {pending_event_content[:50]}...")
-        
+
         # === Phase 1: 设置知识图谱，启用知识驱动演化 ===
         entities = pending_knowledge_graph.get('entities', [])
         relations = pending_knowledge_graph.get('relations', [])
         if entities and hasattr(engine, 'set_knowledge_graph'):
             engine.set_knowledge_graph(entities, relations)
             logger.info(f"知识驱动演化已启用")
-        
+
         engine.knowledge_graph = pending_knowledge_graph
 
         # 如果引擎支持设置新闻
@@ -317,13 +357,16 @@ async def start_simulation(params: StartRequest):
             else:
                 engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
 
-        # 广播事件
+        # 广播事件（触发事件冲击）
         target_scope = "all"
         if pending_event_source == "public":
             target_scope = "public_only"
         elif pending_event_source == "private":
             target_scope = "private_only"
-        engine.broadcast_event(pending_event_content, target_scope)
+        
+        sentiment = pending_knowledge_graph.get("sentiment", "中性")
+        credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
+        engine.broadcast_event(pending_event_content, target_scope, sentiment=sentiment, credibility=credibility)
 
         logger.info(f"待注入事件已成功注入，图谱包含 {len(pending_knowledge_graph.get('entities', []))} 个实体")
 
@@ -784,7 +827,7 @@ async def airdrop_event(req: AirdropRequest):
         pending_knowledge_graph = knowledge_graph
         pending_event_content = req.content
         pending_event_source = req.source
-        
+
         return {
             "success": True,
             "data": {
@@ -797,7 +840,12 @@ async def airdrop_event(req: AirdropRequest):
 
     # ==================== 第三阶段：广播（发送给推演引擎）====================
     logger.info(f"[管线阶段3] 广播事件到推演引擎, 范围: {target_scope}")
-    
+
+    # 获取情感和可信度
+    sentiment = knowledge_graph.get("sentiment", "中性")
+    credibility = knowledge_graph.get("credibility_hint", "不确定")
+    entity_count = len(knowledge_graph.get('entities', []))
+
     try:
         # 更新引擎的新闻和图谱
         if hasattr(engine, 'set_news'):
@@ -806,10 +854,10 @@ async def airdrop_event(req: AirdropRequest):
                 await engine.set_news(req.content, req.source, parse_graph=False)
             else:
                 engine.set_news(req.content, req.source, parse_graph=False)
-        
+
         # 更新引擎的知识图谱
         engine.knowledge_graph = knowledge_graph
-        
+
         # === Phase 1: 设置知识图谱，启用知识驱动演化 ===
         entities = knowledge_graph.get('entities', [])
         relations = knowledge_graph.get('relations', [])
@@ -817,11 +865,16 @@ async def airdrop_event(req: AirdropRequest):
             engine.set_knowledge_graph(entities, relations)
             logger.info(f"知识驱动演化已启用")
 
-        # 广播事件（包含图谱信息）
-        event = engine.broadcast_event(req.content, target_scope)
+        # 广播事件（包含图谱信息，触发事件冲击）
+        event = engine.broadcast_event(
+            content=req.content,
+            target_scope=target_scope,
+            sentiment=sentiment,
+            credibility=credibility
+        )
         event["knowledge_graph"] = knowledge_graph
         event["event_msg"] = event_msg
-        
+
         logger.info(f"[管线完成] 事件注入成功，已广播给所有Agent")
 
         return {
@@ -1082,3 +1135,163 @@ async def websocket_simulation(websocket: WebSocket):
         auto_mode = False
     except Exception as e:
         logger.error(f"WebSocket 错误: {e}")
+
+
+# ==================== Phase 2: 预测与风险预警 API ====================
+
+@app.get("/api/prediction")
+async def get_prediction():
+    """
+    获取预测结果
+    
+    基于历史数据预测未来趋势，返回预测区间
+    """
+    global engine, prediction_model
+    
+    if engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化"},
+            status_code=400
+        )
+    
+    if len(engine.history) < 3:
+        return {
+            "success": True,
+            "data": {
+                "available": False,
+                "message": "历史数据不足，需要至少3步推演后才能预测",
+                "min_steps_required": 3,
+                "current_steps": len(engine.history)
+            }
+        }
+    
+    # 初始化或更新预测模型
+    if prediction_model is None:
+        prediction_model = PredictionModel()
+    
+    prediction_model.update(engine.history)
+    
+    # 获取当前状态
+    current_state = {
+        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
+        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
+        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
+        "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
+    }
+    
+    # 执行预测
+    prediction = prediction_model.predict(current_state)
+    
+    # 获取干预建议
+    recommendation = prediction_model.get_intervention_recommendation(current_state, prediction)
+    
+    # 获取预测轨迹（用于前端绘图）
+    trajectory = prediction_model.get_trajectory(current_state, steps=10)
+    
+    return {
+        "success": True,
+        "data": {
+            "available": True,
+            "current_step": engine.step_count,
+            "prediction": prediction,
+            "trajectory": trajectory,
+            "recommendation": recommendation
+        }
+    }
+
+
+@app.get("/api/risk-alerts")
+async def get_risk_alerts():
+    """
+    获取风险预警
+    
+    检测当前状态的风险并返回预警列表
+    """
+    global engine
+    
+    if engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化"},
+            status_code=400
+        )
+    
+    # 获取风险引擎
+    risk_engine = get_risk_engine()
+    
+    # 获取当前状态
+    current_state = {
+        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
+        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
+        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
+        "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
+    }
+    
+    # 执行风险检查
+    alerts = risk_engine.check(current_state, engine.history)
+    
+    # 获取风险摘要
+    risk_summary = risk_engine.get_risk_summary(current_state)
+    
+    return {
+        "success": True,
+        "data": {
+            "alerts": [a.to_dict() for a in alerts],
+            "risk_summary": risk_summary,
+            "recent_alerts": risk_engine.get_recent_alerts(5)
+        }
+    }
+
+
+@app.get("/api/prediction/trajectory")
+async def get_prediction_trajectory(steps: int = 10):
+    """
+    获取预测轨迹
+    
+    用于前端绘制预测曲线
+    """
+    global engine, prediction_model
+    
+    if engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化"},
+            status_code=400
+        )
+    
+    if len(engine.history) < 3:
+        return {
+            "success": True,
+            "data": {
+                "available": False,
+                "message": "历史数据不足"
+            }
+        }
+    
+    if prediction_model is None:
+        prediction_model = PredictionModel()
+    
+    prediction_model.update(engine.history)
+    
+    current_state = {
+        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
+        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
+        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5
+    }
+    
+    trajectory = prediction_model.get_trajectory(current_state, steps=steps)
+    
+    return {
+        "success": True,
+        "data": {
+            "available": True,
+            "trajectory": trajectory,
+            "steps": steps
+        }
+    }
+
+
+@app.post("/api/risk-alerts/clear")
+async def clear_risk_alerts():
+    """清空预警历史"""
+    risk_engine = get_risk_engine()
+    risk_engine.clear_history()
+    return {"success": True, "message": "预警历史已清空"}

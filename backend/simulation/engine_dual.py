@@ -185,7 +185,10 @@ class SimulationEngineDual:
     def broadcast_event(
         self,
         content: str,
-        target_scope: str = "all"
+        target_scope: str = "all",
+        impact_strength: float = None,
+        sentiment: str = "中性",
+        credibility: str = "不确定"
     ) -> Dict:
         """
         向全网或特定圈层广播突发事件
@@ -196,6 +199,9 @@ class SimulationEngineDual:
                 - "all": 全网广播
                 - "public_only": 仅公域广场
                 - "private_only": 仅私域茧房
+            impact_strength: 冲击强度 (0-1)，None则自动计算
+            sentiment: 情感倾向 (正面/中性/负面)
+            credibility: 可信度 (高可信/不确定/低可信)
 
         Returns:
             事件记录字典
@@ -204,16 +210,171 @@ class SimulationEngineDual:
             "step": self.step_count,
             "content": content,
             "target_scope": target_scope,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "sentiment": sentiment,
+            "credibility": credibility,
+            "impact_strength": impact_strength or 0.0
         }
 
         # 添加到事件池
         self.event_pool.append(event)
         self.pending_events.append(event)
 
+        # 如果引擎已初始化，触发事件冲击
+        if self.population is not None or self.llm_population is not None:
+            impact = self._apply_event_impact_dual(
+                content=content,
+                target_scope=target_scope,
+                impact_strength=impact_strength,
+                sentiment=sentiment,
+                credibility=credibility
+            )
+            event["impact_strength"] = impact["strength"]
+            event["affected_agents"] = impact["affected_count"]
+            event["avg_opinion_shift"] = impact["avg_shift"]
+
         logger.info(f"Step {self.step_count}: 注入突发事件 [{target_scope}] {content[:50]}...")
 
         return event
+
+    def _apply_event_impact_dual(
+        self,
+        content: str,
+        target_scope: str = "all",
+        impact_strength: float = None,
+        sentiment: str = "中性",
+        credibility: str = "不确定"
+    ) -> Dict:
+        """
+        应用事件冲击到双层网络Agent群体
+
+        Args:
+            content: 事件内容
+            target_scope: 目标范围
+            impact_strength: 冲击强度
+            sentiment: 情感倾向
+            credibility: 可信度
+
+        Returns:
+            冲击效果统计
+        """
+        # 计算冲击强度
+        if impact_strength is None:
+            impact_strength = self._calculate_event_impact(sentiment, credibility)
+
+        # 确定受影响的Agent范围
+        if self.use_llm and self.llm_population:
+            pop = self.llm_population
+            opinions = np.array([a.opinion for a in pop.agents])
+            influence = np.array([a.influence for a in pop.agents])
+            is_influencer = np.array([a.is_influencer for a in pop.agents])
+        else:
+            pop = self.population
+            opinions = pop.opinions
+            influence = pop.influence
+            is_influencer = pop.is_influencer if hasattr(pop, 'is_influencer') else np.zeros(len(opinions), dtype=bool)
+
+        # 根据target_scope确定影响范围
+        if target_scope == "public_only":
+            # 公域广场：主要影响大V（influencer）
+            affected_mask = is_influencer
+        elif target_scope == "private_only":
+            # 私域茧房：主要影响普通节点
+            affected_mask = ~is_influencer
+        else:
+            # 全网
+            affected_mask = np.ones(len(opinions), dtype=bool)
+
+        # 计算观点偏移
+        if sentiment == "负面":
+            shift_direction = -1
+        elif sentiment == "正面":
+            shift_direction = 1
+        else:
+            shift_direction = 0
+            impact_strength *= 0.3
+
+        # 应用冲击
+        impact_values = np.zeros(len(opinions))
+
+        for i in range(len(opinions)):
+            if affected_mask[i]:
+                sensitivity = 0.5 + 0.5 * influence[i]
+                shift = shift_direction * impact_strength * sensitivity * np.random.uniform(0.5, 1.5)
+                opinions[i] = np.clip(opinions[i] + shift, -1, 1)
+                impact_values[i] = shift
+
+        # 更新观点
+        if self.use_llm and self.llm_population:
+            for i, agent in enumerate(pop.agents):
+                agent.opinion = opinions[i]
+        else:
+            pop.opinions = opinions
+
+        avg_shift = np.mean(np.abs(impact_values[affected_mask])) if np.any(affected_mask) else 0
+
+        logger.info(f"事件冲击(双层): 强度={impact_strength:.3f}, 情感={sentiment}, "
+                   f"影响{np.sum(affected_mask)}个Agent, 平均偏移={avg_shift:.4f}")
+
+        return {
+            "strength": impact_strength,
+            "affected_count": int(np.sum(affected_mask)),
+            "avg_shift": float(avg_shift)
+        }
+
+    def _calculate_event_impact(self, sentiment: str, credibility: str) -> float:
+        """根据情感和可信度计算事件冲击强度"""
+        sentiment_strength = {
+            "负面": 0.15,
+            "正面": 0.10,
+            "中性": 0.05
+        }.get(sentiment, 0.05)
+
+        credibility_factor = {
+            "高可信": 1.3,
+            "不确定": 1.0,
+            "低可信": 0.7
+        }.get(credibility, 1.0)
+
+        entity_boost = 0.0
+        if self.use_knowledge_evolution and self.knowledge_evolution:
+            entity_boost = min(0.1, len(self.knowledge_evolution.entities) * 0.02)
+
+        impact = (sentiment_strength * credibility_factor) + entity_boost
+        return min(impact, 0.3)
+
+    def set_initial_distribution_from_news(
+        self,
+        sentiment: str = "中性",
+        credibility: str = "不确定",
+        entity_count: int = 0
+    ):
+        """根据新闻内容设置初始观点分布"""
+        base_rumor_spread = 0.3
+
+        if sentiment == "负面":
+            rumor_boost = 0.15
+        elif sentiment == "正面":
+            rumor_boost = -0.05
+        else:
+            rumor_boost = 0.0
+
+        if credibility == "低可信":
+            truth_penalty = 0.05
+        elif credibility == "高可信":
+            truth_penalty = -0.03
+        else:
+            truth_penalty = 0.0
+
+        entity_factor = min(0.1, entity_count * 0.015)
+
+        self.initial_rumor_spread = np.clip(
+            base_rumor_spread + rumor_boost + truth_penalty + entity_factor,
+            0.1, 0.6
+        )
+
+        logger.info(f"根据新闻设置初始分布(双层): 情感={sentiment}, 可信度={credibility}, "
+                   f"实体数={entity_count}, 初始谣言传播率={self.initial_rumor_spread:.3f}")
 
     def consume_pending_events(self) -> List[Dict]:
         """

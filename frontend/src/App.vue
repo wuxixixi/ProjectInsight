@@ -132,6 +132,52 @@
         </div>
       </div>
 
+      <!-- 运行模式（Phase 3） -->
+      <div class="control-section">
+        <label class="section-label">运行模式</label>
+        <div class="mode-toggle">
+          <button :class="['mode-btn', { active: simulationMode === 'sandbox' }]" @click="simulationMode = 'sandbox'" :disabled="isRunning">
+            <span class="mode-icon">🎮</span>
+            沙盘推演
+          </button>
+          <button :class="['mode-btn', { active: simulationMode === 'news' }]" @click="simulationMode = 'news'" :disabled="isRunning">
+            <span class="mode-icon">📰</span>
+            新闻推演
+          </button>
+        </div>
+        <p class="param-desc" v-if="simulationMode === 'sandbox'">参数驱动，研究传播机制</p>
+        <p class="param-desc" v-else>真实分布锚定，预测现实演进</p>
+      </div>
+
+      <!-- 真实分布锚定（新闻模式） -->
+      <div class="control-section" v-if="simulationMode === 'news'">
+        <label class="section-label">真实分布锚定</label>
+        <div class="init-dist-config">
+          <div class="param-item">
+            <div class="param-header">
+              <span class="param-label">相信谣言</span>
+              <span class="param-value">{{ (initDistRumor * 100).toFixed(0) }}%</span>
+            </div>
+            <input type="range" v-model.number="initDistRumor" min="0" max="0.8" step="0.05" :disabled="isRunning" />
+          </div>
+          <div class="param-item">
+            <div class="param-header">
+              <span class="param-label">相信真相</span>
+              <span class="param-value">{{ (initDistTruth * 100).toFixed(0) }}%</span>
+            </div>
+            <input type="range" v-model.number="initDistTruth" min="0" max="0.8" step="0.05" :disabled="isRunning" />
+          </div>
+          <div class="init-dist-summary">
+            <span>中立: {{ ((1 - initDistRumor - initDistTruth) * 100).toFixed(0) }}%</span>
+            <span class="dist-bar">
+              <span class="dist-rumor" :style="{ width: (initDistRumor * 100) + '%' }"></span>
+              <span class="dist-neutral" :style="{ width: ((1 - initDistRumor - initDistTruth) * 100) + '%' }"></span>
+              <span class="dist-truth" :style="{ width: (initDistTruth * 100) + '%' }"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
       <!-- 核心参数 -->
       <div class="control-section">
         <div class="param-item">
@@ -280,9 +326,6 @@
             <button class="btn-group" @click="showNewsParser = true">
               <span>📰</span> 解析新闻
             </button>
-            <button class="btn-group" @click="showEventAirdrop = true">
-              <span>📢</span> 注入事件
-            </button>
             <button v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0" class="btn-group" @click="showKnowledgeGraph = true">
               <span>🔍</span> 查看图谱
             </button>
@@ -377,6 +420,14 @@
             <span class="kpi-value">{{ animatedStep }}</span>
           </div>
         </div>
+        <!-- Phase 3: 运行模式状态显示 -->
+        <div class="kpi-card mode-indicator" :class="simulationMode">
+          <div class="kpi-icon">{{ simulationMode === 'news' ? '📰' : '🎮' }}</div>
+          <div class="kpi-content">
+            <span class="kpi-label">运行模式</span>
+            <span class="kpi-value">{{ simulationMode === 'news' ? '新闻推演' : '沙盘推演' }}</span>
+          </div>
+        </div>
         <div class="kpi-card danger clickable" @click="showInfoPanelWithHighlight('rumor')">
           <div class="kpi-icon">📢</div>
           <div class="kpi-content">
@@ -417,6 +468,100 @@
           <div class="kpi-content">
             <span class="kpi-label">知识驱动</span>
             <span class="kpi-value">{{ knowledgeGraph.entities.length }}<small> 实体</small></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 预测与风险预警区域 -->
+      <div class="prediction-alerts-area" v-if="isRunning && currentStep >= 3">
+        <!-- 预测区间展示 -->
+        <div class="prediction-panel" v-if="prediction && prediction.available">
+          <div class="prediction-header">
+            <h4>📊 趋势预测</h4>
+            <span class="prediction-step">基于步骤 {{ prediction.current_step }}</span>
+          </div>
+          <div class="prediction-intervals">
+            <div class="prediction-item">
+              <div class="prediction-label">谣言传播率</div>
+              <div class="prediction-bar">
+                <div class="bar-range" :style="{
+                  left: (prediction.prediction.rumor_spread_rate.optimistic * 100) + '%',
+                  right: (100 - prediction.prediction.rumor_spread_rate.pessimistic * 100) + '%'
+                }">
+                  <div class="bar-expected" :style="{ left: ((prediction.prediction.rumor_spread_rate.expected - prediction.prediction.rumor_spread_rate.optimistic) / (prediction.prediction.rumor_spread_rate.pessimistic - prediction.prediction.rumor_spread_rate.optimistic) * 100) + '%' }"></div>
+                </div>
+              </div>
+              <div class="prediction-values">
+                <span class="optimistic">{{ (prediction.prediction.rumor_spread_rate.optimistic * 100).toFixed(0) }}%</span>
+                <span class="expected">{{ (prediction.prediction.rumor_spread_rate.expected * 100).toFixed(0) }}%</span>
+                <span class="pessimistic">{{ (prediction.prediction.rumor_spread_rate.pessimistic * 100).toFixed(0) }}%</span>
+              </div>
+            </div>
+            <div class="prediction-item">
+              <div class="prediction-label">真相接受率</div>
+              <div class="prediction-bar truth-bar">
+                <div class="bar-range" :style="{
+                  left: (prediction.prediction.truth_acceptance_rate.pessimistic * 100) + '%',
+                  right: (100 - prediction.prediction.truth_acceptance_rate.optimistic * 100) + '%'
+                }">
+                  <div class="bar-expected" :style="{ left: ((prediction.prediction.truth_acceptance_rate.expected - prediction.prediction.truth_acceptance_rate.pessimistic) / (prediction.prediction.truth_acceptance_rate.optimistic - prediction.prediction.truth_acceptance_rate.pessimistic) * 100) + '%' }"></div>
+                </div>
+              </div>
+              <div class="prediction-values">
+                <span class="pessimistic">{{ (prediction.prediction.truth_acceptance_rate.pessimistic * 100).toFixed(0) }}%</span>
+                <span class="expected">{{ (prediction.prediction.truth_acceptance_rate.expected * 100).toFixed(0) }}%</span>
+                <span class="optimistic">{{ (prediction.prediction.truth_acceptance_rate.optimistic * 100).toFixed(0) }}%</span>
+              </div>
+            </div>
+          </div>
+          <div class="prediction-recommendation" v-if="prediction.recommendation">
+            <span :class="['risk-badge', prediction.recommendation.risk_level]">{{ prediction.recommendation.risk_level.toUpperCase() }}</span>
+            <span class="recommendation-msg">{{ prediction.recommendation.message }}</span>
+          </div>
+          <!-- Phase 3: 增强干预策略展示 -->
+          <div class="intervention-strategies" v-if="prediction.recommendation && prediction.recommendation.strategies">
+            <div class="strategies-header">干预策略建议</div>
+            <div class="strategies-list">
+              <div class="strategy-item" v-for="strategy in prediction.recommendation.strategies" :key="strategy.type">
+                <div class="strategy-icon">{{ getStrategyIcon(strategy.type) }}</div>
+                <div class="strategy-content">
+                  <div class="strategy-name">{{ strategy.name }}</div>
+                  <div class="strategy-desc">{{ strategy.description }}</div>
+                  <div class="strategy-meta">
+                    <span class="effectiveness">效果: {{ (strategy.effectiveness * 100).toFixed(0) }}%</span>
+                    <span :class="['cost', strategy.cost]">成本: {{ getCostLabel(strategy.cost) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="intervention-timing" v-if="prediction.recommendation.best_timing">
+              <span class="timing-label">最佳干预时机:</span>
+              <span class="timing-value">{{ prediction.recommendation.best_timing }} 步内</span>
+              <span class="window-status" :class="prediction.recommendation.window_status">
+                窗口{{ prediction.recommendation.window_status }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 风险预警展示 -->
+        <div class="alerts-panel" v-if="riskAlerts && riskAlerts.alerts && riskAlerts.alerts.length > 0">
+          <div class="alerts-header">
+            <h4>⚠️ 风险预警</h4>
+            <span class="alerts-count">{{ riskAlerts.alerts.length }}</span>
+          </div>
+          <div class="alerts-list">
+            <div v-for="(alert, idx) in riskAlerts.alerts.slice(0, 3)" :key="idx" :class="['alert-item', alert.level]">
+              <span class="alert-icon">{{ alert.level === 'critical' ? '🚨' : alert.level === 'high' ? '⚠️' : '📢' }}</span>
+              <div class="alert-content">
+                <div class="alert-message">{{ alert.message }}</div>
+                <div class="alert-suggestion">{{ alert.suggestion }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="risk-summary" v-if="riskAlerts.risk_summary">
+            <span class="risk-score">综合风险: {{ (riskAlerts.risk_summary.risk_score * 100).toFixed(0) }}%</span>
+            <span :class="['risk-level', riskAlerts.risk_summary.overall_level]">{{ riskAlerts.risk_summary.overall_level.toUpperCase() }}</span>
           </div>
         </div>
       </div>
@@ -1122,20 +1267,41 @@
           <button class="report-close-btn" @click="showEventAirdrop = false">✕</button>
         </div>
         <div class="kg-modal-body">
-          <!-- 功能说明 -->
+          <!-- 功能说明：根据注入时机显示不同内容 -->
           <div class="kg-section kg-info-box">
-            <p><strong>"解析-注入-推演"三段式管线：</strong></p>
-            <ol class="pipeline-steps">
-              <li><span class="step-num">1</span> 解析：大模型提取结构化知识图谱</li>
-              <li><span class="step-num">2</span> 封装：构建结构化 EventMsg</li>
-              <li><span class="step-num">3</span> 注入：作为推演的新闻源</li>
-            </ol>
-            <p class="kg-info-hint" v-if="currentStep === 0">
-              ⚡ 当前推演未开始，事件将被存储并在推演开始时自动注入
-            </p>
-            <p class="kg-info-hint" v-else>
-              ⚡ 事件将立即广播给所有Agent
-            </p>
+            <!-- 推演未开始：设置初始分布 -->
+            <template v-if="currentStep === 0">
+              <p><strong>🎯 注入时机：推演开始前</strong></p>
+              <p class="impact-desc">事件将产生三层影响：</p>
+              <ul class="impact-list">
+                <li><b>初始分布：</b>谣言传播率根据情感/可信度调整</li>
+                <li><b>事件冲击：</b>推演开始时触发一次观点偏移</li>
+                <li><b>知识演化：</b>每步推演中实体持续影响Agent</li>
+              </ul>
+              <p class="impact-desc" style="margin-top:8px">实体影响力权重：</p>
+              <ul class="impact-list">
+                <li>媒体(1.0) > 官方(0.95) > 专家(0.85) > 组织(0.7) > 人物(0.5)</li>
+              </ul>
+              <p class="kg-info-hint">💡 建议推演前注入初始事件，构建完整的知识驱动推演</p>
+            </template>
+
+            <!-- 推演进行中：触发观点冲击 -->
+            <template v-else>
+              <p><strong>🎯 注入时机：第 {{ currentStep }} 步</strong></p>
+              <p class="impact-desc">事件将产生两层影响：</p>
+              <ul class="impact-list">
+                <li><b>即时冲击：</b>全网Agent观点一次性偏移</li>
+                <li><b>持续演化：</b>知识图谱每步持续影响推演</li>
+              </ul>
+              <p class="impact-desc" style="margin-top:8px">冲击强度计算：</p>
+              <ul class="impact-list">
+                <li><span class="impact-tag negative">负面新闻</span> 向谣言方向偏移（基础0.15）</li>
+                <li><span class="impact-tag positive">正面新闻</span> 向真相方向偏移（基础0.10）</li>
+                <li><span class="impact-tag high">高可信</span> 强度 ×1.3 | <span class="impact-tag low">低可信</span> ×0.7</li>
+                <li>大V更敏感，影响力高的Agent受影响更大</li>
+              </ul>
+              <p class="kg-info-hint">⚡ 突发事件可改变推演化走向，观察舆论波动</p>
+            </template>
           </div>
           
           <!-- 输入区域 -->
@@ -1259,6 +1425,11 @@ export default {
       initialRumorSpread: 0.3,
       useLLM: true,
 
+      // Phase 3: 运行模式参数
+      simulationMode: 'sandbox',  // sandbox / news
+      initDistRumor: 0.25,         // 新闻模式：初始相信谣言比例
+      initDistTruth: 0.15,         // 新闻模式：初始相信真相比例
+
       // Agent参数
       populationSize: 200,
       networkType: 'small_world',
@@ -1326,6 +1497,10 @@ export default {
       numCommunities: 0,
       numInfluencers: 0,
 
+      // 预测与风险预警 (Phase 2)
+      prediction: null,
+      riskAlerts: null,
+
       // 图表实例
       opinionChartInstance: null,
       networkChartInstance: null,
@@ -1352,7 +1527,8 @@ export default {
       showKnowledgeGraph: false,
       knowledgeGraph: { entities: [], relations: [], summary: '' },
       knowledgeGraphLoading: false,
-      
+      entityImpactSummary: null,  // Phase 3: 实体影响摘要
+
       // 新闻解析
       showNewsParser: false,
       newsContent: '',
@@ -1467,6 +1643,24 @@ export default {
     },
     // 高影响力实体（用于知识驱动演化展示）
     topEntities() {
+      // 优先使用后端返回的entity_impact_summary
+      if (this.entityImpactSummary && Object.keys(this.entityImpactSummary).length > 0) {
+        const entities = Object.entries(this.entityImpactSummary)
+          .map(([name, impact]) => {
+            // 从knowledgeGraph中找到实体类型
+            const entityInfo = this.knowledgeGraph.entities?.find(e => e.name === name) || {}
+            return {
+              name: name,
+              type: entityInfo.type || '未知',
+              impact: impact
+            }
+          })
+          .sort((a, b) => b.impact - a.impact)
+          .slice(0, 5)
+        return entities
+      }
+
+      // 回退：前端计算
       if (!this.knowledgeGraph.entities || this.knowledgeGraph.entities.length === 0) {
         return []
       }
@@ -1557,6 +1751,28 @@ export default {
       if (opinion < -0.3) return 'opinion-rumor'
       if (opinion > 0.3) return 'opinion-truth'
       return 'opinion-neutral'
+    },
+
+    // Phase 3: 干预策略相关方法
+    getStrategyIcon(type) {
+      const icons = {
+        'debunk': '📢',
+        'prevent': '🛡️',
+        'amplify': '📣',
+        'depolarize': '🤝',
+        'multi': '🎯'
+      }
+      return icons[type] || '📋'
+    },
+
+    getCostLabel(cost) {
+      const labels = {
+        'low': '低',
+        'medium': '中',
+        'high': '高',
+        'very_high': '极高'
+      }
+      return labels[cost] || cost
     },
 
     // ==================== WebSocket 连接 ====================
@@ -1692,6 +1908,7 @@ export default {
 
       this.sendAction('start', {
         params: {
+          mode: this.simulationMode,  // Phase 3: 运行模式
           cocoon_strength: this.cocoonStrength,
           debunk_delay: this.debunkDelay,
           initial_rumor_spread: this.initialRumorSpread,
@@ -1704,7 +1921,13 @@ export default {
           max_retries: this.maxRetries,
           use_dual_network: this.useDualNetwork,  // 双层网络开关
           num_communities: 8,      // 私域社群数量
-          public_m: 3              // 公域网络参数
+          public_m: 3,             // 公域网络参数
+          // Phase 3: 真实分布锚定（新闻模式）
+          init_distribution: this.simulationMode === 'news' ? {
+            believe_rumor: this.initDistRumor,
+            believe_truth: this.initDistTruth,
+            neutral: 1 - this.initDistRumor - this.initDistTruth
+          } : null
         }
       })
 
@@ -1824,9 +2047,9 @@ export default {
         // 第一阶段：解析（显示Loading状态）
         this.airdropLoadingStage = '⏳ 阶段1/3: 大模型正在解析事件图谱...'
 
-        // 创建带超时的 fetch 请求（120秒超时）
+        // 创建带超时的 fetch 请求（180秒超时，匹配后端LLM调用）
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 120000)
+        const timeoutId = setTimeout(() => controller.abort(), 180000)
 
         const response = await fetch(
           'http://localhost:8000' + '/api/event/airdrop',
@@ -1843,7 +2066,7 @@ export default {
         if (data.success) {
           // 更新Loading状态
           this.airdropLoadingStage = '✅ 阶段2/3: 知识图谱解析完成'
-          
+
           // 保存解析后的图谱数据用于展示
           if (data.data && data.data.knowledge_graph) {
             this.parsedGraphDisplay = data.data.knowledge_graph
@@ -1852,16 +2075,32 @@ export default {
 
           // 更新Loading状态到第三阶段
           this.airdropLoadingStage = '✅ 阶段3/3: 事件处理完成'
-          
+
+          // 获取事件冲击信息
+          const eventData = data.data?.event || {}
+          const impactStrength = eventData.impact_strength || 0
+          const affectedAgents = eventData.affected_agents || 0
+          const avgShift = eventData.avg_opinion_shift || 0
+          const sentiment = eventData.sentiment || '中性'
+          const credibility = eventData.credibility || '不确定'
+
           // 添加到事件日志（透明化展示）
           this.addEventLog({
             content: this.airdropContent,
             source: this.airdropSource,
             knowledgeGraph: this.parsedGraphDisplay,
             timestamp: new Date().toLocaleString('zh-CN'),
-            pending: this.currentStep === 0  // 标记是否为待注入
+            pending: this.currentStep === 0,  // 标记是否为待注入
+            // 新增：事件冲击信息
+            impact: {
+              strength: impactStrength,
+              affectedAgents: affectedAgents,
+              avgShift: avgShift,
+              sentiment: sentiment,
+              credibility: credibility
+            }
           })
-          
+
           // 短暂延迟后关闭弹窗
           setTimeout(() => {
             this.showEventAirdrop = false
@@ -1869,17 +2108,24 @@ export default {
             this.airdropLoading = false
             this.airdropLoadingStage = ''
             this.airdropSuccess = true
-            
-            // 显示成功提示（包含图谱信息）
+
+            // 显示成功提示（包含图谱信息和冲击效果）
             const entityCount = this.parsedGraphDisplay?.entities?.length || 0
             const relationCount = this.parsedGraphDisplay?.relations?.length || 0
-            
+
             if (this.currentStep === 0) {
               // 推演未开始，事件将被存储
-              alert(`事件解析成功！\n\n📊 解析结果：${entityCount}个实体, ${relationCount}个关系\n📝 摘要：${this.parsedGraphDisplay?.summary || '无'}\n\n✅ 事件已存储，将在推演开始时自动注入`)
+              alert(`事件解析成功！\n\n📊 解析结果：${entityCount}个实体, ${relationCount}个关系\n📝 摘要：${this.parsedGraphDisplay?.summary || '无'}\n🎭 情感：${sentiment} | 可信度：${credibility}\n\n✅ 事件已存储，将在推演开始时自动注入`)
             } else {
-              // 推演已开始，事件已广播
-              alert(`事件注入成功！\n\n📊 解析结果：${entityCount}个实体, ${relationCount}个关系\n📝 摘要：${this.parsedGraphDisplay?.summary || '无'}`)
+              // 推演已开始，自动刷新界面显示冲击效果
+              let impactMsg = ''
+              if (impactStrength > 0) {
+                impactMsg = `\n\n⚡ 事件冲击效果：\n  • 冲击强度：${(impactStrength * 100).toFixed(1)}%\n  • 影响Agent：${affectedAgents}个\n  • 平均观点偏移：${(avgShift * 100).toFixed(2)}%`
+              }
+              alert(`事件注入成功！\n\n📊 解析结果：${entityCount}个实体, ${relationCount}个关系\n📝 摘要：${this.parsedGraphDisplay?.summary || '无'}\n🎭 情感：${sentiment} | 可信度：${credibility}${impactMsg}`)
+
+              // 自动获取最新状态刷新界面
+              this.refreshSimulationState()
             }
           }, 500)
         } else {
@@ -1917,6 +2163,20 @@ export default {
     formatEntitiesForLog(entities) {
       if (!entities || entities.length === 0) return '无'
       return entities.slice(0, 5).map(e => e.name).join(', ') + (entities.length > 5 ? ` +${entities.length - 5}` : '')
+    },
+
+    // 刷新推演状态（事件注入后调用）
+    async refreshSimulationState() {
+      try {
+        const response = await fetch('http://localhost:8000/api/simulation/state')
+        const data = await response.json()
+        if (data.step !== undefined) {
+          this.updateState(data)
+          console.log('[refreshSimulationState] 状态已刷新，当前步骤:', data.step)
+        }
+      } catch (error) {
+        console.error('[refreshSimulationState] 刷新状态失败:', error)
+      }
     },
 
     // ==================== 历史报告功能 ====================
@@ -2120,14 +2380,23 @@ export default {
       this.silenceRate = data.silence_rate || 0
       this.debunked = data.step >= this.debunkDelay
 
-      this.trendHistory.steps.push(data.step)
-      this.trendHistory.rumorRates.push(data.rumor_spread_rate)
-      this.trendHistory.truthRates.push(data.truth_acceptance_rate)
-      this.trendHistory.avgOpinions.push(data.avg_opinion)
-      this.trendHistory.polarization.push(data.polarization_index)
-      this.trendHistory.silenceRates.push(data.silence_rate || 0)
-      this.trendHistory.publicRumorRates.push(data.public_rumor_rate || data.rumor_spread_rate)
-      this.trendHistory.privateRumorRates.push(data.private_rumor_rate || data.rumor_spread_rate)
+      // Phase 3: 实体影响摘要
+      if (data.entity_impact_summary) {
+        this.entityImpactSummary = data.entity_impact_summary
+      }
+
+      // 只在步骤变化时追加历史记录（避免事件注入刷新时重复）
+      const lastStep = this.trendHistory.steps[this.trendHistory.steps.length - 1]
+      if (lastStep !== data.step) {
+        this.trendHistory.steps.push(data.step)
+        this.trendHistory.rumorRates.push(data.rumor_spread_rate)
+        this.trendHistory.truthRates.push(data.truth_acceptance_rate)
+        this.trendHistory.avgOpinions.push(data.avg_opinion)
+        this.trendHistory.polarization.push(data.polarization_index)
+        this.trendHistory.silenceRates.push(data.silence_rate || 0)
+        this.trendHistory.publicRumorRates.push(data.public_rumor_rate || data.rumor_spread_rate)
+        this.trendHistory.privateRumorRates.push(data.private_rumor_rate || data.rumor_spread_rate)
+      }
 
       this.agentProgress = ''
 
@@ -2144,6 +2413,38 @@ export default {
       this.renderOpinionChart()
       this.renderNetworkChart()
       this.renderTrendChart()
+
+      // 每3步获取一次预测和风险预警
+      if (this.currentStep >= 3 && this.currentStep % 3 === 0) {
+        this.fetchPrediction()
+        this.fetchRiskAlerts()
+      }
+    },
+
+    // ==================== 预测与风险预警 (Phase 2) ====================
+
+    async fetchPrediction() {
+      try {
+        const response = await fetch('http://localhost:8000/api/prediction')
+        const data = await response.json()
+        if (data.success) {
+          this.prediction = data.data
+        }
+      } catch (e) {
+        console.error('获取预测失败:', e)
+      }
+    },
+
+    async fetchRiskAlerts() {
+      try {
+        const response = await fetch('http://localhost:8000/api/risk-alerts')
+        const data = await response.json()
+        if (data.success) {
+          this.riskAlerts = data.data
+        }
+      } catch (e) {
+        console.error('获取风险预警失败:', e)
+      }
     },
 
     // ==================== 图表渲染 ====================
@@ -3509,6 +3810,53 @@ export default {
   font-size: 16px;
 }
 
+/* ==================== Phase 3: 真实分布锚定样式 ==================== */
+.init-dist-config {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.init-dist-config .param-item {
+  margin-bottom: 8px;
+}
+
+.init-dist-config .param-item:last-child {
+  margin-bottom: 0;
+}
+
+.init-dist-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(100, 181, 246, 0.1);
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.dist-bar {
+  display: inline-flex;
+  width: 120px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.dist-rumor {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.dist-neutral {
+  background: #64748b;
+}
+
+.dist-truth {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
 /* 参数项 */
 .param-item {
   background: rgba(30, 41, 59, 0.3);
@@ -3906,6 +4254,36 @@ export default {
   color: #10b981;
 }
 
+/* Phase 3: 运行模式状态显示样式 */
+.kpi-card.mode-indicator {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
+}
+
+.kpi-card.mode-indicator .kpi-icon {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+}
+
+.kpi-card.mode-indicator .kpi-value {
+  color: #8b5cf6;
+  font-size: 14px;
+}
+
+.kpi-card.mode-indicator.news {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(251, 191, 36, 0.05) 100%);
+}
+
+.kpi-card.mode-indicator.news .kpi-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.kpi-card.mode-indicator.news .kpi-value {
+  color: #f59e0b;
+}
+
 .kpi-icon {
   width: 44px;
   height: 44px;
@@ -3942,13 +4320,393 @@ export default {
   margin-left: 2px;
 }
 
+/* ==================== 预测与风险预警样式 (Phase 2) ==================== */
+
+.prediction-alerts-area {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 8px 0;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  max-height: 180px;
+  overflow: hidden;
+}
+
+.prediction-panel {
+  flex: 1;
+  min-width: 280px;
+  max-width: 400px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.05));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.prediction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.prediction-header h4 {
+  font-size: 14px;
+  color: #60a5fa;
+  margin: 0;
+}
+
+.prediction-step {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.prediction-intervals {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.prediction-item {
+  flex: 1;
+  min-width: 120px;
+}
+
+.prediction-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.prediction-bar {
+  height: 12px;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 6px;
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.bar-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+}
+
+.prediction-bar.truth-bar .bar-range {
+  background: rgba(34, 197, 94, 0.3);
+}
+
+.bar-expected {
+  position: absolute;
+  width: 4px;
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 2px;
+}
+
+.prediction-values {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.prediction-values .optimistic {
+  color: #22c55e;
+}
+
+.prediction-values .expected {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.prediction-values .pessimistic {
+  color: #ef4444;
+}
+
+.prediction-recommendation {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(59, 130, 246, 0.2);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.risk-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.risk-badge.low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.risk-badge.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.risk-badge.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.recommendation-msg {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+/* Phase 3: 增强干预策略样式 */
+.intervention-strategies {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.strategies-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
+.strategies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.strategy-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.strategy-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.strategy-content {
+  flex: 1;
+}
+
+.strategy-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.strategy-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.strategy-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+.effectiveness {
+  color: #22c55e;
+}
+
+.cost {
+  color: #94a3b8;
+}
+
+.cost.high {
+  color: #f59e0b;
+}
+
+.cost.very_high {
+  color: #ef4444;
+}
+
+.intervention-timing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.timing-label {
+  color: #94a3b8;
+}
+
+.timing-value {
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.window-status {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.window-status.充足 {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.window-status.收窄 {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.window-status.紧迫 {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.risk-badge.critical {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.alerts-panel {
+  flex: 1;
+  min-width: 280px;
+  max-width: 400px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.alerts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.alerts-header h4 {
+  font-size: 14px;
+  color: #f87171;
+  margin: 0;
+}
+
+.alerts-count {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 90px;
+  overflow-y: auto;
+}
+
+.alert-item {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 6px;
+}
+
+.alert-item.critical {
+  border-left: 3px solid #ef4444;
+}
+
+.alert-item.high {
+  border-left: 3px solid #f59e0b;
+}
+
+.alert-item.medium {
+  border-left: 3px solid #3b82f6;
+}
+
+.alert-icon {
+  font-size: 18px;
+}
+
+.alert-content {
+  flex: 1;
+}
+
+.alert-message {
+  font-size: 13px;
+  color: #e2e8f0;
+  margin-bottom: 2px;
+}
+
+.alert-suggestion {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.risk-summary {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(239, 68, 68, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.risk-score {
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.risk-level {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.risk-level.low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.risk-level.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.risk-level.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.risk-level.critical {
+  background: rgba(220, 38, 38, 0.3);
+  color: #fca5a5;
+}
+
 /* 图表区域 */
 .charts-grid {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 0;
+  min-height: 400px;
 }
 
 .chart-row {
@@ -5496,6 +6254,57 @@ export default {
   font-size: 12px !important;
 }
 
+/* 注入时机说明样式 */
+.impact-desc {
+  color: #cbd5e1 !important;
+  margin-top: 8px !important;
+}
+
+.impact-list {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.impact-list li {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.impact-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.impact-tag.negative {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.impact-tag.positive {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.impact-tag.high {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.impact-tag.low {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
 .kg-section h4 {
   margin: 0 0 10px 0;
   color: #a78bfa;
@@ -6283,9 +7092,10 @@ export default {
   flex-direction: column;
   padding: 20px;
   padding-top: 70px;
-  gap: 16px;
+  gap: 12px;
   overflow: hidden;
   min-width: 0;
+  min-height: 600px;
 }
 
 /* 主内容区布局调整 */

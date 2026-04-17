@@ -1,6 +1,7 @@
 """
 推演引擎核心
 支持 LLM 驱动和数学模型两种模式
+支持沙盘推演和新闻推演两种运行模式
 """
 import numpy as np
 from typing import Optional, Dict, List, Callable
@@ -13,7 +14,7 @@ from .agents import AgentPopulation
 from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
 from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionConfig
-from ..models.schemas import SimulationState
+from ..models.schemas import SimulationState, SimulationMode
 from ..llm.client import LLMClient, LLMConfig
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,10 @@ class SimulationEngine:
     支持两种模式:
     1. LLM 模式: Agent 通过大模型决策观点变化
     2. 数学模型模式: 使用数学公式计算观点变化
+
+    支持两种运行模式:
+    1. 沙盘模式(SANDBOX): 参数驱动，研究传播机制
+    2. 新闻模式(NEWS): 真实分布锚定，预测现实演进
 
     核心机制:
     1. 算法茧房效应: 根据用户观点推荐相似内容, 强化既有观点
@@ -48,7 +53,11 @@ class SimulationEngine:
         backfire_strength: float = 0.3,
         silence_threshold: float = 0.3,
         polarization_factor: float = 0.3,
-        echo_chamber_factor: float = 0.2
+        echo_chamber_factor: float = 0.2,
+        # Phase 3: 运行模式参数
+        mode: str = "sandbox",
+        init_distribution: Optional[Dict[str, float]] = None,
+        time_acceleration: float = 1.0
     ):
         self.population_size = population_size
         self.cocoon_strength = cocoon_strength
@@ -65,6 +74,11 @@ class SimulationEngine:
         self.silence_threshold = silence_threshold
         self.polarization_factor = polarization_factor
         self.echo_chamber_factor = echo_chamber_factor
+
+        # Phase 3: 运行模式
+        self.mode = SimulationMode(mode) if isinstance(mode, str) else mode
+        self.init_distribution = init_distribution
+        self.time_acceleration = time_acceleration
 
         self.step_count = 0
         self.debunked = False
@@ -160,7 +174,10 @@ class SimulationEngine:
     def broadcast_event(
         self,
         content: str,
-        target_scope: str = "all"
+        target_scope: str = "all",
+        impact_strength: float = None,
+        sentiment: str = "中性",
+        credibility: str = "不确定"
     ) -> Dict:
         """
         向全网或特定圈层广播突发事件
@@ -168,6 +185,9 @@ class SimulationEngine:
         Args:
             content: 事件内容
             target_scope: 目标范围 (all/public/private)
+            impact_strength: 冲击强度 (0-1)，None则自动计算
+            sentiment: 情感倾向 (正面/中性/负面)
+            credibility: 可信度 (高可信/不确定/低可信)
 
         Returns:
             事件数据
@@ -175,9 +195,203 @@ class SimulationEngine:
         event = {
             "content": content,
             "scope": target_scope,
-            "step": self.step_count
+            "step": self.step_count,
+            "sentiment": sentiment,
+            "credibility": credibility,
+            "impact_strength": impact_strength or 0.0
         }
+
+        # 如果引擎已初始化，触发事件冲击
+        if self.population is not None or self.llm_population is not None:
+            impact = self._apply_event_impact(
+                content=content,
+                target_scope=target_scope,
+                impact_strength=impact_strength,
+                sentiment=sentiment,
+                credibility=credibility
+            )
+            event["impact_strength"] = impact["strength"]
+            event["affected_agents"] = impact["affected_count"]
+            event["avg_opinion_shift"] = impact["avg_shift"]
+
         return event
+
+    def _apply_event_impact(
+        self,
+        content: str,
+        target_scope: str = "all",
+        impact_strength: float = None,
+        sentiment: str = "中性",
+        credibility: str = "不确定"
+    ) -> Dict:
+        """
+        应用事件冲击到Agent群体
+
+        冲击效果：
+        - 负面新闻：推高谣言传播率（观点向-1偏移）
+        - 正面新闻：推高真相接受率（观点向+1偏移）
+        - 可信度影响冲击强度
+
+        Args:
+            content: 事件内容
+            target_scope: 目标范围
+            impact_strength: 冲击强度
+            sentiment: 情感倾向
+            credibility: 可信度
+
+        Returns:
+            冲击效果统计
+        """
+        # 计算冲击强度
+        if impact_strength is None:
+            impact_strength = self._calculate_event_impact(sentiment, credibility)
+
+        # 确定受影响的Agent范围
+        if self.use_llm and self.llm_population:
+            pop = self.llm_population
+            opinions = np.array([a.opinion for a in pop.agents])
+            influence = np.array([a.influence for a in pop.agents])
+        else:
+            pop = self.population
+            opinions = pop.opinions
+            influence = pop.influence
+
+        # 根据target_scope确定影响范围
+        if target_scope == "public":
+            # 公域广场：主要影响影响力高的节点（大V）
+            affected_mask = influence > np.percentile(influence, 50)
+        elif target_scope == "private":
+            # 私域茧房：主要影响普通节点
+            affected_mask = influence <= np.percentile(influence, 50)
+        else:
+            # 全网
+            affected_mask = np.ones(len(opinions), dtype=bool)
+
+        # 计算观点偏移
+        # 负面新闻 → 观点向-1偏移（相信谣言）
+        # 正面新闻 → 观点向+1偏移（相信真相）
+        # 中性新闻 → 轻微随机波动
+        if sentiment == "负面":
+            shift_direction = -1
+        elif sentiment == "正面":
+            shift_direction = 1
+        else:
+            shift_direction = 0
+            impact_strength *= 0.3  # 中性新闻冲击减弱
+
+        # 应用冲击
+        old_opinions = opinions.copy()
+        impact_values = np.zeros(len(opinions))
+
+        for i in range(len(opinions)):
+            if affected_mask[i]:
+                # 影响力越高的节点，受冲击影响越大（更敏感）
+                sensitivity = 0.5 + 0.5 * influence[i]
+                shift = shift_direction * impact_strength * sensitivity * np.random.uniform(0.5, 1.5)
+                opinions[i] = np.clip(opinions[i] + shift, -1, 1)
+                impact_values[i] = shift
+
+        # 更新观点
+        if self.use_llm and self.llm_population:
+            for i, agent in enumerate(pop.agents):
+                agent.opinion = opinions[i]
+        else:
+            pop.opinions = opinions
+
+        # 计算统计
+        avg_shift = np.mean(np.abs(impact_values[affected_mask])) if np.any(affected_mask) else 0
+
+        logger.info(f"事件冲击: 强度={impact_strength:.3f}, 情感={sentiment}, "
+                   f"影响{np.sum(affected_mask)}个Agent, 平均偏移={avg_shift:.4f}")
+
+        return {
+            "strength": impact_strength,
+            "affected_count": int(np.sum(affected_mask)),
+            "avg_shift": float(avg_shift)
+        }
+
+    def _calculate_event_impact(self, sentiment: str, credibility: str) -> float:
+        """
+        根据情感和可信度计算事件冲击强度
+
+        Args:
+            sentiment: 情感倾向
+            credibility: 可信度
+
+        Returns:
+            冲击强度 (0-1)
+        """
+        # 情感强度
+        sentiment_strength = {
+            "负面": 0.15,  # 负面新闻冲击最大
+            "正面": 0.10,
+            "中性": 0.05
+        }.get(sentiment, 0.05)
+
+        # 可信度调节
+        credibility_factor = {
+            "高可信": 1.3,
+            "不确定": 1.0,
+            "低可信": 0.7
+        }.get(credibility, 1.0)
+
+        # 如果有知识图谱，考虑实体影响力
+        entity_boost = 0.0
+        if self.use_knowledge_evolution and self.knowledge_evolution:
+            # 高影响力实体数量增加冲击
+            entity_boost = min(0.1, len(self.knowledge_evolution.entities) * 0.02)
+
+        impact = (sentiment_strength * credibility_factor) + entity_boost
+        return min(impact, 0.3)  # 最大冲击0.3
+
+    def set_initial_distribution_from_news(
+        self,
+        sentiment: str = "中性",
+        credibility: str = "不确定",
+        entity_count: int = 0
+    ):
+        """
+        根据新闻内容设置初始观点分布
+
+        替代固定的 initial_rumor_spread 参数
+
+        Args:
+            sentiment: 情感倾向
+            credibility: 可信度
+            entity_count: 实体数量
+        """
+        # 基础谣言传播率
+        base_rumor_spread = 0.3
+
+        # 情感影响
+        if sentiment == "负面":
+            # 负面新闻更容易引发谣言传播
+            rumor_boost = 0.15
+        elif sentiment == "正面":
+            rumor_boost = -0.05
+        else:
+            rumor_boost = 0.0
+
+        # 可信度影响
+        if credibility == "低可信":
+            # 低可信度新闻，真相接受率低
+            truth_penalty = 0.05
+        elif credibility == "高可信":
+            truth_penalty = -0.03
+        else:
+            truth_penalty = 0.0
+
+        # 实体影响：涉及实体越多，关注度越高，谣言传播率可能越高
+        entity_factor = min(0.1, entity_count * 0.015)
+
+        # 计算最终初始谣言传播率
+        self.initial_rumor_spread = np.clip(
+            base_rumor_spread + rumor_boost + truth_penalty + entity_factor,
+            0.1, 0.6
+        )
+
+        logger.info(f"根据新闻设置初始分布: 情感={sentiment}, 可信度={credibility}, "
+                   f"实体数={entity_count}, 初始谣言传播率={self.initial_rumor_spread:.3f}")
 
     def initialize(self) -> SimulationState:
         """初始化模拟"""
@@ -185,6 +399,8 @@ class SimulationEngine:
         self.debunked = False
         self.history = []
         self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        logger.info(f"初始化推演引擎: 模式={self.mode.value}, 人口={self.population_size}")
 
         if self.use_llm:
             # LLM 模式
@@ -195,6 +411,10 @@ class SimulationEngine:
                 llm_config=self.llm_config
             )
             self.llm_client = LLMClient(self.llm_config)
+
+            # 新闻模式：应用真实分布锚定
+            if self.mode == SimulationMode.NEWS and self.init_distribution:
+                self._apply_init_distribution_llm()
         else:
             # 数学模型模式
             self.population = AgentPopulation(
@@ -203,10 +423,86 @@ class SimulationEngine:
                 network_type=self.network_type
             )
 
+            # 新闻模式：应用真实分布锚定
+            if self.mode == SimulationMode.NEWS and self.init_distribution:
+                self._apply_init_distribution()
+
         self.current_state = self._compute_state()
         self.history.append(self.current_state.to_dict())
 
         return self.current_state
+
+    def _apply_init_distribution(self):
+        """
+        应用真实分布锚定（数学模型模式）
+
+        根据真实舆情分布初始化 Agent 观点
+        """
+        dist = self.init_distribution
+        n = self.population_size
+
+        believe_rumor = dist.get("believe_rumor", 0)
+        believe_truth = dist.get("believe_truth", 0)
+        neutral = dist.get("neutral", 1 - believe_rumor - believe_truth)
+
+        # 计算各群体数量
+        n_rumor = int(n * believe_rumor)
+        n_truth = int(n * believe_truth)
+        n_neutral = n - n_rumor - n_truth
+
+        logger.info(f"应用真实分布锚定: 谣言={n_rumor}, 真相={n_truth}, 中立={n_neutral}")
+
+        # 生成观点值
+        opinions = np.zeros(n)
+
+        # 相信谣言: -0.8 ~ -0.3
+        if n_rumor > 0:
+            opinions[:n_rumor] = np.random.uniform(-0.8, -0.3, n_rumor)
+
+        # 相信真相: 0.3 ~ 0.8
+        start = n_rumor
+        end = start + n_truth
+        if n_truth > 0:
+            opinions[start:end] = np.random.uniform(0.3, 0.8, n_truth)
+
+        # 中立: -0.2 ~ 0.2
+        if n_neutral > 0:
+            opinions[end:] = np.random.uniform(-0.2, 0.2, n_neutral)
+
+        # 随机打乱
+        np.random.shuffle(opinions)
+
+        # 应用到群体
+        self.population.opinions = opinions
+
+        # 更新暴露状态
+        self.population.exposed_to_rumor = opinions < -0.2
+        self.population.exposed_to_truth = opinions > 0.2
+
+    def _apply_init_distribution_llm(self):
+        """
+        应用真实分布锚定（LLM模式）
+
+        根据真实舆情分布初始化 LLM Agent 观点
+        """
+        dist = self.init_distribution
+        n = self.population_size
+
+        believe_rumor = dist.get("believe_rumor", 0)
+        believe_truth = dist.get("believe_truth", 0)
+
+        n_rumor = int(n * believe_rumor)
+        n_truth = int(n * believe_truth)
+
+        logger.info(f"LLM模式应用真实分布锚定: 谣言={n_rumor}, 真相={n_truth}")
+
+        for i, agent in enumerate(self.llm_population.agents):
+            if i < n_rumor:
+                agent.opinion = np.random.uniform(-0.8, -0.3)
+            elif i < n_rumor + n_truth:
+                agent.opinion = np.random.uniform(0.3, 0.8)
+            else:
+                agent.opinion = np.random.uniform(-0.2, 0.2)
 
     async def async_step(self) -> SimulationState:
         """
@@ -512,6 +808,11 @@ class SimulationEngine:
             agents = pop.to_agent_list()
             edges = pop.get_edges()
 
+        # Phase 3: 计算实体影响摘要
+        entity_impact_summary = None
+        if self.mode == SimulationMode.NEWS and self.knowledge_evolution:
+            entity_impact_summary = self.knowledge_evolution.entity_impacts
+
         return SimulationState(
             step=self.step_count,
             agents=agents,
@@ -521,7 +822,9 @@ class SimulationEngine:
             truth_acceptance_rate=stats["truth_acceptance_rate"],
             avg_opinion=stats["avg_opinion"],
             polarization_index=stats["polarization_index"],
-            silence_rate=stats.get("silence_rate", 0.0)
+            silence_rate=stats.get("silence_rate", 0.0),
+            mode=self.mode.value,
+            entity_impact_summary=entity_impact_summary
         )
 
     def generate_report(self) -> str:

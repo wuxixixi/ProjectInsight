@@ -4,7 +4,10 @@
       "Bash(mkdir *)",
       "Bash(curl *)",
       "Bash(netstat *)",
-      "Bash(findstr *)"
+      "Bash(findstr *)",
+      "Bash(taskkill *)",
+      "Bash(python *)",
+      "Bash(npm run *)"
     ]
   },
   "$version": 3

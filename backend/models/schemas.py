@@ -3,7 +3,14 @@
 """
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from enum import Enum
 import numpy as np
+
+
+class SimulationMode(Enum):
+    """推演模式枚举"""
+    SANDBOX = "sandbox"  # 沙盘推演模式（参数驱动）
+    NEWS = "news"        # 新闻推演模式（真实分布锚定）
 
 
 class Agent(BaseModel):
@@ -28,6 +35,9 @@ class Agent(BaseModel):
 
 class SimulationParams(BaseModel):
     """模拟参数"""
+    # 推演模式
+    mode: str = "sandbox"  # sandbox(沙盘) / news(新闻)
+    
     cocoon_strength: float = 0.5
     debunk_delay: int = 10
     population_size: int = 200
@@ -44,6 +54,17 @@ class SimulationParams(BaseModel):
     silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
     polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
     echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
+    
+    # 新闻模式专用参数 - 真实分布锚定
+    init_distribution: Optional[Dict[str, float]] = None
+    """真实分布锚定，格式:
+    {
+        "believe_rumor": 0.25,  # 初始相信谣言比例
+        "believe_truth": 0.15,  # 初始相信真相比例
+        "neutral": 0.60         # 中立比例
+    }
+    """
+    time_acceleration: float = 1.0  # 时间加速比（新闻模式）
 
 
 class SimulationState(BaseModel):
@@ -68,6 +89,9 @@ class SimulationState(BaseModel):
     private_truth_rate: float = 0.0    # 私域真相率
     num_communities: int = 0           # 社群数量
     num_influencers: int = 0           # 大V数量
+    # Phase 3: 新闻模式专用
+    mode: str = "sandbox"              # 运行模式
+    entity_impact_summary: Optional[Dict[str, float]] = None  # 实体影响摘要
 
     def to_dict(self) -> dict:
         """转换为可序列化的字典"""
@@ -88,7 +112,9 @@ class SimulationState(BaseModel):
             "private_rumor_rate": self.private_rumor_rate,
             "private_truth_rate": self.private_truth_rate,
             "num_communities": self.num_communities,
-            "num_influencers": self.num_influencers
+            "num_influencers": self.num_influencers,
+            "mode": self.mode,
+            "entity_impact_summary": self.entity_impact_summary
         }
 
 
