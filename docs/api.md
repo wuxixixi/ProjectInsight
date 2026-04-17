@@ -27,9 +27,49 @@
 
 ---
 
-### 推演管理
+## 推演模式
 
-#### POST /api/simulation/start
+### 模式参数说明
+
+推演模式通过 `/api/simulation/start` 接口的 `mode` 参数指定，无需单独调用模式设置接口。
+
+**模式类型**:
+| 值 | 说明 |
+|------|------|
+| `sandbox` | 沙盘推演模式（默认），参数驱动，研究传播机制 |
+| `news` | 新闻推演模式，真实分布锚定，预测现实演进 |
+
+**启动参数示例（新闻模式）**:
+```json
+{
+  "mode": "news",
+  "init_distribution": {
+    "believe_rumor": 0.30,
+    "believe_truth": 0.15,
+    "neutral": 0.55
+  },
+  "cocoon_strength": 0.5,
+  "population_size": 200,
+  "use_llm": true
+}
+```
+
+**启动参数示例（沙盘模式）**:
+```json
+{
+  "mode": "sandbox",
+  "initial_rumor_spread": 0.3,
+  "cocoon_strength": 0.5,
+  "population_size": 200,
+  "use_llm": true
+}
+```
+
+---
+
+## 推演管理
+
+### POST /api/simulation/start
 
 启动新的推演模拟
 
@@ -132,7 +172,92 @@
 
 ---
 
-### 智能体透视
+## 预测接口
+
+### GET /api/prediction
+
+获取当前预测结果（新闻模式）
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "data": {
+    "current_state": {
+      "rumor_spread_rate": 0.45,
+      "truth_acceptance_rate": 0.15,
+      "polarization_index": 0.62
+    },
+    "prediction": {
+      "rumor_spread_rate": {
+        "expected": 0.52,
+        "optimistic": 0.38,
+        "pessimistic": 0.66,
+        "confidence": 0.95
+      },
+      "truth_acceptance_rate": {
+        "expected": 0.22,
+        "optimistic": 0.35,
+        "pessimistic": 0.09
+      }
+    },
+    "risk_level": "high",
+    "intervention_window": {
+      "current_step": 5,
+      "recommended_intervention_step": 8,
+      "window_closing": false
+    },
+    "strategies": [
+      {
+        "type": "debunk",
+        "priority": 1,
+        "description": "官方权威辟谣",
+        "expected_effect": "预计降低谣言传播率15-25%"
+      },
+      {
+        "type": "amplify",
+        "priority": 2,
+        "description": "放大真相传播",
+        "expected_effect": "预计提升真相接受率10-20%"
+      }
+    ],
+    "reasoning": "当前谣言传播率已达45%，预测将持续上升..."
+  }
+}
+```
+
+---
+
+### GET /api/prediction/trajectory
+
+获取预测轨迹数据
+
+**查询参数:**
+- `steps`: 预测步数（默认10）
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "data": {
+    "steps": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "rumor_spread_rate": {
+      "expected": [0.45, 0.48, 0.51, 0.54, 0.56, 0.58, 0.60, 0.61, 0.62, 0.63, 0.64],
+      "optimistic": [0.45, 0.42, 0.39, 0.36, 0.33, 0.30, 0.28, 0.26, 0.24, 0.23, 0.22],
+      "pessimistic": [0.45, 0.54, 0.63, 0.72, 0.79, 0.85, 0.88, 0.90, 0.92, 0.93, 0.94]
+    },
+    "truth_acceptance_rate": {
+      "expected": [0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25],
+      "optimistic": [0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.44, 0.48, 0.51, 0.54, 0.56],
+      "pessimistic": [0.15, 0.12, 0.09, 0.07, 0.05, 0.04, 0.03, 0.02, 0.02, 0.01, 0.01]
+    }
+  }
+}
+```
+
+---
+
+## 智能体透视
 
 #### GET /api/agent/{agent_id}/inspect
 
@@ -179,7 +304,7 @@
 
 ---
 
-### 报告管理
+## 报告管理
 
 #### POST /api/report/generate
 
@@ -261,7 +386,7 @@
 
 ---
 
-### 知识图谱
+## 知识图谱
 
 #### POST /api/event/parse
 
@@ -296,9 +421,21 @@
 
 注入突发事件，触发知识图谱解析并在推演中使用
 
-**查询参数:**
-- `content`: 事件文本内容
-- `source`: 来源 (public/private)，默认 "public"
+**请求体:**
+```json
+{
+  "content": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元",
+  "source": "public",
+  "skip_parse": false
+}
+```
+
+**参数说明:**
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| content | string | 必填 | 事件文本内容 |
+| source | string | "public" | 来源 (public/private) |
+| skip_parse | boolean | false | 是否跳过图谱解析（快速模式） |
 
 **响应示例:**
 ```json
@@ -306,15 +443,32 @@
   "success": true,
   "data": {
     "event": {
-      "content": "某科技公司CEO王某杞在北京发帨会上宣希公司将投资100亿元",
-      "step": 0,
-      "knowledge_graph": {...}
+      "content": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元",
+      "step": 5,
+      "skip_parse": false
     },
     "knowledge_graph": {
       "entities": [...],
       "relations": [...],
       "summary": "..."
-    }
+    },
+    "parse_time": 15.3
+  }
+}
+```
+
+**快速模式响应（skip_parse=true）:**
+```json
+{
+  "success": true,
+  "data": {
+    "event": {
+      "content": "...",
+      "step": 5,
+      "skip_parse": true
+    },
+    "knowledge_graph": null,
+    "parse_time": 0.1
   }
 }
 ```
@@ -339,7 +493,24 @@
 
 ---
 
-### 数学模型
+## 文档接口
+
+#### GET /api/docs/usage
+
+获取使用说明文档内容
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "content": "# 使用说明\n\n## 1. 选择推演模式\n...",
+  "filename": "README.md"
+}
+```
+
+---
+
+## 数学模型
 
 #### GET /api/math-model/explanation
 
@@ -379,6 +550,7 @@ ws://localhost:8000/ws/simulation
 {
   "action": "start",
   "params": {
+    "mode": "news",
     "cocoon_strength": 0.5,
     "debunk_delay": 10,
     "population_size": 200,
@@ -386,10 +558,22 @@ ws://localhost:8000/ws/simulation
     "use_llm": true,
     "use_dual_network": true,
     "num_communities": 8,
-    "max_concurrent": 50
+    "max_concurrent": 50,
+    "init_distribution": {
+      "believe_rumor": 0.30,
+      "believe_truth": 0.15,
+      "neutral": 0.55
+    }
   }
 }
 ```
+
+**参数说明**:
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| mode | 否 | 推演模式，默认 sandbox |
+| init_distribution | 否 | 新闻模式专用，真实分布锚定 |
+| 其他参数 | 否 | 详见上文 REST API 说明 |
 
 #### 执行单步
 ```json
@@ -434,6 +618,19 @@ ws://localhost:8000/ws/simulation
     "private_truth_rate": 0.12,
     "num_communities": 8,
     "num_influencers": 5
+  }
+}
+```
+
+#### 预测推送（新闻模式）
+```json
+{
+  "type": "prediction",
+  "data": {
+    "prediction": {...},
+    "risk_level": "high",
+    "strategies": [...],
+    "reasoning": "..."
   }
 }
 ```
@@ -488,3 +685,18 @@ ws://localhost:8000/ws/simulation
 | 推演引擎未初始化 | engine 对象为 None |
 | 智库专报仅支持LLM驱动模式 | 数学模型模式无法生成专报 |
 | 报告不存在 | 指定的报告文件不存在 |
+| 知识图谱解析超时 | LLM 响应超时，建议使用快速注入 |
+
+---
+
+## 响应时间参考
+
+| 接口 | 数学模型模式 | LLM模式 |
+|------|-------------|---------|
+| /api/simulation/start | 100-500ms | 5-30s（初始化Agent） |
+| /api/simulation/step | 10-50ms | 通过WebSocket |
+| /api/event/parse | N/A | 10-60s |
+| /api/event/airdrop | N/A | 10-60s（完整解析） |
+| /api/event/airdrop (skip_parse) | N/A | 0.1-2s（快速注入） |
+| /api/prediction | 10-100ms | 10-100ms |
+| /api/report/generate | N/A | 30-120s |

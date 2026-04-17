@@ -8,7 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, List, Any
 from datetime import datetime
 import asyncio
 import json
@@ -115,6 +115,7 @@ class AirdropRequest(BaseModel):
     """事件注入请求参数"""
     content: str  # 事件文本内容
     source: str = "public"  # 来源 (public/private)
+    skip_parse: bool = False  # 跳过知识图谱解析（快速注入模式）
 
 
 def _is_local_llm_runtime(llm_config: LLMConfig) -> bool:
@@ -758,14 +759,15 @@ async def parse_news_event(req: ParseRequest):
 async def airdrop_event(req: AirdropRequest):
     """
     注入突发事件 - "解析-注入-推演"三段式管线
-    
-    第一阶段（解析）：调用 GraphParserAgent 提取结构化知识图谱
+
+    第一阶段（解析）：调用 GraphParserAgent 提取结构化知识图谱（可选跳过）
     第二阶段（封装）：将图谱+原始文本封装成结构化的 EventMsg
     第三阶段（广播）：将 EventMsg 发送给网络中的节点
-    
+
     Request Body:
         content: 事件文本内容
         source: 来源 (public/private)
+        skip_parse: 跳过知识图谱解析（快速注入模式）
 
     Response:
         success: 是否成功
@@ -774,28 +776,42 @@ async def airdrop_event(req: AirdropRequest):
     """
     global engine, pending_knowledge_graph, pending_event_content, pending_event_source
 
-    # ==================== 第一阶段：解析（挂起并调用大模型）====================
-    logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
-
-    try:
-        from .simulation.graph_parser_agent import get_graph_parser
-        graph_parser = get_graph_parser()
-        knowledge_graph = await graph_parser.parse(req.content)
-
-        entity_count = len(knowledge_graph.get('entities', []))
-        relation_count = len(knowledge_graph.get('relations', []))
-        logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
-
-    except Exception as e:
-        logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
-        # 即使解析失败，也继续流程，使用空图谱
+    # ==================== 第一阶段：解析（可选跳过）====================
+    if req.skip_parse:
+        # 快速注入模式：跳过 LLM 解析，使用简单图谱
+        logger.info(f"[快速注入] 跳过知识图谱解析: {req.content[:50]}...")
         knowledge_graph = {
-            "entities": [],
+            "entities": [{"id": "e1", "name": "事件主体", "type": "事件", "description": req.content[:50]}],
             "relations": [],
             "summary": req.content[:100],
-            "parse_error": True,
-            "error_message": str(e)
+            "keywords": [],
+            "sentiment": "中性",
+            "credibility_hint": "不确定",
+            "skip_parse": True
         }
+    else:
+        # 完整解析模式：调用 LLM 解析知识图谱
+        logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
+
+        try:
+            from .simulation.graph_parser_agent import get_graph_parser
+            graph_parser = get_graph_parser()
+            knowledge_graph = await graph_parser.parse(req.content)
+
+            entity_count = len(knowledge_graph.get('entities', []))
+            relation_count = len(knowledge_graph.get('relations', []))
+            logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
+
+        except Exception as e:
+            logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
+            # 即使解析失败，也继续流程，使用空图谱
+            knowledge_graph = {
+                "entities": [],
+                "relations": [],
+                "summary": req.content[:100],
+                "parse_error": True,
+                "error_message": str(e)
+            }
 
     # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
     logger.info(f"[管线阶段2] 封装结构化事件消息...")
@@ -1295,3 +1311,16 @@ async def clear_risk_alerts():
     risk_engine = get_risk_engine()
     risk_engine.clear_history()
     return {"success": True, "message": "预警历史已清空"}
+
+
+@app.get("/api/docs/usage")
+async def get_usage_docs():
+    """获取使用说明文档"""
+    try:
+        import os
+        docs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs", "README.md")
+        with open(docs_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"success": True, "content": content}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

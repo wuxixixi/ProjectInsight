@@ -29,11 +29,21 @@
     <aside class="control-panel">
       <!-- 标题 -->
       <div class="panel-header">
-        <h1>觉测·洞鉴</h1>
+        <div class="header-row">
+          <a href="https://www.sass.org.cn/" target="_blank" class="sass-logo-link">
+            <img src="/sass-logo.png" alt="上海社会科学院" class="sass-logo" />
+          </a>
+          <h1>觉测·洞鉴</h1>
+        </div>
         <p class="subtitle">多智能体舆论认知干预沙盘</p>
-        <a href="https://github.com/wuxixixi/ProjectInsight" target="_blank" class="project-link">
-          <span>📖 项目文档</span>
-        </a>
+        <div class="header-links">
+          <a href="https://github.com/wuxixixi/ProjectInsight" target="_blank" class="project-link">
+            <span>📖 项目文档</span>
+          </a>
+          <a href="#" @click.prevent="showUsageDrawer = true" class="project-link">
+            <span>📋 使用说明</span>
+          </a>
+        </div>
       </div>
 
       <!-- 事件注入区块（核心流程） -->
@@ -909,6 +919,23 @@
       </div>
     </div>
 
+    <!-- 使用说明抽屉 -->
+    <div v-if="showUsageDrawer" class="drawer-overlay" @click.self="showUsageDrawer = false">
+      <div class="usage-drawer">
+        <div class="drawer-header">
+          <h3>📋 使用说明</h3>
+          <button class="drawer-close" @click="showUsageDrawer = false">✕</button>
+        </div>
+        <div class="drawer-body">
+          <div v-if="usageLoading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>加载使用说明...</p>
+          </div>
+          <div v-else class="usage-content" v-html="usageContent"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Agent透视弹窗 -->
     <div v-if="showAgentModal" class="agent-modal-overlay" @click.self="closeAgentModal">
       <div class="agent-modal">
@@ -1328,6 +1355,12 @@
                 <span>🏠 私域 (微信群)</span>
               </label>
             </div>
+            <div class="airdrop-options-row" style="margin-top: 12px;">
+              <label class="source-option" style="font-size: 12px; color: #888;">
+                <input type="checkbox" v-model="airdropSkipParse" style="width: 14px; height: 14px;" />
+                <span>⚡ 快速注入（跳过图谱解析，秒级响应）</span>
+              </label>
+            </div>
           </div>
           
           <!-- Loading 状态显示 -->
@@ -1339,7 +1372,7 @@
             <div class="loading-progress">
               <div class="progress-bar-loading"></div>
             </div>
-            <p class="loading-hint">大模型正在解析事件图谱，预计需要 3-5 秒...</p>
+            <p class="loading-hint">{{ airdropLoadingHint }}</p>
           </div>
           
           <!-- 解析成功后的图谱展示 -->
@@ -1540,6 +1573,7 @@ export default {
       showEventAirdrop: false,
       airdropContent: '',
       airdropSource: 'public',
+      airdropSkipParse: false,  // 快速注入模式（跳过图谱解析）
       airdropLoading: false,
       airdropLoadingStage: '',  // Loading阶段提示
       airdropError: '',
@@ -1569,7 +1603,12 @@ export default {
       // 数学模型说明抽屉
       showMathModelDrawer: false,
       mathModelLoading: false,
-      mathModelExplanation: null
+      mathModelExplanation: null,
+
+      // 使用说明抽屉
+      showUsageDrawer: false,
+      usageContent: '',
+      usageLoading: false
     }
   },
 
@@ -1640,6 +1679,24 @@ export default {
       }
 
       return null
+    },
+    // 事件注入加载提示（根据阶段动态调整）
+    airdropLoadingHint() {
+      const stage = this.airdropLoadingStage || ''
+      // 快速注入模式
+      if (this.airdropSkipParse || stage.includes('快速')) {
+        return '快速注入模式，预计 1-2 秒...'
+      }
+      if (stage.includes('阶段1') || stage.includes('解析')) {
+        return '大模型正在解析事件图谱，通常需要 10-60 秒...'
+      }
+      if (stage.includes('阶段2') || stage.includes('完成')) {
+        return '图谱解析完成，正在处理事件...'
+      }
+      if (stage.includes('阶段3') || stage.includes('处理完成')) {
+        return '事件处理完成'
+      }
+      return '正在处理，请稍候...'
     },
     // 高影响力实体（用于知识驱动演化展示）
     topEntities() {
@@ -1712,6 +1769,11 @@ export default {
     showMathModelDrawer(newVal) {
       if (newVal) {
         this.fetchMathModelExplanation()
+      }
+    },
+    showUsageDrawer(newVal) {
+      if (newVal && !this.usageContent) {
+        this.fetchUsageContent()
       }
     }
   },
@@ -1996,6 +2058,22 @@ export default {
       }
     },
 
+    async fetchUsageContent() {
+      this.usageLoading = true
+      try {
+        const response = await fetch('http://localhost:8000' + '/api/docs/usage')
+        const data = await response.json()
+        if (data.success && data.content) {
+          this.usageContent = marked(data.content)
+        }
+      } catch (error) {
+        console.error('获取使用说明失败:', error)
+        this.usageContent = '<p style="color:#ef4444;">加载失败，请刷新重试</p>'
+      } finally {
+        this.usageLoading = false
+      }
+    },
+
     // ==================== 新闻解析功能 ====================
 
     async parseNews() {
@@ -2038,25 +2116,34 @@ export default {
       if (!this.airdropContent.trim()) return
 
       this.airdropLoading = true
-      this.airdropLoadingStage = '正在调用大模型解析事件图谱...'
+      this.airdropLoadingStage = this.airdropSkipParse ? '正在快速注入事件...' : '正在调用大模型解析事件图谱...'
       this.airdropError = ''
       this.airdropSuccess = false
       this.parsedGraphDisplay = null
 
       try {
         // 第一阶段：解析（显示Loading状态）
-        this.airdropLoadingStage = '⏳ 阶段1/3: 大模型正在解析事件图谱...'
+        if (!this.airdropSkipParse) {
+          this.airdropLoadingStage = '⏳ 阶段1/3: 大模型正在解析事件图谱...'
+        } else {
+          this.airdropLoadingStage = '⚡ 快速注入模式...'
+        }
 
-        // 创建带超时的 fetch 请求（180秒超时，匹配后端LLM调用）
+        // 创建带超时的 fetch 请求（快速模式5秒，完整解析180秒）
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 180000)
+        const timeout = this.airdropSkipParse ? 5000 : 180000
+        const timeoutId = setTimeout(() => controller.abort(), timeout)
 
         const response = await fetch(
           'http://localhost:8000' + '/api/event/airdrop',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: this.airdropContent, source: this.airdropSource }),
+            body: JSON.stringify({
+              content: this.airdropContent,
+              source: this.airdropSource,
+              skip_parse: this.airdropSkipParse
+            }),
             signal: controller.signal
           }
         )
@@ -3661,6 +3748,33 @@ export default {
   border-bottom: 1px solid rgba(100, 181, 246, 0.1);
 }
 
+.panel-header .header-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.sass-logo-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sass-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+}
+
+.sass-logo:hover {
+  transform: scale(1.1);
+}
+
 .panel-header h1 {
   font-size: 24px;
   font-weight: 700;
@@ -3668,7 +3782,7 @@ export default {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 4px;
+  margin: 0;
 }
 
 .panel-header .subtitle {
@@ -3676,11 +3790,21 @@ export default {
   color: #6b7280;
 }
 
+.header-links {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.header-links .project-link {
+  margin-top: 0;
+}
+
 .project-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 8px;
   padding: 4px 10px;
   background: rgba(100, 181, 246, 0.1);
   border: 1px solid rgba(100, 181, 246, 0.2);
@@ -5124,6 +5248,110 @@ export default {
 .btn-theory:hover {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.3) 100%);
   border-color: rgba(139, 92, 246, 0.5);
+}
+
+/* ==================== 使用说明抽屉 ==================== */
+.usage-drawer {
+  width: 640px;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.98);
+  border-left: 1px solid rgba(100, 181, 246, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.usage-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #cbd5e1;
+}
+
+.usage-content h1 {
+  font-size: 20px;
+  color: #60a5fa;
+  margin-bottom: 8px;
+}
+
+.usage-content h2 {
+  font-size: 16px;
+  color: #a5b4fc;
+  margin: 20px 0 10px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(100, 181, 246, 0.2);
+}
+
+.usage-content h3 {
+  font-size: 14px;
+  color: #c4b5fd;
+  margin: 16px 0 8px 0;
+}
+
+.usage-content p {
+  margin: 8px 0;
+}
+
+.usage-content ul, .usage-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.usage-content li {
+  margin: 4px 0;
+}
+
+.usage-content code {
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #a5f3fc;
+}
+
+.usage-content pre {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.usage-content pre code {
+  padding: 0;
+  background: none;
+}
+
+.usage-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.usage-content th, .usage-content td {
+  padding: 8px 12px;
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  text-align: left;
+}
+
+.usage-content th {
+  background: rgba(100, 181, 246, 0.1);
+  color: #60a5fa;
+}
+
+.usage-content blockquote {
+  border-left: 3px solid #60a5fa;
+  padding-left: 12px;
+  margin: 12px 0;
+  color: #94a3b8;
+}
+
+.usage-content a {
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.usage-content a:hover {
+  text-decoration: underline;
 }
 
 /* ==================== Agent透视弹窗 ==================== */
