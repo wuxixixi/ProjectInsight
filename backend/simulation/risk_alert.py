@@ -74,25 +74,26 @@ class RiskAlertEngine:
     def _setup_default_rules(self):
         """设置默认风险规则"""
         
-        # === 负面信念传播风险 ===
+        # === 负面信念传播风险（阈值0标准下调整）===
+        # 阈值改为0后，negative_belief_rate 基于方向判定，数值会更高
         self.rules.append(RiskRule(
             name="negative_critical",
             metric="negative_belief_rate",
-            condition=lambda x: x > 0.7,
+            condition=lambda x: x > 0.75,
             level=RiskLevel.CRITICAL,
-            message_template="🚨 负面信念传播率已达到 {value:.0%}，超过危险阈值70%！",
+            message_template="🚨 误信率已达 {value:.0%}，超过危险阈值75%！",
             suggestion="建议立即发布权威回应，加强权威媒体正面引导",
-            threshold=0.7
+            threshold=0.75
         ))
 
         self.rules.append(RiskRule(
             name="negative_high",
             metric="negative_belief_rate",
-            condition=lambda x: 0.5 < x <= 0.7,
+            condition=lambda x: 0.55 < x <= 0.75,
             level=RiskLevel.HIGH,
-            message_template="⚠️ 负面信念传播率较高，已达 {value:.0%}",
+            message_template="⚠️ 误信率较高，已达 {value:.0%}",
             suggestion="建议尽快准备权威回应材料，选择合适时机发布",
-            threshold=0.5
+            threshold=0.55
         ))
 
         self.rules.append(RiskRule(
@@ -250,25 +251,25 @@ class RiskAlertEngine:
         """基于预测的风险检查"""
         alerts = []
 
-        # 负面信念预测风险
+        # 负面信念预测风险（阈值0标准下调整）
         negative_pred = prediction.get("negative_belief_rate", {})
         pessimistic = negative_pred.get("pessimistic", 0)
 
-        if pessimistic > 0.7:
+        if pessimistic > 0.75:
             alerts.append(Alert(
                 level=RiskLevel.HIGH,
                 metric="negative_belief_rate_predicted",
                 current_value=pessimistic,
-                threshold=0.7,
-                message=f"🔮 预测预警：负面信念传播率可能达到 {pessimistic:.0%}",
+                threshold=0.75,
+                message=f"🔮 预测预警：误信率可能达到 {pessimistic:.0%}",
                 suggestion="建议提前准备干预措施",
                 timestamp=now
             ))
-        
+
         # 极化预测风险
         polar_pred = prediction.get("polarization_index", {})
         polar_pessimistic = polar_pred.get("pessimistic", 0)
-        
+
         if polar_pessimistic > 0.8:
             alerts.append(Alert(
                 level=RiskLevel.HIGH,
@@ -279,7 +280,7 @@ class RiskAlertEngine:
                 suggestion="建议关注群体对立风险",
                 timestamp=now
             ))
-        
+
         return alerts
     
     def get_risk_summary(self, current_state: Dict) -> Dict:
@@ -288,29 +289,36 @@ class RiskAlertEngine:
         polarization = current_state.get("polarization_index", 0)
         silence_rate = current_state.get("silence_rate", 0)
         truth_rate = current_state.get("truth_acceptance_rate", 0)
+        # 新增：深度误信率
+        deep_negative_rate = current_state.get("deep_negative_rate", 0)
 
-        # 综合风险评分
+        # 综合风险评分（阈值0标准下调整）
+        # negative_rate基于方向判定数值更高，降低其权重
+        # deep_negative_rate反映真正坚定的误信者，增加其权重
         risk_score = (
-            negative_rate * 0.4 +
-            polarization * 0.3 +
-            silence_rate * 0.2 +
+            negative_rate * 0.25 +  # 方向性误信率（数值普遍较高）
+            deep_negative_rate * 0.25 +  # 深度误信率（新增）
+            polarization * 0.25 +
+            silence_rate * 0.15 +
             (1 - truth_rate) * 0.1
         )
-        
-        if risk_score > 0.7:
+
+        # 风险等级阈值调整
+        if risk_score > 0.6:
             overall_level = RiskLevel.CRITICAL
-        elif risk_score > 0.5:
+        elif risk_score > 0.4:
             overall_level = RiskLevel.HIGH
-        elif risk_score > 0.3:
+        elif risk_score > 0.25:
             overall_level = RiskLevel.MEDIUM
         else:
             overall_level = RiskLevel.LOW
-        
+
         return {
             "overall_level": overall_level.value,
             "risk_score": round(risk_score, 3),
             "components": {
                 "negative_risk": round(negative_rate, 3),
+                "deep_negative_risk": round(deep_negative_rate, 3),
                 "polarization_risk": round(polarization, 3),
                 "silence_risk": round(silence_rate, 3),
                 "truth_deficit": round(1 - truth_rate, 3)

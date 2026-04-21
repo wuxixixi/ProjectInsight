@@ -142,7 +142,7 @@ class LLMAgent:
         self.belief_strength = belief_strength
         self.influence = influence
         self.susceptibility = susceptibility
-        self.exposed_to_negative = opinion < -0.2
+        self.exposed_to_negative = opinion < 0
         self.exposed_to_positive = False
 
         # 人设背景
@@ -245,8 +245,8 @@ class LLMAgent:
         total = len(neighbors)
         silent_count = total - active_count
 
-        pro_negative = sum(1 for o in active_opinions if o < -0.2)
-        pro_positive = sum(1 for o in active_opinions if o > 0.2)
+        pro_negative = sum(1 for o in active_opinions if o < 0)
+        pro_positive = sum(1 for o in active_opinions if o > 0)
         neutral = active_count - pro_negative - pro_positive
         avg_opinion = sum(active_opinions) / active_count
 
@@ -323,8 +323,8 @@ class LLMAgent:
 
         if climate["total"] > 0:
             # 判断自己的观点是否与主流相反
-            my_stance = "误信" if self.opinion < -0.2 else ("正确认知" if self.opinion > 0.2 else "中立")
-            majority_stance = "误信" if climate['pro_negative_ratio'] > climate['pro_positive_ratio'] else "正确认知" if climate['pro_positive_ratio'] > climate['pro_negative_ratio'] else "中立"
+            my_stance = "误信" if self.opinion < 0 else ("正确认知" if self.opinion > 0 else "不确定")
+            majority_stance = "误信" if climate['pro_negative_ratio'] > climate['pro_positive_ratio'] else "正确认知" if climate['pro_positive_ratio'] > climate['pro_negative_ratio'] else "不确定"
 
             # 计算主流观点比例
             majority_ratio = max(climate['pro_negative_ratio'], climate['pro_positive_ratio'])
@@ -334,9 +334,9 @@ class LLMAgent:
 
             # 判断是否处于少数派
             is_minority = False
-            if self.opinion < -0.2 and climate['pro_positive_ratio'] > climate['pro_negative_ratio']:
+            if self.opinion < 0 and climate['pro_positive_ratio'] > climate['pro_negative_ratio']:
                 is_minority = True
-            elif self.opinion > 0.2 and climate['pro_negative_ratio'] > climate['pro_positive_ratio']:
+            elif self.opinion > 0 and climate['pro_negative_ratio'] > climate['pro_positive_ratio']:
                 is_minority = True
 
             if is_minority:
@@ -638,8 +638,8 @@ class LLMAgentPopulation:
         # 初始化观点分布
         opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
-        opinions[:negative_believers] = np.random.uniform(-0.8, -0.3, negative_believers)
-        opinions[negative_believers:] = np.random.uniform(-0.2, 0.3, size - negative_believers)
+        opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
+        opinions[negative_believers:] = np.random.uniform(0.0, 0.4, size - negative_believers)
 
         # 初始化属性
         belief_strengths = np.random.beta(2, 2, size)
@@ -816,20 +816,40 @@ class LLMAgentPopulation:
 
     def get_statistics(self) -> Dict:
         """计算群体统计"""
-        opinions = [a.opinion for a in self.agents]
+        opinions = np.array([a.opinion for a in self.agents])
+        belief_strengths = np.array([a.belief_strength for a in self.agents])
+        believe_mask = opinions > 0   # 相信新闻
+        reject_mask = opinions < 0    # 拒绝新闻
 
-        negative_spread_rate = np.mean([o < -0.2 for o in opinions])
-        positive_acceptance_rate = np.mean([o > 0.2 for o in opinions])
+        believe_rate = float(np.mean(believe_mask))
+        reject_rate = float(np.mean(reject_mask))
 
         return {
-            "negative_spread_rate": negative_spread_rate,
-            "positive_acceptance_rate": positive_acceptance_rate,
-            # 新增字段名（与 llm_agents_dual.py 一致）
-            "negative_belief_rate": negative_spread_rate,
-            "positive_belief_rate": positive_acceptance_rate,
+            # 基础统计（与 opinion 直接对应）
+            "believe_rate": believe_rate,
+            "reject_rate": reject_rate,
+            "uncertain_rate": float(np.mean(opinions == 0)),
+            # 深度统计
+            "deep_believe_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
+            "deep_reject_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+            "weighted_believe_index": float(
+                np.mean(np.maximum(opinions, 0) * belief_strengths)
+                if np.any(believe_mask) else 0.0
+            ),
             "avg_opinion": float(np.mean(opinions)),
             "polarization_index": float(np.std(opinions) * 2),
-            "silence_rate": np.mean([a.is_silent for a in self.agents])  # 沉默率
+            "silence_rate": float(np.mean([a.is_silent for a in self.agents])),
+            # 兼容旧字段名
+            "negative_spread_rate": reject_rate,
+            "positive_acceptance_rate": believe_rate,
+            "negative_belief_rate": reject_rate,
+            "positive_belief_rate": believe_rate,
+            "deep_negative_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+            "weighted_negative_index": float(
+                np.mean(np.abs(np.minimum(opinions, 0)) * belief_strengths)
+                if np.any(reject_mask) else 0.0
+            ),
+            "deep_positive_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
         }
 
     def get_agent_snapshot(self, agent_id: int) -> Optional[Dict]:

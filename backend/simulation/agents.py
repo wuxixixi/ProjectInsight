@@ -35,11 +35,12 @@ class AgentPopulation:
             initial_negative_spread = initial_rumor_spread
 
         # 初始化观点分布
-        # 初始时部分人持负面信念(opinion < 0), 其他人中立或倾向正面信念
+        # 阈值0: opinion < 0 为误信，opinion > 0 为正确认知，opinion = 0 为不确定
+        # 初始时部分人持负面信念(opinion < 0), 其他人持正面信念(opinion >= 0)
         self.opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
-        self.opinions[:negative_believers] = np.random.uniform(-0.8, -0.3, negative_believers)
-        self.opinions[negative_believers:] = np.random.uniform(-0.2, 0.3, size - negative_believers)
+        self.opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
+        self.opinions[negative_believers:] = np.random.uniform(0.0, 0.4, size - negative_believers)
 
         # 信念强度 - 越强越难改变观点
         self.belief_strength = np.random.beta(2, 2, size)  # 集中在中等

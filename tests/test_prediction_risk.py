@@ -219,7 +219,7 @@ class TestRiskAlertEngine:
         engine = RiskAlertEngine()
 
         current_state = {
-            "negative_belief_rate": 0.75,  # 超过70%阈值
+            "negative_belief_rate": 0.8,  # 超过75%阈值（阈值0标准下调整）
             "positive_belief_rate": 0.1,
             "polarization_index": 0.5,
             "silence_rate": 0.2
@@ -277,7 +277,7 @@ class TestRiskAlertEngine:
         }
 
         prediction = {
-            "negative_belief_rate": {"pessimistic": 0.75}  # 高悲观预测
+            "negative_belief_rate": {"pessimistic": 0.8}  # 高悲观预测（阈值0标准下调整）
         }
 
         alerts = engine.check(current_state, prediction=prediction)

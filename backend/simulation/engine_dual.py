@@ -115,6 +115,7 @@ class SimulationEngineDual:
         self.news_content = "某地发生重大事件，网络上流传各种说法..."
         self.news_source = "public"  # 默认公域信息
         self.knowledge_graph: Dict = {}  # 知识图谱数据
+        self.news_credibility: str = "不确定"  # 新闻可信度：高可信/低可信/不确定
         self._graph_parser: Optional[GraphParserAgent] = None  # 图谱解析器
 
         # 知识驱动演化器（Phase 1 新增）
@@ -219,6 +220,9 @@ class SimulationEngineDual:
         Returns:
             事件记录字典
         """
+        # 存储新闻可信度（用于后续统计判定）
+        self.news_credibility = credibility
+
         event = {
             "step": self.step_count,
             "content": content,
@@ -761,11 +765,38 @@ class SimulationEngineDual:
         else:
             pop = self.population
             opinion_dist = pop.get_opinion_histogram()
+            # 基础统计：opinion 与新闻接受度直接对应
+            opinions = pop.opinions
+            belief_strengths = pop.belief_strength
+            believe_mask = opinions > 0   # 相信新闻
+            reject_mask = opinions < 0    # 拒绝新闻
+
+            believe_rate = float(np.mean(believe_mask))
+            reject_rate = float(np.mean(reject_mask))
+
             stats = {
-                "negative_belief_rate": float(np.mean(pop.opinions < -0.2)),
-                "positive_belief_rate": float(np.mean(pop.opinions > 0.2)),
-                "avg_opinion": float(np.mean(pop.opinions)),
-                "polarization_index": float(np.std(pop.opinions) * 2),
+                # 基础统计（与 opinion 直接对应）
+                "believe_rate": believe_rate,
+                "reject_rate": reject_rate,
+                "uncertain_rate": float(np.mean(opinions == 0)),
+                # 深度统计
+                "deep_believe_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
+                "deep_reject_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+                "weighted_believe_index": float(
+                    np.mean(np.maximum(opinions, 0) * belief_strengths)
+                    if np.any(believe_mask) else 0.0
+                ),
+                # 兼容旧字段名
+                "negative_belief_rate": reject_rate,
+                "positive_belief_rate": believe_rate,
+                "deep_negative_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+                "weighted_negative_index": float(
+                    np.mean(np.abs(np.minimum(opinions, 0)) * belief_strengths)
+                    if np.any(reject_mask) else 0.0
+                ),
+                "deep_positive_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
+                "avg_opinion": float(np.mean(opinions)),
+                "polarization_index": float(np.std(opinions) * 2),
                 "silence_rate": float(np.mean(pop.is_silent)),
             }
             agents = pop.to_agent_list()
@@ -790,6 +821,57 @@ class SimulationEngineDual:
                 stats["num_communities"] = 0
                 stats["num_influencers"] = 0
 
+        # 根据新闻可信度后验判定误信/正确认知
+        credibility = self.news_credibility
+        believe_rate = stats.get("believe_rate", stats.get("positive_belief_rate", 0.0))
+        reject_rate = stats.get("reject_rate", stats.get("negative_belief_rate", 0.0))
+        deep_believe_rate = stats.get("deep_believe_rate", stats.get("deep_positive_rate", 0.0))
+        deep_reject_rate = stats.get("deep_reject_rate", stats.get("deep_negative_rate", 0.0))
+        weighted_believe_index = stats.get("weighted_believe_index", stats.get("weighted_negative_index", 0.0))
+
+        if credibility == "高可信":
+            mislead_rate = reject_rate
+            correct_rate = believe_rate
+            deep_mislead_rate = deep_reject_rate
+            deep_correct_rate = deep_believe_rate
+            weighted_mislead_index = stats.get("weighted_reject_index", 0.0)
+        elif credibility == "低可信":
+            mislead_rate = believe_rate
+            correct_rate = reject_rate
+            deep_mislead_rate = deep_believe_rate
+            deep_correct_rate = deep_reject_rate
+            weighted_mislead_index = weighted_believe_index
+        else:
+            # 不确定：使用传统语义，拒绝=误信，相信=正确认知
+            mislead_rate = reject_rate
+            correct_rate = believe_rate
+            deep_mislead_rate = deep_reject_rate
+            deep_correct_rate = deep_believe_rate
+            weighted_mislead_index = 1.0 - weighted_believe_index  # 反转
+
+        # 公域/私域统计的后验判定
+        public_reject_rate = stats.get("public_negative_rate", reject_rate)
+        public_believe_rate = stats.get("public_positive_rate", believe_rate)
+        private_reject_rate = stats.get("private_negative_rate", reject_rate)
+        private_believe_rate = stats.get("private_positive_rate", believe_rate)
+
+        if credibility == "高可信":
+            public_mislead_rate = public_reject_rate
+            public_correct_rate = public_believe_rate
+            private_mislead_rate = private_reject_rate
+            private_correct_rate = private_believe_rate
+        elif credibility == "低可信":
+            public_mislead_rate = public_believe_rate
+            public_correct_rate = public_reject_rate
+            private_mislead_rate = private_believe_rate
+            private_correct_rate = private_reject_rate
+        else:
+            # 不确定：传统语义
+            public_mislead_rate = public_reject_rate
+            public_correct_rate = public_believe_rate
+            private_mislead_rate = private_reject_rate
+            private_correct_rate = private_believe_rate
+
         return SimulationState(
             step=self.step_count,
             agents=agents,
@@ -797,15 +879,31 @@ class SimulationEngineDual:
             private_edges=private_edges,
             edges=public_edges,  # 兼容旧版
             opinion_distribution=opinion_dist,
-            negative_belief_rate=stats["negative_belief_rate"],
-            positive_belief_rate=stats["positive_belief_rate"],
+            # 基础统计
+            believe_rate=believe_rate,
+            reject_rate=reject_rate,
+            uncertain_rate=stats.get("uncertain_rate", 0.0),
+            deep_believe_rate=deep_believe_rate,
+            deep_reject_rate=deep_reject_rate,
+            weighted_believe_index=weighted_believe_index,
+            # 后验判定
+            news_credibility=credibility,
+            mislead_rate=mislead_rate,
+            correct_rate=correct_rate,
+            # 兼容旧字段
+            negative_belief_rate=mislead_rate,
+            positive_belief_rate=correct_rate,
+            deep_negative_rate=deep_mislead_rate,
+            deep_positive_rate=deep_correct_rate,
+            weighted_negative_index=weighted_mislead_index,
             avg_opinion=stats["avg_opinion"],
             polarization_index=stats["polarization_index"],
             silence_rate=stats.get("silence_rate", 0.0),
-            public_negative_rate=stats.get("public_negative_rate", stats["negative_belief_rate"]),
-            public_positive_rate=stats.get("public_positive_rate", stats["positive_belief_rate"]),
-            private_negative_rate=stats.get("private_negative_rate", stats["negative_belief_rate"]),
-            private_positive_rate=stats.get("private_positive_rate", stats["positive_belief_rate"]),
+            # 公域/私域使用后验判定的误信/正确认知率
+            public_negative_rate=public_mislead_rate,
+            public_positive_rate=public_correct_rate,
+            private_negative_rate=private_mislead_rate,
+            private_positive_rate=private_correct_rate,
             num_communities=stats.get("num_communities", 0),
             num_influencers=stats.get("num_influencers", 0)
         )

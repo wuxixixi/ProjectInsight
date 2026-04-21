@@ -23,7 +23,7 @@ class SimulationMode(Enum):
 class Agent(BaseModel):
     """个体智能体"""
     id: int
-    opinion: float           # 观点值 [-1, 1], -1=完全误信, 1=完全正确认知
+    opinion: float           # 对新闻内容的接受程度 [-1, 1], -1=完全拒绝, 1=完全相信
     belief_strength: float   # 信念强度 [0, 1]
     influence: float         # 影响力
     susceptibility: float    # 易感性
@@ -165,9 +165,25 @@ class SimulationState(BaseModel):
     private_edges: List[tuple] = []    # 私域网络边
     edges: List[tuple] = []            # 兼容旧版（公域边）
     opinion_distribution: Dict[str, List]
-    # 整体统计（新字段名）
-    negative_belief_rate: float        # 负面信念率（替代 rumor_spread_rate）
-    positive_belief_rate: float        # 正面信念率（替代 truth_acceptance_rate）
+    # 基础统计（与 opinion 直接对应，不涉及新闻真假）
+    believe_rate: float = 0.0          # 相信新闻比例 (opinion > 0)
+    reject_rate: float = 0.0           # 拒绝新闻比例 (opinion < 0)
+    uncertain_rate: float = 0.0        # 不确定比例 (opinion = 0)
+    # 深度统计
+    deep_believe_rate: float = 0.0     # 深度相信率 (opinion>0 且 belief_strength>0.5)
+    deep_reject_rate: float = 0.0      # 深度拒绝率 (opinion<0 且 belief_strength>0.5)
+    weighted_believe_index: float = 0.0  # 加权相信指数
+    # 后验判定（基于新闻可信度）
+    news_credibility: str = "不确定"   # 新闻可信度: 高可信/低可信/不确定
+    mislead_rate: float = 0.0          # 误信率（是否"信错了"）
+    correct_rate: float = 0.0          # 正确认知率
+    # 兼容旧字段名
+    negative_belief_rate: float = 0.0  # 兼容：同 mislead_rate
+    positive_belief_rate: float = 0.0  # 兼容：同 correct_rate
+    deep_negative_rate: float = 0.0    # 兼容
+    deep_positive_rate: float = 0.0    # 兼容
+    weighted_negative_index: float = 0.0  # 兼容
+    # 其他统计
     avg_opinion: float
     polarization_index: float
     silence_rate: float = 0.0
@@ -283,9 +299,23 @@ class SimulationState(BaseModel):
             "private_edges": self.private_edges,
             "edges": self.edges,
             "opinion_distribution": self.opinion_distribution,
-            # 新字段名
+            # 基础统计（与 opinion 直接对应）
+            "believe_rate": self.believe_rate,
+            "reject_rate": self.reject_rate,
+            "uncertain_rate": self.uncertain_rate,
+            "deep_believe_rate": self.deep_believe_rate,
+            "deep_reject_rate": self.deep_reject_rate,
+            "weighted_believe_index": self.weighted_believe_index,
+            # 后验判定（基于新闻可信度）
+            "news_credibility": self.news_credibility,
+            "mislead_rate": self.mislead_rate,
+            "correct_rate": self.correct_rate,
+            # 兼容旧字段名
             "negative_belief_rate": self.negative_belief_rate,
             "positive_belief_rate": self.positive_belief_rate,
+            "deep_negative_rate": self.deep_negative_rate,
+            "deep_positive_rate": self.deep_positive_rate,
+            "weighted_negative_index": self.weighted_negative_index,
             "avg_opinion": self.avg_opinion,
             "polarization_index": self.polarization_index,
             "silence_rate": self.silence_rate,

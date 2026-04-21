@@ -119,6 +119,7 @@ class AirdropRequest(BaseModel):
     content: str  # 事件文本内容
     source: str = "public"  # 来源 (public/private)
     skip_parse: bool = False  # 跳过知识图谱解析（快速注入模式）
+    credibility: str = "不确定"  # 新闻可信度 (高可信/低可信/不确定)
 
 
 def _is_local_llm_runtime(llm_config: LLMConfig) -> bool:
@@ -825,6 +826,10 @@ async def airdrop_event(req: AirdropRequest):
     logger.info(f"[管线阶段2] 封装结构化事件消息...")
 
     # 构建结构化事件消息
+    # 用户选择的可信度优先于自动解析的
+    final_credibility = req.credibility if req.credibility != "不确定" else knowledge_graph.get("credibility_hint", "不确定")
+    # 同步到 knowledge_graph 供后续待注入使用
+    knowledge_graph["credibility_hint"] = final_credibility
     event_msg = {
         "type": "breaking_news",
         "content": req.content,  # 原始文本
@@ -833,7 +838,7 @@ async def airdrop_event(req: AirdropRequest):
         "summary": knowledge_graph.get("summary", ""),
         "keywords": knowledge_graph.get("keywords", []),
         "sentiment": knowledge_graph.get("sentiment", "中性"),
-        "credibility_hint": knowledge_graph.get("credibility_hint", "不确定"),
+        "credibility_hint": final_credibility,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
@@ -855,7 +860,7 @@ async def airdrop_event(req: AirdropRequest):
         return {
             "success": True,
             "data": {
-                "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True},
+                "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True, "credibility": final_credibility},
                 "knowledge_graph": knowledge_graph,
                 "event_msg": event_msg,
                 "message": "事件已解析并存储，将在推演开始时自动注入"
@@ -867,7 +872,8 @@ async def airdrop_event(req: AirdropRequest):
 
     # 获取情感和可信度
     sentiment = knowledge_graph.get("sentiment", "中性")
-    credibility = knowledge_graph.get("credibility_hint", "不确定")
+    # 使用前面计算的 final_credibility
+    credibility = final_credibility
     entity_count = len(knowledge_graph.get('entities', []))
 
     try:

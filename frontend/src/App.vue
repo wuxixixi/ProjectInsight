@@ -607,11 +607,14 @@
           <div class="chart-card opinion-chart">
             <div class="chart-header">
               <h3>群体观点分布</h3>
+              <span v-if="newsCredibility !== '不确定'" class="credibility-badge" :class="newsCredibility === '高可信' ? 'high' : 'low'">
+                {{ newsCredibility === '高可信' ? '✅ 高可信新闻' : '⚠️ 低可信新闻' }}
+              </span>
               <button class="chart-zoom-btn" @click="openChartModal('opinion')" title="放大">🔍</button>
               <div class="chart-legend">
-                <span class="legend-item rumor">误信</span>
+                <span class="legend-item rumor">{{ misleadLegendLabel }}</span>
                 <span class="legend-item neutral">中立</span>
-                <span class="legend-item truth">正确认知</span>
+                <span class="legend-item truth">{{ correctLegendLabel }}</span>
               </div>
             </div>
             <div class="chart-body" ref="opinionChart"></div>
@@ -668,14 +671,14 @@
                 <span class="info-item-label">误信率</span>
                 <span class="info-item-value danger">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
               </div>
-              <p class="info-item-desc">当前误信的人群比例（opinion &lt; -0.2）。权威回应后应逐渐下降。</p>
+              <p class="info-item-desc">当前误信的人群比例（opinion &lt; 0）。权威回应后应逐渐下降。</p>
             </div>
             <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'truth' }">
               <div class="info-item-header">
                 <span class="info-item-label">正确认知率</span>
                 <span class="info-item-value success">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
               </div>
-              <p class="info-item-desc">当前持正确认知的人群比例（opinion &gt; 0.2）。权威回应后应逐渐上升。</p>
+              <p class="info-item-desc">当前持正确认知的人群比例（opinion &gt; 0）。权威回应后应逐渐上升。</p>
             </div>
             <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'avgOpinion' }">
               <div class="info-item-header">
@@ -1055,10 +1058,10 @@
                   <div class="conclusion-icon">🔊</div>
                   <div class="conclusion-text">
                     <strong>选择发声</strong>
-                    <p v-if="normalizedClimate.pro_rumor_ratio > normalizedClimate.pro_truth_ratio && agentSnapshot.new_opinion > 0.2">
+                    <p v-if="normalizedClimate.pro_rumor_ratio > normalizedClimate.pro_truth_ratio && agentSnapshot.new_opinion > 0">
                       "虽然周围误信的人更多，但我有足够的勇气和信念表达我的观点。"
                     </p>
-                    <p v-else-if="normalizedClimate.pro_truth_ratio > normalizedClimate.pro_rumor_ratio && agentSnapshot.new_opinion < -0.2">
+                    <p v-else-if="normalizedClimate.pro_truth_ratio > normalizedClimate.pro_rumor_ratio && agentSnapshot.new_opinion < 0">
                       "虽然周围持正确认知的人更多，但我坚持自己的判断，不会轻易改变。"
                     </p>
                     <p v-else>
@@ -1420,6 +1423,29 @@
               </label>
             </div>
           </div>
+
+          <!-- 新闻可信度选择 -->
+          <div class="kg-section" v-if="!airdropLoading">
+            <h4>🔍 新闻可信度</h4>
+            <p class="impact-desc" style="margin-bottom:8px">可信度决定"误信/正确认知"的判定方向：</p>
+            <div class="airdrop-source-options">
+              <label class="source-option">
+                <input type="radio" v-model="airdropCredibility" value="低可信" />
+                <span class="credibility-tag low">⚠️ 低可信</span>
+                <span class="credibility-hint">相信=误信，拒绝=正确认知</span>
+              </label>
+              <label class="source-option">
+                <input type="radio" v-model="airdropCredibility" value="不确定" />
+                <span class="credibility-tag uncertain">❓ 不确定</span>
+                <span class="credibility-hint">系统自动判定</span>
+              </label>
+              <label class="source-option">
+                <input type="radio" v-model="airdropCredibility" value="高可信" />
+                <span class="credibility-tag high">✅ 高可信</span>
+                <span class="credibility-hint">相信=正确认知，拒绝=误信</span>
+              </label>
+            </div>
+          </div>
           
           <!-- Loading 状态显示 -->
           <div class="kg-section airdrop-loading-section" v-if="airdropLoading">
@@ -1560,6 +1586,9 @@ export default {
       // 统计数据
       rumorSpreadRate: 0,
       truthAcceptanceRate: 0,
+      believeRate: 0,          // 相信新闻比例
+      rejectRate: 0,           // 拒绝新闻比例
+      newsCredibility: '不确定', // 新闻可信度
       avgOpinion: 0,
       polarizationIndex: 0,
       silenceRate: 0,  // 沉默率
@@ -1635,6 +1664,7 @@ export default {
       showEventAirdrop: false,
       airdropContent: '',
       airdropSource: 'public',
+      airdropCredibility: '不确定',  // 新闻可信度选择
       airdropSkipParse: false,  // 快速注入模式（跳过图谱解析）
       airdropLoading: false,
       airdropLoadingStage: '',  // Loading阶段提示
@@ -1695,16 +1725,16 @@ export default {
     agentOpinionClass() {
       if (!this.agentSnapshot) return 'neutral'
       const opinion = this.agentSnapshot.new_opinion
-      if (opinion > 0.2) return 'positive'
-      if (opinion < -0.2) return 'negative'
+      if (opinion > 0) return 'positive'
+      if (opinion < 0) return 'negative'
       return 'neutral'
     },
     agentOpinionLabel() {
       if (!this.agentSnapshot) return ''
       const opinion = this.agentSnapshot.new_opinion
-      if (opinion > 0.2) return '正确认知'
-      if (opinion < -0.2) return '误信'
-      return '中立'
+      if (opinion > 0) return '正确认知'
+      if (opinion < 0) return '误信'
+      return '不确定'
     },
     renderedIntelligence() {
       if (!this.intelligenceContent) return ''
@@ -1810,6 +1840,17 @@ export default {
       })
       // 按影响力排序，取前5个
       return entitiesWithImpact.sort((a, b) => b.impact - a.impact).slice(0, 5)
+    },
+    // 图例标签：根据新闻可信度动态调整
+    misleadLegendLabel() {
+      if (this.newsCredibility === '低可信') return '误信(相信)'
+      if (this.newsCredibility === '高可信') return '误信(拒绝)'
+      return '拒绝'
+    },
+    correctLegendLabel() {
+      if (this.newsCredibility === '低可信') return '正确认知(拒绝)'
+      if (this.newsCredibility === '高可信') return '正确认知(相信)'
+      return '相信'
     }
   },
 
@@ -1900,8 +1941,8 @@ export default {
     },
 
     getOpinionClass(opinion) {
-      if (opinion < -0.3) return 'opinion-rumor'
-      if (opinion > 0.3) return 'opinion-truth'
+      if (opinion < 0) return 'opinion-rumor'
+      if (opinion > 0) return 'opinion-truth'
       return 'opinion-neutral'
     },
 
@@ -2259,7 +2300,8 @@ export default {
             body: JSON.stringify({
               content: this.airdropContent,
               source: this.airdropSource,
-              skip_parse: this.airdropSkipParse
+              skip_parse: this.airdropSkipParse,
+              credibility: this.airdropCredibility
             }),
             signal: controller.signal
           }
@@ -2287,6 +2329,9 @@ export default {
           const avgShift = eventData.avg_opinion_shift || 0
           const sentiment = eventData.sentiment || '中性'
           const credibility = eventData.credibility || '不确定'
+
+          // 更新可信度显示（用户选择的优先）
+          this.newsCredibility = credibility
 
           // 添加到事件日志（透明化展示）
           this.addEventLog({
@@ -2577,8 +2622,11 @@ export default {
       this.numInfluencers = data.num_influencers || 0
 
       this.opinionDist = data.opinion_distribution
-      this.rumorSpreadRate = data.rumor_spread_rate
-      this.truthAcceptanceRate = data.truth_acceptance_rate
+      this.rumorSpreadRate = data.mislead_rate || data.rumor_spread_rate
+      this.truthAcceptanceRate = data.correct_rate || data.truth_acceptance_rate
+      this.believeRate = data.believe_rate || 0
+      this.rejectRate = data.reject_rate || 0
+      this.newsCredibility = data.news_credibility || '不确定'
       this.avgOpinion = data.avg_opinion
       this.polarizationIndex = data.polarization_index
       this.silenceRate = data.silence_rate || 0
@@ -2761,7 +2809,6 @@ export default {
         })
       }
     },
-
     getOpinionChartOption() {
       const data = this.opinionDist.counts.map((count, i) => ({
         value: count,
@@ -2801,18 +2848,32 @@ export default {
           data: data.map((d, i) => {
             const center = d.center
             let color
-            if (center < -0.2) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#ef4444' },
-              { offset: 1, color: '#dc2626' }
-            ])
-            else if (center > 0.2) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#22c55e' },
-              { offset: 1, color: '#16a34a' }
-            ])
-            else color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            // 根据新闻可信度动态调整颜色语义
+            // center < 0 → 拒绝新闻, center > 0 → 相信新闻
+            // 中立区间: |center| <= 0.05
+            if (Math.abs(center) <= 0.05) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
               { offset: 0, color: '#f59e0b' },
               { offset: 1, color: '#d97706' }
             ])
+            else {
+              // 根据新闻可信度判定"误信/正确认知"
+              const isBelieve = center > 0  // 相信新闻
+              let isMislead
+              if (this.newsCredibility === '低可信') {
+                // 低可信新闻：相信=误信
+                isMislead = isBelieve
+              } else if (this.newsCredibility === '高可信') {
+                // 高可信新闻：拒绝=误信
+                isMislead = !isBelieve
+              } else {
+                // 不确定时：恢复传统语义，负值=误信(红色)，正值=正确认知(绿色)
+                isMislead = !isBelieve
+              }
+              color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: isMislead ? '#ef4444' : '#22c55e' },
+                { offset: 1, color: isMislead ? '#dc2626' : '#16a34a' }
+              ])
+            }
             return {
               value: d.value,
               itemStyle: { color, borderRadius: [4, 4, 0, 0] }
@@ -2839,8 +2900,8 @@ export default {
 
       const nodes = this.agents.map(agent => {
         let color
-        if (agent.opinion < -0.2) color = '#ef4444'
-        else if (agent.opinion > 0.2) color = '#22c55e'
+        if (agent.opinion < 0) color = '#ef4444'
+        else if (agent.opinion > 0) color = '#22c55e'
         else color = '#f59e0b'
 
         const opacity = agent.is_silent ? 0.3 : 1.0
@@ -3111,18 +3172,32 @@ export default {
           data: data.map((d, i) => {
             const center = d.center
             let color
-            if (center < -0.2) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#ef4444' },
-              { offset: 1, color: '#dc2626' }
-            ])
-            else if (center > 0.2) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#22c55e' },
-              { offset: 1, color: '#16a34a' }
-            ])
-            else color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            // 根据新闻可信度动态调整颜色语义
+            // center < 0 → 拒绝新闻, center > 0 → 相信新闻
+            // 中立区间: |center| <= 0.05
+            if (Math.abs(center) <= 0.05) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
               { offset: 0, color: '#f59e0b' },
               { offset: 1, color: '#d97706' }
             ])
+            else {
+              // 根据新闻可信度判定"误信/正确认知"
+              const isBelieve = center > 0  // 相信新闻
+              let isMislead
+              if (this.newsCredibility === '低可信') {
+                // 低可信新闻：相信=误信
+                isMislead = isBelieve
+              } else if (this.newsCredibility === '高可信') {
+                // 高可信新闻：拒绝=误信
+                isMislead = !isBelieve
+              } else {
+                // 不确定时：恢复传统语义，负值=误信(红色)，正值=正确认知(绿色)
+                isMislead = !isBelieve
+              }
+              color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: isMislead ? '#ef4444' : '#22c55e' },
+                { offset: 1, color: isMislead ? '#dc2626' : '#16a34a' }
+              ])
+            }
             return {
               value: d.value,
               itemStyle: { color, borderRadius: [4, 4, 0, 0] }
@@ -3150,8 +3225,8 @@ export default {
 
       const nodes = this.agents.map(agent => {
         let color
-        if (agent.opinion < -0.2) color = '#ef4444'
-        else if (agent.opinion > 0.2) color = '#22c55e'
+        if (agent.opinion < 0) color = '#ef4444'
+        else if (agent.opinion > 0) color = '#22c55e'
         else color = '#f59e0b'
 
         // 沉默的节点透明度降低
@@ -6890,6 +6965,58 @@ export default {
   background: rgba(245, 158, 11, 0.2);
   color: #fcd34d;
   border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* 可信度选择器样式 */
+.credibility-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.credibility-tag.high {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.credibility-tag.low {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.credibility-tag.uncertain {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+.credibility-hint {
+  font-size: 11px;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+/* 观点分布图标题旁的可信度徽章 */
+.credibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.credibility-badge.high {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.credibility-badge.low {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .kg-section h4 {

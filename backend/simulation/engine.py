@@ -125,10 +125,14 @@ class SimulationEngine:
         self.progress_callback: Optional[Callable] = None
 
         # 新闻和知识图谱
-        self.news_content: str = ""
+        self.news_content: str = ""  # 兼容：最后一个新闻
         self.news_source: str = "public"
         self.knowledge_graph: Dict = {}
-        
+        self.news_credibility: str = "不确定"  # 新闻可信度：高可信/低可信/不确定
+
+        # 事件池：存储所有注入的新闻事件
+        self.event_pool: List[Dict] = []  # [{"content": ..., "source": ..., "credibility": ..., "step": ...}, ...]
+
         # 知识驱动演化器（Phase 1 新增）
         self.knowledge_evolution: Optional[KnowledgeDrivenEvolution] = None
         self.use_knowledge_evolution: bool = False
@@ -212,6 +216,12 @@ class SimulationEngine:
         Returns:
             事件数据
         """
+        # 存储新闻可信度（用于后续统计判定）
+        self.news_credibility = credibility
+
+        # 更新当前新闻（兼容旧逻辑）
+        self.news_content = content
+
         event = {
             "content": content,
             "scope": target_scope,
@@ -220,6 +230,9 @@ class SimulationEngine:
             "credibility": credibility,
             "impact_strength": impact_strength or 0.0
         }
+
+        # 添加到事件池
+        self.event_pool.append(event)
 
         # 如果引擎已初始化，触发事件冲击
         if self.population is not None or self.llm_population is not None:
@@ -477,19 +490,19 @@ class SimulationEngine:
         # 生成观点值
         opinions = np.zeros(n)
 
-        # 相信负面信念: -0.8 ~ -0.3
+        # 相信负面信念: -0.8 ~ -0.2 (opinion < 0 为误信)
         if n_rumor > 0:
-            opinions[:n_rumor] = np.random.uniform(-0.8, -0.3, n_rumor)
+            opinions[:n_rumor] = np.random.uniform(-0.8, -0.2, n_rumor)
 
-        # 相信正面信念: 0.3 ~ 0.8
+        # 相信正面信念: 0.2 ~ 0.8 (opinion > 0 为正确认知)
         start = n_rumor
         end = start + n_truth
         if n_truth > 0:
-            opinions[start:end] = np.random.uniform(0.3, 0.8, n_truth)
+            opinions[start:end] = np.random.uniform(0.2, 0.8, n_truth)
 
-        # 中立: -0.2 ~ 0.2
+        # 不确定: -0.05 ~ 0.05 (接近0)
         if n_neutral > 0:
-            opinions[end:] = np.random.uniform(-0.2, 0.2, n_neutral)
+            opinions[end:] = np.random.uniform(-0.05, 0.05, n_neutral)
 
         # 随机打乱
         np.random.shuffle(opinions)
@@ -497,9 +510,9 @@ class SimulationEngine:
         # 应用到群体
         self.population.opinions = opinions
 
-        # 更新暴露状态
-        self.population.exposed_to_negative = opinions < -0.2
-        self.population.exposed_to_positive = opinions > 0.2
+        # 更新暴露状态 (阈值0)
+        self.population.exposed_to_negative = opinions < 0
+        self.population.exposed_to_positive = opinions > 0
 
     def _apply_init_distribution_llm(self):
         """
@@ -520,11 +533,11 @@ class SimulationEngine:
 
         for i, agent in enumerate(self.llm_population.agents):
             if i < n_rumor:
-                agent.opinion = np.random.uniform(-0.8, -0.3)
+                agent.opinion = np.random.uniform(-0.8, -0.2)
             elif i < n_rumor + n_truth:
-                agent.opinion = np.random.uniform(0.3, 0.8)
+                agent.opinion = np.random.uniform(0.2, 0.8)
             else:
-                agent.opinion = np.random.uniform(-0.2, 0.2)
+                agent.opinion = np.random.uniform(-0.05, 0.05)
 
     async def async_step(self) -> SimulationState:
         """
@@ -820,15 +833,64 @@ class SimulationEngine:
         else:
             pop = self.population
             opinion_dist = pop.get_opinion_histogram()
+            # 基础统计：opinion 与新闻接受度直接对应
+            opinions = pop.opinions
+            belief_strengths = pop.belief_strength
+            believe_mask = opinions > 0   # 相信新闻
+            reject_mask = opinions < 0    # 拒绝新闻
+
+            believe_rate = float(np.mean(believe_mask))
+            reject_rate = float(np.mean(reject_mask))
+            uncertain_rate = float(np.mean(opinions == 0))
+
             stats = {
-                "negative_belief_rate": float(np.mean(pop.opinions < -0.2)),
-                "positive_belief_rate": float(np.mean(pop.opinions > 0.2)),
-                "avg_opinion": float(np.mean(pop.opinions)),
-                "polarization_index": float(np.std(pop.opinions) * 2),
+                # 基础统计（与 opinion 直接对应）
+                "believe_rate": believe_rate,
+                "reject_rate": reject_rate,
+                "uncertain_rate": uncertain_rate,
+                # 深度统计
+                "deep_believe_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
+                "deep_reject_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+                "weighted_believe_index": float(
+                    np.mean(np.maximum(opinions, 0) * belief_strengths)
+                    if np.any(believe_mask) else 0.0
+                ),
+                "avg_opinion": float(np.mean(opinions)),
+                "polarization_index": float(np.std(opinions) * 2),
                 "silence_rate": float(np.mean(pop.is_silent))
             }
             agents = pop.to_agent_list()
             edges = pop.get_edges()
+
+        # 根据新闻可信度后验判定误信/正确认知
+        credibility = self.news_credibility
+        believe_rate = stats.get("believe_rate", stats.get("positive_belief_rate", 0.0))
+        reject_rate = stats.get("reject_rate", stats.get("negative_belief_rate", 0.0))
+        deep_believe_rate = stats.get("deep_believe_rate", stats.get("deep_positive_rate", 0.0))
+        deep_reject_rate = stats.get("deep_reject_rate", stats.get("deep_negative_rate", 0.0))
+        weighted_believe_index = stats.get("weighted_believe_index", stats.get("weighted_negative_index", 0.0))
+
+        if credibility == "高可信":
+            # 真实新闻：相信=正确认知，拒绝=误信
+            mislead_rate = reject_rate
+            correct_rate = believe_rate
+            deep_mislead_rate = deep_reject_rate
+            deep_correct_rate = deep_believe_rate
+            weighted_mislead_index = stats.get("weighted_reject_index", 0.0)  # 暂无此字段
+        elif credibility == "低可信":
+            # 虚假新闻：相信=误信，拒绝=正确认知
+            mislead_rate = believe_rate
+            correct_rate = reject_rate
+            deep_mislead_rate = deep_believe_rate
+            deep_correct_rate = deep_reject_rate
+            weighted_mislead_index = weighted_believe_index
+        else:
+            # 不确定：使用传统语义，拒绝=误信，相信=正确认知
+            mislead_rate = reject_rate
+            correct_rate = believe_rate
+            deep_mislead_rate = deep_reject_rate
+            deep_correct_rate = deep_believe_rate
+            weighted_mislead_index = 1.0 - weighted_believe_index  # 反转
 
         # Phase 3: 计算实体影响摘要
         entity_impact_summary = None
@@ -840,8 +902,23 @@ class SimulationEngine:
             agents=agents,
             edges=edges,
             opinion_distribution=opinion_dist,
-            negative_belief_rate=stats.get("negative_belief_rate", stats.get("rumor_spread_rate", 0.0)),
-            positive_belief_rate=stats.get("positive_belief_rate", stats.get("truth_acceptance_rate", 0.0)),
+            # 基础统计
+            believe_rate=believe_rate,
+            reject_rate=reject_rate,
+            uncertain_rate=stats.get("uncertain_rate", 0.0),
+            deep_believe_rate=deep_believe_rate,
+            deep_reject_rate=deep_reject_rate,
+            weighted_believe_index=weighted_believe_index,
+            # 后验判定
+            news_credibility=credibility,
+            mislead_rate=mislead_rate,
+            correct_rate=correct_rate,
+            # 兼容旧字段
+            negative_belief_rate=mislead_rate,
+            positive_belief_rate=correct_rate,
+            deep_negative_rate=deep_mislead_rate,
+            deep_positive_rate=deep_correct_rate,
+            weighted_negative_index=weighted_mislead_index,
             avg_opinion=stats["avg_opinion"],
             polarization_index=stats["polarization_index"],
             silence_rate=stats.get("silence_rate", 0.0),

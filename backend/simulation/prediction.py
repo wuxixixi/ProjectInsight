@@ -364,11 +364,11 @@ class PredictionModel:
                 risk_level = max(risk_level, "medium")
             risk_factors.append(f"群体极化指数{expected_polarization:.2f}")
 
-        # 计算最佳干预时机
-        # 基于负面信念传播速率（预期增长率）
-        if current_negative < 0.2:
+        # 计算最佳干预时机（阈值0标准下的调整）
+        # negative_belief_rate 现在基于方向判定，数值会更高
+        if current_negative < 0.3:
             best_timing = 5  # 早期，可稍作观察
-        elif current_negative < 0.4:
+        elif current_negative < 0.5:
             best_timing = 3  # 中期，需尽快介入
         else:
             best_timing = 1  # 晚期，需立即干预
@@ -388,11 +388,11 @@ class PredictionModel:
             risk_level, current_negative, expected_positive, expected_polarization
         )
 
-        # 分析窗口收窄情况
+        # 分析窗口收窄情况（阈值0标准下调整）
         window_status = "充足"
-        if current_negative > 0.4:
+        if current_negative > 0.5:
             window_status = "收窄"
-        if current_negative > 0.6:
+        if current_negative > 0.65:
             window_status = "紧迫"
 
         # 决策依据

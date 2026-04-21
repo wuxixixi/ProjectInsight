@@ -138,7 +138,7 @@ class LLMAgent:
         self.belief_strength = belief_strength
         self.influence = influence
         self.susceptibility = susceptibility
-        self.exposed_to_negative = opinion < -0.2
+        self.exposed_to_negative = opinion < 0
         self.exposed_to_positive = False
 
         # 人设背景
@@ -312,8 +312,8 @@ class LLMAgent:
         else:
             opinions = [n.opinion for n in public_neighbors]
 
-        pro_negative = sum(1 for o in opinions if o < -0.2)
-        pro_positive = sum(1 for o in opinions if o > 0.2)
+        pro_negative = sum(1 for o in opinions if o < 0)
+        pro_positive = sum(1 for o in opinions if o > 0)
         neutral = total - pro_negative - pro_positive
         avg_opinion = sum(opinions) / total
 
@@ -352,8 +352,8 @@ class LLMAgent:
         else:
             opinions = [n.opinion for n in private_neighbors]
 
-        pro_negative = sum(1 for o in opinions if o < -0.2)
-        pro_positive = sum(1 for o in opinions if o > 0.2)
+        pro_negative = sum(1 for o in opinions if o < 0)
+        pro_positive = sum(1 for o in opinions if o > 0)
         neutral = total - pro_negative - pro_positive
         avg_opinion = sum(opinions) / total
 
@@ -464,8 +464,8 @@ class LLMAgent:
         if all_neighbors:
             all_opinions = [opinion_snapshot.get(n.id, n.opinion) for n in all_neighbors] if opinion_snapshot else [n.opinion for n in all_neighbors]
             total_all = len(all_neighbors)
-            pro_negative_all = sum(1 for o in all_opinions if o < -0.2)
-            pro_positive_all = sum(1 for o in all_opinions if o > 0.2)
+            pro_negative_all = sum(1 for o in all_opinions if o < 0)
+            pro_positive_all = sum(1 for o in all_opinions if o > 0)
             neutral_all = total_all - pro_negative_all - pro_positive_all
             avg_opinion_all = sum(all_opinions) / total_all
         else:
@@ -676,8 +676,8 @@ class LLMAgentPopulationDual:
         # 初始化观点分布
         opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
-        opinions[:negative_believers] = np.random.uniform(-0.8, -0.3, negative_believers)
-        opinions[negative_believers:] = np.random.uniform(-0.2, 0.3, size - negative_believers)
+        opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
+        opinions[negative_believers:] = np.random.uniform(0.0, 0.4, size - negative_believers)
 
         # 初始化属性
         belief_strengths = np.random.beta(2, 2, size)
@@ -832,20 +832,43 @@ class LLMAgentPopulationDual:
 
     def get_statistics(self) -> Dict:
         """计算群体统计（分别统计公域和私域）"""
-        opinions = [a.opinion for a in self.agents]
+        opinions = np.array([a.opinion for a in self.agents])
+        belief_strengths = np.array([a.belief_strength for a in self.agents])
+        believe_mask = opinions > 0   # 相信新闻
+        reject_mask = opinions < 0    # 拒绝新闻
 
-        # 整体统计
+        believe_rate = float(np.mean(believe_mask))
+        reject_rate = float(np.mean(reject_mask))
+
+        # 整体统计（与 opinion 直接对应）
         overall_stats = {
-            "negative_belief_rate": np.mean([o < -0.2 for o in opinions]),
-            "positive_belief_rate": np.mean([o > 0.2 for o in opinions]),
+            # 基础统计
+            "believe_rate": believe_rate,
+            "reject_rate": reject_rate,
+            "uncertain_rate": float(np.mean(opinions == 0)),
+            # 深度统计
+            "deep_believe_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
+            "deep_reject_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+            "weighted_believe_index": float(
+                np.mean(np.maximum(opinions, 0) * belief_strengths)
+                if np.any(believe_mask) else 0.0
+            ),
             "avg_opinion": float(np.mean(opinions)),
             "polarization_index": float(np.std(opinions) * 2),
-            "silence_rate": np.mean([a.is_silent for a in self.agents]),
+            "silence_rate": float(np.mean([a.is_silent for a in self.agents])),
             # 兼容旧键名
-            "negative_spread_rate": np.mean([o < -0.2 for o in opinions]),
-            "positive_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
-            "rumor_spread_rate": np.mean([o < -0.2 for o in opinions]),
-            "truth_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
+            "negative_belief_rate": reject_rate,
+            "positive_belief_rate": believe_rate,
+            "negative_spread_rate": reject_rate,
+            "positive_acceptance_rate": believe_rate,
+            "rumor_spread_rate": reject_rate,
+            "truth_acceptance_rate": believe_rate,
+            "deep_negative_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),
+            "weighted_negative_index": float(
+                np.mean(np.abs(np.minimum(opinions, 0)) * belief_strengths)
+                if np.any(reject_mask) else 0.0
+            ),
+            "deep_positive_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
         }
 
         # 公域统计（大V和其粉丝的观点）
@@ -855,45 +878,47 @@ class LLMAgentPopulationDual:
             public_agent_ids.update(self.get_public_neighbors(influencer_id))
 
         if public_agent_ids:
-            public_opinions = [self.agents[aid].opinion for aid in public_agent_ids if aid < len(self.agents)]
-            public_negative_rate = np.mean([o < -0.2 for o in public_opinions]) if public_opinions else 0
-            public_positive_rate = np.mean([o > 0.2 for o in public_opinions]) if public_opinions else 0
+            public_opinions = np.array([self.agents[aid].opinion for aid in public_agent_ids if aid < len(self.agents)])
+            public_reject_rate = float(np.mean(public_opinions < 0)) if len(public_opinions) > 0 else 0
+            public_believe_rate = float(np.mean(public_opinions > 0)) if len(public_opinions) > 0 else 0
         else:
-            public_negative_rate = overall_stats["negative_spread_rate"]
-            public_positive_rate = overall_stats["positive_acceptance_rate"]
+            public_reject_rate = overall_stats["reject_rate"]
+            public_believe_rate = overall_stats["believe_rate"]
 
         # 私域统计（按社群聚合）
         community_stats = {}
         for comm_id in range(self.dual_network.num_communities):
             members = self.dual_network.get_community_members(comm_id)
             if members:
-                comm_opinions = [self.agents[mid].opinion for mid in members if mid < len(self.agents)]
-                comm_negative_rate = np.mean([o < -0.2 for o in comm_opinions]) if comm_opinions else 0
-                comm_positive_rate = np.mean([o > 0.2 for o in comm_opinions]) if comm_opinions else 0
+                comm_opinions = np.array([self.agents[mid].opinion for mid in members if mid < len(self.agents)])
+                comm_reject_rate = float(np.mean(comm_opinions < 0)) if len(comm_opinions) > 0 else 0
+                comm_believe_rate = float(np.mean(comm_opinions > 0)) if len(comm_opinions) > 0 else 0
                 community_stats[f"community_{comm_id}"] = {
                     "size": len(comm_opinions),
-                    "avg_opinion": float(np.mean(comm_opinions)) if comm_opinions else 0,
-                    "negative_rate": comm_negative_rate,
-                    "positive_rate": comm_positive_rate,
+                    "avg_opinion": float(np.mean(comm_opinions)) if len(comm_opinions) > 0 else 0,
+                    "reject_rate": comm_reject_rate,
+                    "believe_rate": comm_believe_rate,
                     # 兼容旧键名
-                    "rumor_rate": comm_negative_rate,
+                    "negative_rate": comm_reject_rate,
+                    "positive_rate": comm_believe_rate,
+                    "rumor_rate": comm_reject_rate,
                 }
 
-        # 私域整体负面信念率（社群内部的平均）
-        private_negative_rate = np.mean([s["negative_rate"] for s in community_stats.values()]) if community_stats else 0
-        private_positive_rate = np.mean([s.get("positive_rate", 0) for s in community_stats.values()]) if community_stats else 0
+        # 私域整体拒绝率（社群内部的平均）
+        private_reject_rate = np.mean([s["reject_rate"] for s in community_stats.values()]) if community_stats else 0
+        private_believe_rate = np.mean([s.get("believe_rate", 0) for s in community_stats.values()]) if community_stats else 0
 
         return {
             **overall_stats,
-            "public_negative_rate": float(public_negative_rate),
-            "public_positive_rate": float(public_positive_rate),
-            "private_negative_rate": float(private_negative_rate),
-            "private_positive_rate": float(private_positive_rate),
+            "public_negative_rate": float(public_reject_rate),
+            "public_positive_rate": float(public_believe_rate),
+            "private_negative_rate": float(private_reject_rate),
+            "private_positive_rate": float(private_believe_rate),
             # 兼容旧键名
-            "public_rumor_rate": float(public_negative_rate),
-            "public_truth_rate": float(public_positive_rate),
-            "private_rumor_rate": float(private_negative_rate),
-            "private_truth_rate": float(private_positive_rate),
+            "public_rumor_rate": float(public_reject_rate),
+            "public_truth_rate": float(public_believe_rate),
+            "private_rumor_rate": float(private_reject_rate),
+            "private_truth_rate": float(private_believe_rate),
             "num_communities": self.dual_network.num_communities,
             "num_influencers": len(self.dual_network.influencer_ids),
             "community_stats": community_stats

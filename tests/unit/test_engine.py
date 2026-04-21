@@ -240,7 +240,7 @@ class TestStateComputation:
         assert hasattr(state, 'polarization_index')
 
     def test_negative_belief_rate_calculation(self):
-        """测试负面信念率计算"""
+        """测试误信率计算（基于新闻可信度后验判定）"""
         engine = SimulationEngine(
             population_size=100,
             initial_negative_spread=0.3,
@@ -248,9 +248,17 @@ class TestStateComputation:
         )
         state = engine.initialize()
 
-        # 初始负面信念率应该接近 0.3（支持新旧字段名）
-        negative_rate = getattr(state, 'negative_belief_rate', None) or getattr(state, 'rumor_spread_rate', None)
-        assert 0.2 <= negative_rate <= 0.5
+        # 不确定可信度时，mislead_rate = reject_rate（传统语义：拒绝=误信）
+        # initial_negative_spread=0.3 → 约30%拒绝 → mislead_rate ≈ 0.3
+        mislead_rate = getattr(state, 'mislead_rate', None) or getattr(state, 'negative_belief_rate', None)
+        assert 0.2 <= mislead_rate <= 0.4
+
+        # 基础统计字段
+        believe_rate = getattr(state, 'believe_rate', 0)
+        reject_rate = getattr(state, 'reject_rate', 0)
+        assert believe_rate > 0
+        assert reject_rate > 0
+        assert abs(believe_rate + reject_rate + getattr(state, 'uncertain_rate', 0) - 1.0) < 0.05
 
     def test_avg_opinion_in_valid_range(self):
         """测试平均观点在有效范围"""
