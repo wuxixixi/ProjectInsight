@@ -51,10 +51,10 @@
 │  │          │                  │                       │             │  │
 │  │  ┌───────┴──────────────────┴───────────────────────┴────────┐   │  │
 │  │  │                    Agent Population                        │   │  │
-│  │  │  ┌─────────────┐           ┌─────────────────────────┐    │   │  │
-│  │  │  │  agents.py  │           │  llm_agents_dual.py     │    │   │  │
-│  │  │  │  (数学模型) │           │  (LLM驱动+知识图谱)     │    │   │  │
-│  │  │  └─────────────┘           └─────────────────────────┘    │   │  │
+│  │  │  ┌─────────────┐  ┌───────────────┐  ┌─────────────────┐  │   │  │
+│  │  │  │  agents.py  │  │ llm_agents.py │  │ llm_agents_     │  │   │  │
+│  │  │  │  (数学模型) │  │ (LLM驱动)     │  │ dual.py(双层)   │  │   │  │
+│  │  │  └─────────────┘  └───────────────┘  └─────────────────┘  │   │  │
 │  │  └────────────────────────────────────────────────────────────┘   │  │
 │  └────────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
@@ -86,18 +86,20 @@
 - **路由处理**：simulation、agent、report、prediction、event、docs 六大模块
 - **CORS 中间件**：支持前端跨域访问
 - **双模式管理**：沙盘/新闻模式切换和状态管理
+- **向后兼容层**：API同时接受新旧参数名（如 `response_delay` / `debunk_delay`）
 
 #### 2. Simulation Engine
 
 | 组件 | 文件 | 说明 |
 |------|------|------|
-| SimulationEngine | `simulation/engine.py` | 单层网络数学模型引擎 |
+| SimulationEngine | `simulation/engine.py` | 单层网络引擎（数学模型/LLM） |
 | SimulationEngineDual | `simulation/engine_dual.py` | 双层网络引擎（公域+私域） |
 | AgentPopulation | `simulation/agents.py` | 数学模型智能体群体 |
-| LLM Agents | `simulation/llm_agents_dual.py` | LLM 驱动智能体（含知识图谱支持） |
+| LLMAgentPopulation | `simulation/llm_agents.py` | LLM 驱动智能体 |
+| LLMAgentPopulationDual | `simulation/llm_agents_dual.py` | LLM 驱动智能体（双层网络） |
 | KnowledgeDrivenEvolution | `simulation/knowledge_evolution.py` | 知识图谱驱动演化器 |
 | GraphParserAgent | `simulation/graph_parser_agent.py` | 知识图谱解析器 |
-| Analyst Agent | `simulation/analyst_agent.py` | 智库专报生成 |
+| AnalystAgent | `simulation/analyst_agent.py` | 智库专报生成 |
 
 #### 3. LLM Layer
 
@@ -117,10 +119,6 @@
 #### 5. Knowledge Graph Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    知识图谱解析流程                                   │
-└─────────────────────────────────────────────────────────────────────┘
-
    新闻文本输入
          │
          ▼
@@ -143,10 +141,8 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │  知识图谱 JSON                                                      │
 │  {                                                                  │
-│    "entities": [{"name": "人物", "type": "人物",                     │
-│                  "description": "", "importance": 1-5}],            │
-│    "relations": [{"source": "", "target": "",                       │
-│                   "action": "", "type": ""}],                       │
+│    "entities": [{"name": "", "type": "", "importance": 1-5}],       │
+│    "relations": [{"source": "", "target": "", "action": ""}],       │
 │    "summary": "...",                                                │
 │    "sentiment": "中性",                                              │
 │    "credibility_hint": "不确定"                                      │
@@ -155,16 +151,7 @@
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Agent 决策上下文                                                   │
-│  • 实体列表 + 类型 + 影响力权重                                       │
-│  • 关系网络 + 立场                                                   │
-│  • 事件摘要                                                         │
-│  • 证据链信息                                                       │
-└─────────────────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  知识驱动演化                                                       │
+│  Agent 决策上下文 + 知识驱动演化                                     │
 │  • 实体影响力计算                                                   │
 │  • 关系立场映射                                                     │
 │  • 观点增量计算                                                     │
@@ -193,102 +180,44 @@ frontend/src/
     └── sass-logo.png   # 上海社会科学院Logo
 ```
 
-## 双模式架构
+## 数据模型
 
-### 模式对比
+### 核心语义抽象
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                         SimulationEngine                                 │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌─────────────────────────┐    ┌─────────────────────────────────────┐ │
-│  │   沙盘推演模式           │    │         新闻推演模式                 │ │
-│  │   (Sandbox Mode)        │    │       (News Mode)                  │ │
-│  ├─────────────────────────┤    ├─────────────────────────────────────┤ │
-│  │ 目标：研究传播机制        │    │ 目标：预测现实演进                   │ │
-│  │                         │    │                                     │ │
-│  │ • 参数完全可控           │    │ • 真实舆情分布锚定                   │ │
-│  │ • 快速复现实验           │    │ • 历史节点标注                       │ │
-│  │ • 机制解释性研究         │    │ • 事实锚定 + 预测区间                │ │
-│  │                         │    │                                     │ │
-│  │ 谣言内容：抽象模板       │    │ 谣言内容：新闻文本解析               │ │
-│  │  "A事件导致B"           │    │  关联实体、立场、证据                │ │
-│  │                         │    │                                     │ │
-│  │ Agent初始分布           │    │ Agent初始分布                       │ │
-│  │  按 initial_rumor_spread│    │  按真实舆情采样                      │ │
-│  │  参数随机生成           │    │  或问卷数据                          │ │
-│  │                         │    │                                     │ │
-│  │ 输出：单值结果          │    │ 输出：预测区间 + 风险预警            │ │
-│  │                         │    │       + 干预建议                     │ │
-│  └─────────────────────────┘    └─────────────────────────────────────┘ │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+系统采用语义抽象设计，将特定领域术语映射为通用概念：
 
-### 新闻模式真实分布锚定
+| UI文案 | 内部命名 | 英文标识 | 说明 |
+|--------|----------|----------|------|
+| 误信 | 负面信念 | `negative_belief` | 用户相信的错误/有害信息 |
+| 正确认知 | 正面信念 | `positive_belief` | 官方正确/有益信息 |
+| 权威回应 | 权威回应 | `authority_response` | 官方发布的纠正信息 |
 
-```python
-# 真实分布锚定格式
-init_distribution = {
-    "believe_rumor": 0.30,   # 初始相信谣言的比例
-    "believe_truth": 0.15,   # 初始相信真相的比例
-    "neutral": 0.55          # 中立人群比例
-}
+### SimulationParams 核心字段
 
-# 应用到Agent群体
-# 相信谣言: opinion ∈ [-0.8, -0.3]
-# 相信真相: opinion ∈ [0.3, 0.8]
-# 中立:     opinion ∈ [-0.2, 0.2]
-```
+| 字段名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `mode` | str | "sandbox" | 推演模式 |
+| `cocoon_strength` | float | 0.5 | 算法茧房强度 |
+| `response_delay` | int | 10 | 权威回应延迟步数 |
+| `initial_negative_spread` | float | 0.3 | 初始负面信念传播率 |
+| `response_credibility` | float | 0.7 | 权威回应可信度 |
+| `population_size` | int | 200 | Agent 数量 |
+| `use_llm` | bool | true | 是否使用 LLM |
+| `use_dual_network` | bool | true | 是否使用双层网络 |
 
-## 数据流
+> **向后兼容**：旧参数名（如 `debunk_delay`、`initial_rumor_spread`）仍然有效，API会自动映射到新参数名。
 
-### 推演流程
+### SimulationState 核心字段
 
-```
-1. 选择推演模式
-   ├── 沙盘模式：设置参数
-   └── 新闻模式：输入真实分布 + 可选事件解析
-
-2. 前端发送参数
-      ↓
-3. 后端创建 SimulationEngine
-      ↓
-4. 初始化 Agent 群体
-   ├── 沙盘：参数驱动
-   └── 新闻：真实分布锚定
-
-5. 构建社交网络
-      ↓
-6. WebSocket 循环:
-   ├── 执行单步推演
-   ├── 计算统计指标
-   ├── 新闻模式：计算预测和预警
-   └── 推送状态到前端
-
-7. 推演结束 → 生成报告
-```
-
-### WebSocket 消息协议
-
-**客户端 → 服务端：**
-```json
-{"action": "set_mode", "params": {"mode": "news", "init_distribution": {...}}}
-{"action": "start", "params": {...}}
-{"action": "step"}
-{"action": "auto", "interval": 2000}
-{"action": "stop"}
-{"action": "finish"}
-```
-
-**服务端 → 客户端：**
-```json
-{"type": "state", "data": {...}}
-{"type": "prediction", "data": {...}}  // 新闻模式专用
-{"type": "progress", "step": 1, "total": 200}
-{"type": "error", "message": "..."}
-```
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| `negative_belief_rate` | float | 负面信念率（API同时返回 `rumor_spread_rate`） |
+| `positive_belief_rate` | float | 正面信念率（API同时返回 `truth_acceptance_rate`） |
+| `avg_opinion` | float | 平均观点值 |
+| `polarization_index` | float | 极化指数 |
+| `silence_rate` | float | 沉默率 |
+| `public_negative_rate` | float | 公域负面信念率 |
+| `private_negative_rate` | float | 私域负面信念率 |
 
 ## 双层网络模型
 
@@ -342,9 +271,9 @@ PORT=8000
 |------|--------|------|
 | mode | sandbox | 推演模式（sandbox/news） |
 | cocoon_strength | 0.5 | 算法茧房强度 |
-| debunk_delay | 10 | 辟谣延迟步数 |
+| response_delay | 10 | 权威回应延迟步数 |
 | population_size | 200 | Agent 数量 |
-| initial_rumor_spread | 0.3 | 初始谣言传播率（沙盘模式） |
+| initial_negative_spread | 0.3 | 初始误信率（沙盘模式） |
 | init_distribution | null | 真实分布锚定（新闻模式） |
 | use_llm | true | 是否使用 LLM 模式 |
 | use_dual_network | true | 是否使用双层网络 |

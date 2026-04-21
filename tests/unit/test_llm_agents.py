@@ -29,8 +29,8 @@ class TestLLMAgent:
         assert agent.belief_strength == 0.6
         assert agent.influence == 0.8
         assert agent.susceptibility == 0.3
-        assert agent.exposed_to_rumor is True  # opinion < -0.2
-        assert agent.exposed_to_truth is False
+        assert agent.exposed_to_negative is True  # opinion < -0.2
+        assert agent.exposed_to_positive is False
 
     def test_agent_to_dict(self):
         """测试智能体序列化"""
@@ -76,7 +76,7 @@ class TestLLMAgent:
 
         prompt, _ = agent.build_prompt(
             neighbor_agents=[neighbor1, neighbor2, neighbor3],
-            debunk_released=False,
+            response_released=False,
             cocoon_strength=0.5
         )
 
@@ -84,8 +84,8 @@ class TestLLMAgent:
         assert "信念强度: 0.60" in prompt
         assert "邻居" in prompt
 
-    def test_build_prompt_with_debunk(self):
-        """测试带辟谣的 Prompt 构建"""
+    def test_build_prompt_with_response(self):
+        """测试带权威回应的 Prompt 构建"""
         agent = LLMAgent(
             agent_id=0,
             opinion=-0.5,
@@ -101,11 +101,11 @@ class TestLLMAgent:
 
         prompt, _ = agent.build_prompt(
             neighbor_agents=[neighbor],
-            debunk_released=True,
+            response_released=True,
             cocoon_strength=0.5
         )
 
-        assert "辟谣" in prompt or "真相" in prompt or "官方" in prompt
+        assert "辟谣" in prompt or "真相" in prompt or "官方" in prompt or "回应" in prompt
 
     def test_build_prompt_with_cocoon(self):
         """测试带茧房效应的 Prompt 构建"""
@@ -119,10 +119,10 @@ class TestLLMAgent:
         )
 
         prompt_rumor, _ = agent_rumor.build_prompt(
-            neighbor_agents=[], debunk_released=False, cocoon_strength=0.8
+            neighbor_agents=[], response_released=False, cocoon_strength=0.8
         )
         prompt_truth, _ = agent_truth.build_prompt(
-            neighbor_agents=[], debunk_released=False, cocoon_strength=0.8
+            neighbor_agents=[], response_released=False, cocoon_strength=0.8
         )
 
         # 高茧房强度应该有推荐信息
@@ -155,7 +155,7 @@ class TestLLMAgent:
         result = await agent.decide_opinion(
             mock_client,
             neighbor_agents=[neighbor],
-            debunk_released=False,
+            response_released=False,
             cocoon_strength=0.5
         )
 
@@ -189,7 +189,7 @@ class TestLLMAgent:
         result = await agent.decide_opinion(
             mock_client,
             neighbor_agents=[neighbor],
-            debunk_released=False,
+            response_released=False,
             cocoon_strength=0.5
         )
 
@@ -215,7 +215,7 @@ class TestLLMAgent:
         result = await agent.decide_opinion(
             mock_client,
             neighbor_agents=[],
-            debunk_released=False,
+            response_released=False,
             cocoon_strength=0.5
         )
 
@@ -228,18 +228,18 @@ class TestLLMAgentPopulation:
 
     def test_population_initialization(self):
         """测试群体初始化"""
-        pop = LLMAgentPopulation(size=50, initial_rumor_spread=0.3)
+        pop = LLMAgentPopulation(size=50, initial_negative_spread=0.3)
 
         assert pop.size == 50
         assert len(pop.agents) == 50
 
     def test_opinion_distribution(self):
         """测试观点分布"""
-        pop = LLMAgentPopulation(size=100, initial_rumor_spread=0.3)
+        pop = LLMAgentPopulation(size=100, initial_negative_spread=0.3)
 
-        # 约 30% 应该是谣言相信者
-        rumor_believers = sum(1 for a in pop.agents if a.opinion < 0)
-        assert rumor_believers >= 25  # 允许随机性
+        # 约 30% 应该是负面观点持有者
+        negative_believers = sum(1 for a in pop.agents if a.opinion < 0)
+        assert negative_believers >= 25  # 允许随机性
 
     def test_get_neighbors(self):
         """测试获取邻居"""
@@ -280,34 +280,37 @@ class TestLLMAgentPopulation:
 
     def test_get_statistics(self):
         """测试统计计算"""
-        pop = LLMAgentPopulation(size=100, initial_rumor_spread=0.3)
+        pop = LLMAgentPopulation(size=100, initial_negative_spread=0.3)
 
         stats = pop.get_statistics()
 
-        assert "rumor_spread_rate" in stats
-        assert "truth_acceptance_rate" in stats
+        # 支持新字段名和兼容的旧字段名
+        assert "negative_belief_rate" in stats or "rumor_spread_rate" in stats
+        assert "positive_belief_rate" in stats or "truth_acceptance_rate" in stats
         assert "avg_opinion" in stats
         assert "polarization_index" in stats
 
-        # 检查范围
-        assert 0 <= stats["rumor_spread_rate"] <= 1
-        assert 0 <= stats["truth_acceptance_rate"] <= 1
+        # 检查范围 - 使用兼容模式获取值
+        negative_rate = stats.get("negative_belief_rate") or stats.get("rumor_spread_rate")
+        positive_rate = stats.get("positive_belief_rate") or stats.get("truth_acceptance_rate")
+        assert 0 <= negative_rate <= 1
+        assert 0 <= positive_rate <= 1
         assert -1 <= stats["avg_opinion"] <= 1
         assert stats["polarization_index"] >= 0
 
-    def test_apply_debunking(self):
-        """测试辟谣应用"""
-        pop = LLMAgentPopulation(size=100, initial_rumor_spread=0.5)
+    def test_apply_authoritative_response(self):
+        """测试权威回应应用"""
+        pop = LLMAgentPopulation(size=100, initial_negative_spread=0.5)
 
-        # 记录辟谣前的观点
+        # 记录权威回应前的观点
         pre_opinions = [a.opinion for a in pop.agents]
 
-        pop.apply_debunking(effectiveness=0.2)
+        pop.apply_authoritative_response(effectiveness=0.2)
 
-        # 检查辟谣效果
+        # 检查权威回应效果
         for i, agent in enumerate(pop.agents):
-            assert agent.exposed_to_truth is True
-            # 相信谣言的人观点应该向正向移动
+            assert agent.exposed_to_positive is True
+            # 持负面观点的人观点应该向正向移动
             if pre_opinions[i] < 0:
                 assert agent.opinion >= pre_opinions[i]
 
@@ -339,7 +342,7 @@ class TestLLMAgentPopulation:
         async with mock_client:
             results = await pop.batch_decide(
                 mock_client,
-                debunk_released=False,
+                response_released=False,
                 cocoon_strength=0.5
             )
 

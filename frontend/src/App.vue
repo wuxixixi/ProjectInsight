@@ -66,13 +66,14 @@
           </div>
           <div class="event-actions-row">
             <button class="btn-event-add" @click="showEventAirdrop = true">➕ 添加</button>
-            <button class="btn-event-start" @click="startSimulation">🚀 开始推演</button>
+            <button v-if="!isRunning" class="btn-event-start" @click="startSimulation">🚀 开始推演</button>
           </div>
         </div>
-        
+
         <!-- 无事件时引导 -->
         <div v-else class="no-event-hint">
-          <div class="hint-text">⚠️ 必须先注入事件才能推演</div>
+          <div class="hint-text" v-if="!isPaused">⚠️ 必须先注入事件才能推演</div>
+          <div class="hint-text" v-else>💡 暂停中可注入事件</div>
           <button class="btn-inject-primary" @click="showEventAirdrop = true">
             📝 注入新闻事件
           </button>
@@ -97,13 +98,13 @@
             <p>• <b>算法茧房</b>：推荐强化既有立场</p>
             <p>• <b>沉默螺旋</b>：少数派因恐惧孤立</p>
             <p>• <b>群体极化</b>：讨论导致观点极端</p>
-            <p>• <b>逆火效应</b>：辟谣反而强化谣言</p>
+            <p>• <b>逆火效应</b>：权威回应反而强化误信</p>
             <p>• <b>认知失调</b>：矛盾信息强化信念</p>
           </div>
           <div class="help-item">
             <strong>核心参数：</strong>
             <p>• <b>茧房强度</b>：算法推荐强化观点的程度</p>
-            <p>• <b>辟谣延迟</b>：谣言传播多久后官方介入</p>
+            <p>• <b>权威回应延迟</b>：负面信息传播多久后官方介入</p>
             <p>• <b>双层网络</b>：模拟公域（微博）+私域（微信群）</p>
           </div>
           <div class="help-item">
@@ -116,7 +117,7 @@
           </div>
           <div class="help-item">
             <strong>观点范围：</strong>
-            <p>-1（完全信谣言）→ 0（中立）→ +1（完全信真相）</p>
+            <p>-1（完全误信）→ 0（中立）→ +1（完全正确认知）</p>
           </div>
         </div>
       </div>
@@ -165,14 +166,14 @@
         <div class="init-dist-config">
           <div class="param-item">
             <div class="param-header">
-              <span class="param-label">相信谣言</span>
+              <span class="param-label">误信比例</span>
               <span class="param-value">{{ (initDistRumor * 100).toFixed(0) }}%</span>
             </div>
             <input type="range" v-model.number="initDistRumor" min="0" max="0.8" step="0.05" :disabled="isRunning" />
           </div>
           <div class="param-item">
             <div class="param-header">
-              <span class="param-label">相信真相</span>
+              <span class="param-label">正确认知比例</span>
               <span class="param-value">{{ (initDistTruth * 100).toFixed(0) }}%</span>
             </div>
             <input type="range" v-model.number="initDistTruth" min="0" max="0.8" step="0.05" :disabled="isRunning" />
@@ -194,7 +195,7 @@
           <div class="param-header">
             <div class="param-label-with-help">
               <span class="param-label">算法茧房强度</span>
-              <span class="param-help" title="模拟推荐算法强化既有观点的程度。0=无茧房，1=完全茧房（只看到同温层内容）。建议：探索辟谣效果时设0.3-0.5">❓</span>
+              <span class="param-help" title="模拟推荐算法强化既有观点的程度。0=无茧房，1=完全茧房（只看到同温层内容）。建议：探索权威回应效果时设0.3-0.5">❓</span>
             </div>
             <span class="param-value">{{ cocoonStrength.toFixed(2) }}</span>
           </div>
@@ -205,20 +206,20 @@
         <div class="param-item">
           <div class="param-header">
             <div class="param-label-with-help">
-              <span class="param-label">官方辟谣延迟</span>
-              <span class="param-help" title="谣言传播多少步后发布辟谣。延迟越长，谣言传播范围越广，辟谣效果越差。建议：对比0步和10步的差异">❓</span>
+              <span class="param-label">权威回应延迟</span>
+              <span class="param-help" title="负面信息传播多少步后发布权威回应。延迟越长，误信传播范围越广，权威回应效果越差。建议：对比0步和10步的差异">❓</span>
             </div>
             <span class="param-value">{{ debunkDelay }} 步</span>
           </div>
           <input type="range" v-model.number="debunkDelay" min="0" max="30" step="1" :disabled="isRunning" />
-          <p class="param-desc">谣言传播多久后发布辟谣</p>
+          <p class="param-desc">负面信息传播多久后发布权威回应</p>
         </div>
 
         <div class="param-item">
           <div class="param-header">
             <div class="param-label-with-help">
-              <span class="param-label">初始谣言传播率</span>
-              <span class="param-help" title="推演开始时已相信谣言的人群比例">❓</span>
+              <span class="param-label">初始误信率</span>
+              <span class="param-help" title="推演开始时已误信的人群比例">❓</span>
             </div>
             <span class="param-value">{{ (initialRumorSpread * 100).toFixed(0) }}%</span>
           </div>
@@ -293,20 +294,32 @@
           <span class="btn-icon">▶</span>
           开始推演
         </button>
-        <button v-else class="btn-stop" @click="stopSimulation">
-          <span class="btn-icon">■</span>
-          停止推演
-        </button>
+        <template v-else>
+          <div class="btn-group-row">
+            <button v-if="!isPaused" class="btn-pause" @click="pauseSimulation">
+              <span class="btn-icon">⏸</span>
+              暂停
+            </button>
+            <button v-else class="btn-resume" @click="resumeSimulation">
+              <span class="btn-icon">▶</span>
+              继续
+            </button>
+            <button class="btn-stop" @click="stopSimulation">
+              <span class="btn-icon">■</span>
+              停止
+            </button>
+          </div>
+        </template>
 
         <!-- 进度显示 -->
-        <div v-if="isRunning" class="progress-container">
+        <div v-if="isRunning && !isPaused" class="progress-container">
           <div class="progress-header">
             <div class="progress-spinner"></div>
             <span class="progress-title">推演进行中...</span>
-            <span class="progress-step">步骤 {{ progressData.currentStep }}/{{ progressData.maxSteps }}</span>
+            <span class="progress-step">步骤 {{ currentStep }}/{{ maxSteps }}</span>
           </div>
           <div class="progress-bar-wrapper">
-            <div class="progress-bar" :style="{ width: progressData.percentage + '%' }"></div>
+            <div class="progress-bar" :style="{ width: Math.round(currentStep / maxSteps * 100) + '%' }"></div>
           </div>
           <div class="progress-info">
             <span class="progress-agent" v-if="progressData.agentId !== null">
@@ -319,8 +332,18 @@
                 {{ progressData.agentStance }}
               </span>
             </span>
-            <span class="progress-count">{{ progressData.step }}/{{ progressData.total }}</span>
+            <span class="progress-count" v-if="progressData.total > 0">本步Agent: {{ progressData.step }}/{{ progressData.total }}</span>
           </div>
+        </div>
+
+        <!-- 暂停状态提示 -->
+        <div v-if="isRunning && isPaused" class="pause-container">
+          <div class="pause-header">
+            <span class="pause-icon">⏸</span>
+            <span class="pause-title">推演已暂停</span>
+            <span class="pause-step">步骤 {{ currentStep }}/{{ maxSteps }}</span>
+          </div>
+          <div class="pause-hint">可注入事件后点击「继续」恢复推演</div>
         </div>
       </div>
 
@@ -441,14 +464,14 @@
         <div class="kpi-card danger clickable" @click="showInfoPanelWithHighlight('rumor')">
           <div class="kpi-icon">📢</div>
           <div class="kpi-content">
-            <span class="kpi-label">谣言传播率</span>
+            <span class="kpi-label">误信率</span>
             <span class="kpi-value">{{ (rumorSpreadRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
         <div class="kpi-card success clickable" @click="showInfoPanelWithHighlight('truth')">
           <div class="kpi-icon">✓</div>
           <div class="kpi-content">
-            <span class="kpi-label">真相接受率</span>
+            <span class="kpi-label">正确认知率</span>
             <span class="kpi-value">{{ (truthAcceptanceRate * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
@@ -483,8 +506,8 @@
       </div>
 
       <!-- 预测与风险预警区域 -->
-      <!-- 推演中：第3步后显示；推演停止后：有预测数据时显示 -->
-      <div class="prediction-alerts-area" v-if="(isRunning && currentStep >= 3) || (!isRunning && prediction && prediction.available)">
+      <!-- 推演中/暂停中：第3步后显示；推演停止后：有预测数据时显示 -->
+      <div class="prediction-alerts-area" v-if="((isRunning || isPaused) && currentStep >= 3) || (!isRunning && !isPaused && prediction && prediction.available)">
         <!-- 预测区间展示 -->
         <div class="prediction-panel" v-if="prediction && prediction.available">
           <div class="prediction-header">
@@ -493,35 +516,35 @@
           </div>
           <div class="prediction-intervals">
             <div class="prediction-item">
-              <div class="prediction-label">谣言传播率</div>
+              <div class="prediction-label">误信率</div>
               <div class="prediction-bar">
                 <div class="bar-range" :style="{
-                  left: (prediction.prediction.rumor_spread_rate.optimistic * 100) + '%',
-                  right: (100 - prediction.prediction.rumor_spread_rate.pessimistic * 100) + '%'
+                  left: (getPredictionField('negative', 'optimistic') * 100) + '%',
+                  right: (100 - getPredictionField('negative', 'pessimistic') * 100) + '%'
                 }">
-                  <div class="bar-expected" :style="{ left: ((prediction.prediction.rumor_spread_rate.expected - prediction.prediction.rumor_spread_rate.optimistic) / (prediction.prediction.rumor_spread_rate.pessimistic - prediction.prediction.rumor_spread_rate.optimistic) * 100) + '%' }"></div>
+                  <div class="bar-expected" :style="{ left: ((getPredictionField('negative', 'expected') - getPredictionField('negative', 'optimistic')) / (getPredictionField('negative', 'pessimistic') - getPredictionField('negative', 'optimistic')) * 100) + '%' }"></div>
                 </div>
               </div>
               <div class="prediction-values">
-                <span class="optimistic">{{ (prediction.prediction.rumor_spread_rate.optimistic * 100).toFixed(0) }}%</span>
-                <span class="expected">{{ (prediction.prediction.rumor_spread_rate.expected * 100).toFixed(0) }}%</span>
-                <span class="pessimistic">{{ (prediction.prediction.rumor_spread_rate.pessimistic * 100).toFixed(0) }}%</span>
+                <span class="optimistic">{{ (getPredictionField('negative', 'optimistic') * 100).toFixed(0) }}%</span>
+                <span class="expected">{{ (getPredictionField('negative', 'expected') * 100).toFixed(0) }}%</span>
+                <span class="pessimistic">{{ (getPredictionField('negative', 'pessimistic') * 100).toFixed(0) }}%</span>
               </div>
             </div>
             <div class="prediction-item">
-              <div class="prediction-label">真相接受率</div>
+              <div class="prediction-label">正确认知率</div>
               <div class="prediction-bar truth-bar">
                 <div class="bar-range" :style="{
-                  left: (prediction.prediction.truth_acceptance_rate.pessimistic * 100) + '%',
-                  right: (100 - prediction.prediction.truth_acceptance_rate.optimistic * 100) + '%'
+                  left: (getPredictionField('positive', 'pessimistic') * 100) + '%',
+                  right: (100 - getPredictionField('positive', 'optimistic') * 100) + '%'
                 }">
-                  <div class="bar-expected" :style="{ left: ((prediction.prediction.truth_acceptance_rate.expected - prediction.prediction.truth_acceptance_rate.pessimistic) / (prediction.prediction.truth_acceptance_rate.optimistic - prediction.prediction.truth_acceptance_rate.pessimistic) * 100) + '%' }"></div>
+                  <div class="bar-expected" :style="{ left: ((getPredictionField('positive', 'expected') - getPredictionField('positive', 'pessimistic')) / (getPredictionField('positive', 'optimistic') - getPredictionField('positive', 'pessimistic')) * 100) + '%' }"></div>
                 </div>
               </div>
               <div class="prediction-values">
-                <span class="pessimistic">{{ (prediction.prediction.truth_acceptance_rate.pessimistic * 100).toFixed(0) }}%</span>
-                <span class="expected">{{ (prediction.prediction.truth_acceptance_rate.expected * 100).toFixed(0) }}%</span>
-                <span class="optimistic">{{ (prediction.prediction.truth_acceptance_rate.optimistic * 100).toFixed(0) }}%</span>
+                <span class="pessimistic">{{ (getPredictionField('positive', 'pessimistic') * 100).toFixed(0) }}%</span>
+                <span class="expected">{{ (getPredictionField('positive', 'expected') * 100).toFixed(0) }}%</span>
+                <span class="optimistic">{{ (getPredictionField('positive', 'optimistic') * 100).toFixed(0) }}%</span>
               </div>
             </div>
           </div>
@@ -586,9 +609,9 @@
               <h3>群体观点分布</h3>
               <button class="chart-zoom-btn" @click="openChartModal('opinion')" title="放大">🔍</button>
               <div class="chart-legend">
-                <span class="legend-item rumor">谣言</span>
+                <span class="legend-item rumor">误信</span>
                 <span class="legend-item neutral">中立</span>
-                <span class="legend-item truth">真相</span>
+                <span class="legend-item truth">正确认知</span>
               </div>
             </div>
             <div class="chart-body" ref="opinionChart"></div>
@@ -621,7 +644,7 @@
             <div class="chart-header">
               <h3>舆论演化趋势</h3>
               <button class="chart-zoom-btn" @click="openChartModal('trend')" title="放大">🔍</button>
-              <span v-if="debunked" class="debunk-badge">辟谣已发布</span>
+              <span v-if="debunked" class="debunk-badge">权威回应已发布</span>
             </div>
             <div class="chart-body" ref="trendChart"></div>
           </div>
@@ -642,24 +665,24 @@
             <h4 class="info-section-title">📊 指标解读</h4>
             <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'rumor' }">
               <div class="info-item-header">
-                <span class="info-item-label">谣言传播率</span>
+                <span class="info-item-label">误信率</span>
                 <span class="info-item-value danger">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
               </div>
-              <p class="info-item-desc">当前相信谣言的人群比例（opinion &lt; -0.2）。辟谣后应逐渐下降。</p>
+              <p class="info-item-desc">当前误信的人群比例（opinion &lt; -0.2）。权威回应后应逐渐下降。</p>
             </div>
             <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'truth' }">
               <div class="info-item-header">
-                <span class="info-item-label">真相接受率</span>
+                <span class="info-item-label">正确认知率</span>
                 <span class="info-item-value success">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
               </div>
-              <p class="info-item-desc">当前相信真相的人群比例（opinion &gt; 0.2）。辟谣后应逐渐上升。</p>
+              <p class="info-item-desc">当前持正确认知的人群比例（opinion &gt; 0.2）。权威回应后应逐渐上升。</p>
             </div>
             <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'avgOpinion' }">
               <div class="info-item-header">
                 <span class="info-item-label">平均观点</span>
                 <span class="info-item-value info">{{ avgOpinion.toFixed(3) }}</span>
               </div>
-              <p class="info-item-desc">群体观点平均值。负值=倾向谣言，正值=倾向真相。范围：-1 ~ +1</p>
+              <p class="info-item-desc">群体观点平均值。负值=倾向负面信念，正值=倾向正确认知。范围：-1 ~ +1</p>
             </div>
             <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'silence' }">
               <div class="info-item-header">
@@ -713,7 +736,7 @@
                 <span class="mechanism-icon">🔥</span>
                 <div class="mechanism-content">
                   <strong>逆火效应</strong>
-                  <p>辟谣可能与强信念冲突，反而强化谣言</p>
+                  <p>权威回应可能与强信念冲突，反而强化误信</p>
                 </div>
               </div>
               <div class="mechanism-item">
@@ -771,16 +794,16 @@
             <div class="guide-item">
               <strong>观点分布图</strong>
               <ul>
-                <li>红色柱子 = 相信谣言的人群</li>
+                <li>红色柱子 = 误信人群</li>
                 <li>橙色柱子 = 中立人群</li>
-                <li>绿色柱子 = 相信真相的人群</li>
+                <li>绿色柱子 = 正确认知人群</li>
                 <li>观察分布如何随推演变化</li>
               </ul>
             </div>
             <div class="guide-item">
               <strong>网络拓扑图</strong>
               <ul>
-                <li>节点颜色 = Agent观点（红=谣言立场）</li>
+                <li>节点颜色 = Agent观点（红=负面信念立场）</li>
                 <li>节点大小 = 影响力（大=意见领袖）</li>
                 <li>连线 = 信息传播路径</li>
                 <li>点击节点查看Agent决策详情</li>
@@ -789,8 +812,8 @@
             <div class="guide-item">
               <strong>趋势曲线图</strong>
               <ul>
-                <li>观察谣言率和真相率的此消彼长</li>
-                <li>辟谣发布点会有标记</li>
+                <li>观察误信率和正确认知率的此消彼长</li>
+                <li>权威回应发布点会有标记</li>
                 <li>极化指数上升=群体观点分化</li>
               </ul>
             </div>
@@ -1008,11 +1031,11 @@
                     <span class="value">{{ normalizedClimate.total }}</span>
                   </div>
                   <div class="climate-item">
-                    <span class="label">信谣言比例</span>
+                    <span class="label">误信比例</span>
                     <span class="value rumor">{{ (normalizedClimate.pro_rumor_ratio * 100).toFixed(0) }}%</span>
                   </div>
                   <div class="climate-item">
-                    <span class="label">信真相比例</span>
+                    <span class="label">正确认知比例</span>
                     <span class="value truth">{{ (normalizedClimate.pro_truth_ratio * 100).toFixed(0) }}%</span>
                   </div>
                   <div class="climate-item">
@@ -1033,10 +1056,10 @@
                   <div class="conclusion-text">
                     <strong>选择发声</strong>
                     <p v-if="normalizedClimate.pro_rumor_ratio > normalizedClimate.pro_truth_ratio && agentSnapshot.new_opinion > 0.2">
-                      "虽然周围信谣言的人更多，但我有足够的勇气和信念表达我的观点。"
+                      "虽然周围误信的人更多，但我有足够的勇气和信念表达我的观点。"
                     </p>
                     <p v-else-if="normalizedClimate.pro_truth_ratio > normalizedClimate.pro_rumor_ratio && agentSnapshot.new_opinion < -0.2">
-                      "虽然周围信真相的人更多，但我坚持自己的判断，不会轻易改变。"
+                      "虽然周围持正确认知的人更多，但我坚持自己的判断，不会轻易改变。"
                     </p>
                     <p v-else>
                       "舆论环境相对宽松，我可以自由表达我的观点。"
@@ -1127,11 +1150,11 @@
             <span :class="['stat-value', 'risk-' + prediction.recommendation.risk_level]">{{ prediction.recommendation.risk_level.toUpperCase() }}</span>
           </div>
           <div class="completion-stat-item">
-            <span class="stat-label">谣言传播率</span>
+            <span class="stat-label">误信率</span>
             <span class="stat-value">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
           </div>
           <div class="completion-stat-item">
-            <span class="stat-label">真相接受率</span>
+            <span class="stat-label">正确认知率</span>
             <span class="stat-value truth">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
           </div>
         </div>
@@ -1336,7 +1359,7 @@
               <p><strong>🎯 注入时机：推演开始前</strong></p>
               <p class="impact-desc">事件将产生三层影响：</p>
               <ul class="impact-list">
-                <li><b>初始分布：</b>谣言传播率根据情感/可信度调整</li>
+                <li><b>初始分布：</b>误信率根据情感/可信度调整</li>
                 <li><b>事件冲击：</b>推演开始时触发一次观点偏移</li>
                 <li><b>知识演化：</b>每步推演中实体持续影响Agent</li>
               </ul>
@@ -1357,8 +1380,8 @@
               </ul>
               <p class="impact-desc" style="margin-top:8px">冲击强度计算：</p>
               <ul class="impact-list">
-                <li><span class="impact-tag negative">负面新闻</span> 向谣言方向偏移（基础0.15）</li>
-                <li><span class="impact-tag positive">正面新闻</span> 向真相方向偏移（基础0.10）</li>
+                <li><span class="impact-tag negative">负面新闻</span> 向误信方向偏移（基础0.15）</li>
+                <li><span class="impact-tag positive">正面新闻</span> 向正确认知方向偏移（基础0.10）</li>
                 <li><span class="impact-tag high">高可信</span> 强度 ×1.3 | <span class="impact-tag low">低可信</span> ×0.7</li>
                 <li>大V更敏感，影响力高的Agent受影响更大</li>
               </ul>
@@ -1498,8 +1521,8 @@ export default {
 
       // Phase 3: 运行模式参数
       simulationMode: 'sandbox',  // sandbox / news
-      initDistRumor: 0.25,         // 新闻模式：初始相信谣言比例
-      initDistTruth: 0.15,         // 新闻模式：初始相信真相比例
+      initDistRumor: 0.25,         // 新闻模式：初始误信比例
+      initDistTruth: 0.15,         // 新闻模式：初始正确认知比例
 
       // Agent参数
       populationSize: 200,
@@ -1517,6 +1540,7 @@ export default {
 
       // 状态
       isRunning: false,
+      isPaused: false,
       currentStep: 0,
       debunked: false,
       agentProgress: '',
@@ -1554,8 +1578,8 @@ export default {
         avgOpinions: [],
         polarization: [],
         silenceRates: [],  // 沉默率历史
-        publicRumorRates: [],   // 公域谣言率历史
-        privateRumorRates: []   // 私域谣言率历史
+        publicRumorRates: [],   // 公域误信率历史
+        privateRumorRates: []   // 私域误信率历史
       },
 
       // 双层网络相关
@@ -1678,8 +1702,8 @@ export default {
     agentOpinionLabel() {
       if (!this.agentSnapshot) return ''
       const opinion = this.agentSnapshot.new_opinion
-      if (opinion > 0.2) return '相信真相'
-      if (opinion < -0.2) return '相信谣言'
+      if (opinion > 0.2) return '正确认知'
+      if (opinion < -0.2) return '误信'
       return '中立'
     },
     renderedIntelligence() {
@@ -1840,10 +1864,35 @@ export default {
       this.expandedGroups[group] = !this.expandedGroups[group]
     },
 
+    // 预测字段名兼容：新名优先，旧名兜底
+    getPredictionField(category, field) {
+      if (!this.prediction || !this.prediction.prediction) return 0
+      const p = this.prediction.prediction
+      const nameMap = {
+        negative: ['negative_belief_rate', 'rumor_spread_rate'],
+        positive: ['positive_belief_rate', 'truth_acceptance_rate'],
+        polarization: ['polarization_index']
+      }
+      const keys = nameMap[category] || []
+      for (const key of keys) {
+        if (p[key] && p[key][field] !== undefined) {
+          return p[key][field]
+        }
+      }
+      return 0
+    },
+
     // 展开信息面板并高亮指定项
     showInfoPanelWithHighlight(itemKey) {
       this.showInfoPanel = true
       this.highlightedInfoItem = itemKey
+      // 滚动到对应元素
+      this.$nextTick(() => {
+        const el = document.querySelector('.info-item.highlighted')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      })
       // 3秒后取消高亮
       setTimeout(() => {
         this.highlightedInfoItem = null
@@ -2023,6 +2072,7 @@ export default {
           use_llm: this.useLLM,
           population_size: this.populationSize,
           network_type: this.networkType,
+          max_steps: this.maxSteps,
           max_concurrent: this.maxConcurrent,
           connection_pool_size: this.connectionPoolSize,
           timeout: this.timeout,
@@ -2047,8 +2097,25 @@ export default {
       }, 500)
     },
 
+    pauseSimulation() {
+      this.isPaused = true
+      this.sendAction('pause')
+      // 暂停时刷新一次预测和风险预警
+      if (this.currentStep >= 3) {
+        this.fetchPrediction()
+        this.fetchRiskAlerts()
+      }
+    },
+
+    resumeSimulation() {
+      this.isPaused = false
+      const interval = this.useLLM ? this.autoInterval : 500
+      this.sendAction('resume', { interval })
+    },
+
     stopSimulation() {
       this.isRunning = false
+      this.isPaused = false
       this.agentProgress = ''
       this.sendAction('stop')
       // 用户主动停止时也展开报告面板
@@ -2543,7 +2610,7 @@ export default {
         // 重置进度数据
         this.progressData = {
           step: 0, total: 0, percentage: 0, agentId: null,
-          agentOpinion: 0, agentStance: '', currentStep: 0, maxSteps: 50
+          agentOpinion: 0, agentStance: '', currentStep: 0, maxSteps: this.maxSteps
         }
         // 推演完成，获取最终预测数据
         this.fetchPrediction()
@@ -2672,7 +2739,7 @@ export default {
           const selected = params.selected
           if (!selected) return
           
-          const legendData = ['谣言传播率', '真相接受率', '平均观点', '极化指数', '沉默率', '公域谣言率', '私域谣言率']
+          const legendData = ['误信率', '正确认知率', '平均观点', '极化指数', '沉默率', '公域误信率', '私域误信率']
           const visibleCount = legendData.filter(name => selected[name]).length
           
           // 全选：使用延时确保图例状态已更新
@@ -2858,7 +2925,7 @@ export default {
           textStyle: { color: '#e0e0e0' }
         },
         legend: {
-          data: ['谣言传播率', '真相接受率', '平均观点', '极化指数', '沉默率', '公域谣言率', '私域谣言率'],
+          data: ['误信率', '正确认知率', '平均观点', '极化指数', '沉默率', '公域误信率', '私域误信率'],
           textStyle: { color: '#6b7280', fontSize: 11 },
           top: 5,
           itemWidth: 16,
@@ -2904,7 +2971,7 @@ export default {
         ],
         series: [
           {
-            name: '谣言传播率',
+            name: '误信率',
             type: 'line',
             yAxisIndex: 1,
             data: this.trendHistory.rumorRates,
@@ -2920,7 +2987,7 @@ export default {
             }
           },
           {
-            name: '真相接受率',
+            name: '正确认知率',
             type: 'line',
             yAxisIndex: 1,
             data: this.trendHistory.truthRates,
@@ -2971,10 +3038,10 @@ export default {
               ])
             }
           },
-          // 双层网络：公域/私域谣言率曲线
+          // 双层网络：公域/私域误信率曲线
           ...(hasDualData ? [
             {
-              name: '公域谣言率',
+              name: '公域误信率',
               type: 'line',
               yAxisIndex: 1,
               data: this.trendHistory.publicRumorRates,
@@ -2985,7 +3052,7 @@ export default {
               symbolSize: 4
             },
             {
-              name: '私域谣言率',
+              name: '私域误信率',
               type: 'line',
               yAxisIndex: 1,
               data: this.trendHistory.privateRumorRates,
@@ -3208,7 +3275,7 @@ export default {
           textStyle: { color: '#e0e0e0' }
         },
         legend: {
-          data: ['谣言传播率', '真相接受率', '平均观点', '极化指数', '沉默率', '公域谣言率', '私域谣言率'],
+          data: ['误信率', '正确认知率', '平均观点', '极化指数', '沉默率', '公域误信率', '私域误信率'],
           textStyle: { color: '#6b7280', fontSize: 11 },
           top: 5,
           itemWidth: 16,
@@ -3254,7 +3321,7 @@ export default {
         ],
         series: [
           {
-            name: '谣言传播率',
+            name: '误信率',
             type: 'line',
             yAxisIndex: 1,
             data: this.trendHistory.rumorRates,
@@ -3270,7 +3337,7 @@ export default {
             }
           },
           {
-            name: '真相接受率',
+            name: '正确认知率',
             type: 'line',
             yAxisIndex: 1,
             data: this.trendHistory.truthRates,
@@ -3321,9 +3388,9 @@ export default {
               ])
             }
           },
-          // 双层网络：公域/私域谣言率曲线
+          // 双层网络：公域/私域误信率曲线
           {
-            name: '公域谣言率',
+            name: '公域误信率',
             type: 'line',
             yAxisIndex: 1,
             data: this.trendHistory.publicRumorRates,
@@ -3334,7 +3401,7 @@ export default {
             symbolSize: 4
           },
           {
-            name: '私域谣言率',
+            name: '私域误信率',
             type: 'line',
             yAxisIndex: 1,
             data: this.trendHistory.privateRumorRates,
@@ -4162,6 +4229,44 @@ export default {
   box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
 }
 
+.btn-pause {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+}
+
+.btn-resume {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+}
+
+.btn-group-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.btn-group-row > button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-group-row > button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
 .btn-icon {
   font-size: 14px;
 }
@@ -4173,6 +4278,47 @@ export default {
   border: 1px solid rgba(96, 165, 250, 0.3);
   border-radius: 12px;
   margin-top: 12px;
+}
+
+.pause-container {
+  width: 100%;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.pause-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.pause-icon {
+  font-size: 18px;
+}
+
+.pause-title {
+  color: #fbbf24;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pause-step {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.pause-hint {
+  color: #94a3b8;
+  font-size: 12px;
+  padding-left: 28px;
 }
 
 .progress-header {

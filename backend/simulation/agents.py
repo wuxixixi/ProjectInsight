@@ -23,16 +23,21 @@ class AgentPopulation:
     def __init__(
         self,
         size: int = 200,
-        initial_rumor_spread: float = 0.3,
+        initial_negative_spread: float = 0.3,
+        initial_rumor_spread: float = None,  # 兼容旧参数名
         network_type: str = "small_world"
     ):
         self.size = size
         self.network_type = network_type
 
+        # 兼容旧参数名
+        if initial_rumor_spread is not None:
+            initial_negative_spread = initial_rumor_spread
+
         # 初始化观点分布
         # 初始时部分人持负面信念(opinion < 0), 其他人中立或倾向正面信念
         self.opinions = np.zeros(size)
-        negative_believers = int(size * initial_rumor_spread)
+        negative_believers = int(size * initial_negative_spread)
         self.opinions[:negative_believers] = np.random.uniform(-0.8, -0.3, negative_believers)
         self.opinions[negative_believers:] = np.random.uniform(-0.2, 0.3, size - negative_believers)
 

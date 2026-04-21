@@ -74,33 +74,33 @@ class RiskAlertEngine:
     def _setup_default_rules(self):
         """设置默认风险规则"""
         
-        # === 谣言传播风险 ===
+        # === 负面信念传播风险 ===
         self.rules.append(RiskRule(
-            name="rumor_critical",
-            metric="rumor_spread_rate",
+            name="negative_critical",
+            metric="negative_belief_rate",
             condition=lambda x: x > 0.7,
             level=RiskLevel.CRITICAL,
-            message_template="🚨 谣言传播率已达到 {value:.0%}，超过危险阈值70%！",
-            suggestion="建议立即发布官方辟谣，加强权威媒体正面引导",
+            message_template="🚨 负面信念传播率已达到 {value:.0%}，超过危险阈值70%！",
+            suggestion="建议立即发布权威回应，加强权威媒体正面引导",
             threshold=0.7
         ))
-        
+
         self.rules.append(RiskRule(
-            name="rumor_high",
-            metric="rumor_spread_rate",
+            name="negative_high",
+            metric="negative_belief_rate",
             condition=lambda x: 0.5 < x <= 0.7,
             level=RiskLevel.HIGH,
-            message_template="⚠️ 谣言传播率较高，已达 {value:.0%}",
-            suggestion="建议尽快准备辟谣材料，选择合适时机发布",
+            message_template="⚠️ 负面信念传播率较高，已达 {value:.0%}",
+            suggestion="建议尽快准备权威回应材料，选择合适时机发布",
             threshold=0.5
         ))
-        
+
         self.rules.append(RiskRule(
-            name="rumor_rising",
-            metric="rumor_spread_rate",
+            name="negative_rising",
+            metric="negative_belief_rate",
             condition=lambda x: False,  # 需要历史数据判断
             level=RiskLevel.MEDIUM,
-            message_template="📈 谣言传播率快速上升，当前 {value:.0%}",
+            message_template="📈 负面信念传播率快速上升，当前 {value:.0%}",
             suggestion="密切监控舆情动态，做好干预准备",
             threshold=0.0
         ))
@@ -197,8 +197,8 @@ class RiskAlertEngine:
             triggered = rule.condition(value)
             
             # 特殊处理趋势规则
-            if rule.name == "rumor_rising" and history:
-                triggered = self._check_rising_trend(history, "rumor_spread_rate", 0.1)
+            if rule.name == "negative_rising" and history:
+                triggered = self._check_rising_trend(history, "negative_belief_rate", 0.1)
             
             if triggered:
                 alert = Alert(
@@ -249,18 +249,18 @@ class RiskAlertEngine:
     def _check_prediction_risks(self, prediction: Dict, now: str) -> List[Alert]:
         """基于预测的风险检查"""
         alerts = []
-        
-        # 谣言预测风险
-        rumor_pred = prediction.get("rumor_spread_rate", {})
-        pessimistic = rumor_pred.get("pessimistic", 0)
-        
+
+        # 负面信念预测风险
+        negative_pred = prediction.get("negative_belief_rate", {})
+        pessimistic = negative_pred.get("pessimistic", 0)
+
         if pessimistic > 0.7:
             alerts.append(Alert(
                 level=RiskLevel.HIGH,
-                metric="rumor_spread_rate_predicted",
+                metric="negative_belief_rate_predicted",
                 current_value=pessimistic,
                 threshold=0.7,
-                message=f"🔮 预测预警：谣言传播率可能达到 {pessimistic:.0%}",
+                message=f"🔮 预测预警：负面信念传播率可能达到 {pessimistic:.0%}",
                 suggestion="建议提前准备干预措施",
                 timestamp=now
             ))
@@ -284,14 +284,14 @@ class RiskAlertEngine:
     
     def get_risk_summary(self, current_state: Dict) -> Dict:
         """获取风险摘要"""
-        rumor_rate = current_state.get("rumor_spread_rate", 0)
+        negative_rate = current_state.get("negative_belief_rate", 0)
         polarization = current_state.get("polarization_index", 0)
         silence_rate = current_state.get("silence_rate", 0)
         truth_rate = current_state.get("truth_acceptance_rate", 0)
-        
+
         # 综合风险评分
         risk_score = (
-            rumor_rate * 0.4 +
+            negative_rate * 0.4 +
             polarization * 0.3 +
             silence_rate * 0.2 +
             (1 - truth_rate) * 0.1
@@ -310,7 +310,7 @@ class RiskAlertEngine:
             "overall_level": overall_level.value,
             "risk_score": round(risk_score, 3),
             "components": {
-                "rumor_risk": round(rumor_rate, 3),
+                "negative_risk": round(negative_rate, 3),
                 "polarization_risk": round(polarization, 3),
                 "silence_risk": round(silence_rate, 3),
                 "truth_deficit": round(1 - truth_rate, 3)

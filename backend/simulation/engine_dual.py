@@ -78,8 +78,7 @@ class SimulationEngineDual:
         self.echo_chamber_factor = echo_chamber_factor
 
         self.step_count = 0
-        self.responded = False
-        self.debunked = False  # 保留兼容
+        self.responded = False  # 新名称（兼容属性debunked会返回此值）
         self.current_state: Optional[SimulationState] = None
 
         # 增强版数学模型实例
@@ -132,6 +131,15 @@ class SimulationEngineDual:
         if self._graph_parser is None:
             self._graph_parser = get_graph_parser(self.llm_config)
         return self._graph_parser
+
+    @property
+    def debunked(self) -> bool:
+        """向后兼容属性：debunked → responded"""
+        return self.responded
+
+    @debunked.setter
+    def debunked(self, value: bool):
+        self.responded = value
 
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
@@ -412,8 +420,7 @@ class SimulationEngineDual:
     def initialize(self) -> SimulationState:
         """初始化模拟"""
         self.step_count = 0
-        self.responded = False
-        self.debunked = False  # 兼容
+        self.responded = False  # 新名称（兼容属性debunked会返回此值）
         self.history = []
         self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -421,7 +428,8 @@ class SimulationEngineDual:
             # LLM 模式 - 双层网络版本
             self.llm_population = LLMAgentPopulationDual(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_negative_spread,
+                initial_negative_spread=self.initial_negative_spread,
+                initial_rumor_spread=self.initial_negative_spread,  # 兼容旧参数名
                 llm_config=self.llm_config,
                 num_communities=self.num_communities,
                 public_m=self.public_m,
@@ -433,7 +441,8 @@ class SimulationEngineDual:
             # 数学模型模式 - 也创建双层网络用于统计
             self.population = AgentPopulation(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_negative_spread,
+                initial_negative_spread=self.initial_negative_spread,
+                initial_rumor_spread=self.initial_negative_spread,  # 兼容旧参数名
                 network_type="scale_free"  # 使用无标度网络作为默认
             )
             # 创建双层网络用于统计
@@ -519,7 +528,6 @@ class SimulationEngineDual:
                 news_source=self.news_source,
                 knowledge_graph=self.knowledge_graph,
                 response_released=self.responded,
-                debunk_released=self.debunked,  # 兼容
                 cocoon_strength=self.cocoon_strength,
                 progress_callback=self.progress_callback
             )
@@ -560,7 +568,7 @@ class SimulationEngineDual:
             fear_of_isolation=pop.fear_of_isolation,
             neighbors=neighbors_list,
             influencer_ids=influencer_ids,
-            debunk_released=self.responded,
+            response_released=self.responded,
             step_count=self.step_count
         )
 
@@ -571,7 +579,7 @@ class SimulationEngineDual:
                 opinions=new_opinions,
                 personas=personas,
                 cocoon_strength=self.cocoon_strength,
-                debunk_released=self.responded
+                response_released=self.responded
             )
 
             # 应用知识影响

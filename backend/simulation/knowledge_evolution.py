@@ -124,8 +124,8 @@ class KnowledgeEvolutionConfig:
     # 证据链强度
     evidence_strength: float = 0.5
     
-    # 辟谣效果系数
-    debunk_effectiveness: float = 0.6
+    # 权威回应效果系数
+    response_effectiveness: float = 0.6
     
     # 关系传播衰减
     relation_decay: float = 0.7
@@ -142,12 +142,12 @@ class KnowledgeEvolutionConfig:
 
 class KnowledgeDrivenEvolution:
     """知识图谱驱动的观点演化器
-    
+
     核心机制：
     1. 实体基础影响力 × 人设调节
     2. 观点同向/反向强化
     3. 茧房效应调节
-    4. 辟谣效果（如已发布）
+    4. 权威回应效果（如已发布）
     """
     
     def __init__(
@@ -206,7 +206,7 @@ class KnowledgeDrivenEvolution:
             "对立": "oppose",
             "指控": "oppose",
             "否认": "oppose",
-            "辟谣": "oppose",
+            "权威回应": "oppose",  # 权威回应
             "参与": "neutral",
             "导致": "neutral",
             "影响": "neutral",
@@ -263,7 +263,7 @@ class KnowledgeDrivenEvolution:
         agent_persona: str,
         exposed_entities: List[str],
         cocoon_strength: float = 0.5,
-        debunk_released: bool = False
+        response_released: bool = False
     ) -> float:
         """
         计算知识图谱对单个Agent的观点影响
@@ -273,7 +273,7 @@ class KnowledgeDrivenEvolution:
             agent_persona: 人设类型
             exposed_entities: 曝光的实体列表
             cocoon_strength: 茧房强度
-            debunk_released: 是否已辟谣
+            response_released: 是否已发布权威回应
         
         Returns:
             观点影响增量
@@ -299,7 +299,7 @@ class KnowledgeDrivenEvolution:
             if base_impact > 0.7:  # 高影响力实体（权威）
                 modifier = persona.authority_acceptance
             else:
-                modifier = persona.rumor_susceptibility
+                modifier = persona.misbelief_susceptibility
             
             # 观点稳定性：稳定性越高，影响越小
             stability_factor = 1.0 - persona.opinion_stability * 0.5
@@ -322,9 +322,9 @@ class KnowledgeDrivenEvolution:
         avg_impact = total_impact / entity_count
         result = avg_impact * self.config.evidence_strength
         
-        # 辟谣效果：正向推动（向真相方向）
-        if debunk_released:
-            result += self.config.debunk_effectiveness * 0.1
+        # 权威回应效果：正向推动（向真相方向）
+        if response_released:
+            result += self.config.response_effectiveness * 0.1
         
         # 限制影响幅度
         return np.clip(result, -self.config.max_influence_per_step, self.config.max_influence_per_step)
@@ -334,7 +334,7 @@ class KnowledgeDrivenEvolution:
         opinions: np.ndarray,
         personas: List[str],
         cocoon_strength: float = 0.5,
-        debunk_released: bool = False
+        response_released: bool = False
     ) -> np.ndarray:
         """
         批量计算对所有Agent的影响力
@@ -345,7 +345,7 @@ class KnowledgeDrivenEvolution:
             opinions: 所有Agent的观点值
             personas: 所有Agent的人设
             cocoon_strength: 茧房强度
-            debunk_released: 是否已辟谣
+            response_released: 是否已发布权威回应
         
         Returns:
             影响力增量数组
@@ -380,7 +380,7 @@ class KnowledgeDrivenEvolution:
                 agent_persona=personas[i] if i < len(personas) else "普通用户",
                 exposed_entities=exposed,
                 cocoon_strength=cocoon_strength,
-                debunk_released=debunk_released
+                response_released=response_released
             )
         
         return influences
@@ -432,27 +432,27 @@ class KnowledgeEvolutionValidator:
         # 提取关键指标
         def extract_metrics(history):
             return {
-                "rumor_rates": [h.get("rumor_spread_rate", 0) for h in history],
+                "negative_rates": [h.get("negative_belief_rate", h.get("rumor_spread_rate", 0)) for h in history],
                 "truth_rates": [h.get("truth_acceptance_rate", 0) for h in history],
                 "polarizations": [h.get("polarization_index", 0) for h in history]
             }
         
         m1 = extract_metrics(with_knowledge)
         m2 = extract_metrics(without_knowledge)
-        
+
         # 计算差异
-        min_len = min(len(m1["rumor_rates"]), len(m2["rumor_rates"]))
-        
+        min_len = min(len(m1["negative_rates"]), len(m2["negative_rates"]))
+
         result = {
-            "rumor_rate_diff": np.mean(m1["rumor_rates"][:min_len]) - np.mean(m2["rumor_rates"][:min_len]),
+            "negative_rate_diff": np.mean(m1["negative_rates"][:min_len]) - np.mean(m2["negative_rates"][:min_len]),
             "truth_rate_diff": np.mean(m1["truth_rates"][:min_len]) - np.mean(m2["truth_rates"][:min_len]),
             "polarization_diff": np.mean(m1["polarizations"][:min_len]) - np.mean(m2["polarizations"][:min_len]),
-            "final_rumor_diff": m1["rumor_rates"][min_len-1] - m2["rumor_rates"][min_len-1],
+            "final_negative_diff": m1["negative_rates"][min_len-1] - m2["negative_rates"][min_len-1],
             "final_truth_diff": m1["truth_rates"][min_len-1] - m2["truth_rates"][min_len-1],
             "significant": False
         }
-        
+
         # 判断是否显著（简化：差异超过5%）
-        result["significant"] = abs(result["final_rumor_diff"]) > 0.05
-        
+        result["significant"] = abs(result["final_negative_diff"]) > 0.05
+
         return result

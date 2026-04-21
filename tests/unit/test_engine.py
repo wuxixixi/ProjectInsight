@@ -23,11 +23,11 @@ class TestEngineInit:
 
         assert engine.population_size == 200
         assert engine.cocoon_strength == 0.5
-        assert engine.debunk_delay == 10
-        assert engine.initial_rumor_spread == 0.3
+        assert engine.response_delay == 10
+        assert engine.initial_negative_spread == 0.3
         assert engine.network_type == "small_world"
         assert engine.step_count == 0
-        assert engine.debunked is False
+        assert engine.responded is False
         assert engine.use_llm is True  # 默认使用 LLM
 
     def test_custom_initialization(self):
@@ -35,16 +35,16 @@ class TestEngineInit:
         engine = SimulationEngine(
             population_size=100,
             cocoon_strength=0.8,
-            debunk_delay=5,
-            initial_rumor_spread=0.5,
+            response_delay=5,
+            initial_negative_spread=0.5,
             network_type="scale_free",
             use_llm=False
         )
 
         assert engine.population_size == 100
         assert engine.cocoon_strength == 0.8
-        assert engine.debunk_delay == 5
-        assert engine.initial_rumor_spread == 0.5
+        assert engine.response_delay == 5
+        assert engine.initial_negative_spread == 0.5
         assert engine.network_type == "scale_free"
         assert engine.use_llm is False
 
@@ -89,7 +89,7 @@ class TestEngineInitialize:
         state = engine.initialize()
 
         assert engine.step_count == 0
-        assert engine.debunked is False
+        assert engine.responded is False
         assert len(engine.history) == 1
 
 
@@ -176,48 +176,48 @@ class TestEngineStepLLMMode:
             engine.step()
 
 
-class TestDebunking:
-    """测试辟谣机制"""
+class TestAuthoritativeResponse:
+    """测试权威回应机制"""
 
-    def test_debunking_releases_at_delay(self):
-        """测试辟谣在延迟后发布"""
+    def test_response_releases_at_delay(self):
+        """测试权威回应在延迟后发布"""
         engine = SimulationEngine(
             population_size=50,
-            debunk_delay=3,
+            response_delay=3,
             use_llm=False
         )
         engine.initialize()
 
-        # 前几步不应辟谣
+        # 前几步不应发布回应
         engine.step()
         engine.step()
-        assert engine.debunked is False
+        assert engine.responded is False
 
-        # 第3步应该辟谣
+        # 第3步应该发布回应
         engine.step()
-        assert engine.debunked is True
+        assert engine.responded is True
 
-    def test_debunking_affects_opinions(self):
-        """测试辟谣影响观点"""
+    def test_response_affects_opinions(self):
+        """测试权威回应影响观点"""
         engine = SimulationEngine(
             population_size=100,
-            debunk_delay=1,
-            initial_rumor_spread=0.5,
+            response_delay=1,
+            initial_negative_spread=0.5,
             use_llm=False
         )
         engine.initialize()
 
-        # 获取辟谣前的观点
-        pre_debunk_opinions = engine.population.opinions.copy()
+        # 获取权威回应前的观点
+        pre_response_opinions = engine.population.opinions.copy()
 
-        # 执行辟谣
+        # 执行权威回应
         engine.step()
 
-        # 相信谣言的人观点应该向真相方向移动
-        rumor_believers_mask = pre_debunk_opinions < 0
-        if sum(rumor_believers_mask) > 0:
-            opinion_changes = engine.population.opinions[rumor_believers_mask] - pre_debunk_opinions[rumor_believers_mask]
-            # 平均变化应该为正 (向真相方向)
+        # 持负面观点的人观点应该向正向移动
+        negative_believers_mask = pre_response_opinions < 0
+        if sum(negative_believers_mask) > 0:
+            opinion_changes = engine.population.opinions[negative_believers_mask] - pre_response_opinions[negative_believers_mask]
+            # 平均变化应该为正 (向正向移动)
             assert np.mean(opinion_changes) > 0
 
 
@@ -239,17 +239,18 @@ class TestStateComputation:
         assert hasattr(state, 'avg_opinion')
         assert hasattr(state, 'polarization_index')
 
-    def test_rumor_spread_rate_calculation(self):
-        """测试谣言传播率计算"""
+    def test_negative_belief_rate_calculation(self):
+        """测试负面信念率计算"""
         engine = SimulationEngine(
             population_size=100,
-            initial_rumor_spread=0.3,
+            initial_negative_spread=0.3,
             use_llm=False
         )
         state = engine.initialize()
 
-        # 初始谣言传播率应该接近 0.3
-        assert 0.2 <= state.rumor_spread_rate <= 0.5
+        # 初始负面信念率应该接近 0.3（支持新旧字段名）
+        negative_rate = getattr(state, 'negative_belief_rate', None) or getattr(state, 'rumor_spread_rate', None)
+        assert 0.2 <= negative_rate <= 0.5
 
     def test_avg_opinion_in_valid_range(self):
         """测试平均观点在有效范围"""
@@ -346,24 +347,24 @@ class TestEdgeCases:
 
         assert state is not None
 
-    def test_immediate_debunk(self):
-        """测试立即辟谣"""
+    def test_immediate_response(self):
+        """测试立即发布权威回应"""
         engine = SimulationEngine(
             population_size=50,
-            debunk_delay=0,
+            response_delay=0,
             use_llm=False
         )
         state = engine.initialize()
 
-        # 第一步就应该辟谣
+        # 第一步就应该发布回应
         engine.step()
-        assert engine.debunked is True
+        assert engine.responded is True
 
-    def test_never_debunk(self):
-        """测试永不辟谣"""
+    def test_never_response(self):
+        """测试永不发布权威回应"""
         engine = SimulationEngine(
             population_size=50,
-            debunk_delay=1000,
+            response_delay=1000,
             use_llm=False
         )
         state = engine.initialize()
@@ -371,4 +372,4 @@ class TestEdgeCases:
         for _ in range(50):
             engine.step()
 
-        assert engine.debunked is False
+        assert engine.responded is False

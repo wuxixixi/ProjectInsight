@@ -623,9 +623,14 @@ class LLMAgentPopulation:
         self,
         size: int = 200,
         initial_negative_spread: float = 0.3,
+        initial_rumor_spread: float = None,  # 兼容旧参数名
         network_type: str = "small_world",
         llm_config: Optional[LLMConfig] = None
     ):
+        # 兼容旧参数名
+        if initial_rumor_spread is not None:
+            initial_negative_spread = initial_rumor_spread
+
         self.size = size
         self.network_type = network_type
         self.llm_config = llm_config or LLMConfig()
@@ -813,9 +818,15 @@ class LLMAgentPopulation:
         """计算群体统计"""
         opinions = [a.opinion for a in self.agents]
 
+        negative_spread_rate = np.mean([o < -0.2 for o in opinions])
+        positive_acceptance_rate = np.mean([o > 0.2 for o in opinions])
+
         return {
-            "negative_spread_rate": np.mean([o < -0.2 for o in opinions]),
-            "positive_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
+            "negative_spread_rate": negative_spread_rate,
+            "positive_acceptance_rate": positive_acceptance_rate,
+            # 新增字段名（与 llm_agents_dual.py 一致）
+            "negative_belief_rate": negative_spread_rate,
+            "positive_belief_rate": positive_acceptance_rate,
             "avg_opinion": float(np.mean(opinions)),
             "polarization_index": float(np.std(opinions) * 2),
             "silence_rate": np.mean([a.is_silent for a in self.agents])  # 沉默率

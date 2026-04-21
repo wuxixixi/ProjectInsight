@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="信息茧房推演系统",
-    description="模拟算法推荐与官方辟谣对群体观点的影响",
+    description="模拟算法推荐与权威回应对群体观点的影响",
     version="2.0.0"
 )
 
@@ -69,9 +69,11 @@ class StartRequest(BaseModel):
     
     # 基础参数
     cocoon_strength: float = 0.5
-    debunk_delay: int = 10
+    debunk_delay: int = 10                              # 兼容旧参数名
+    response_delay: Optional[int] = None                # 权威回应延迟（新参数名，优先于 debunk_delay）
     population_size: int = 200
-    initial_rumor_spread: float = 0.3
+    initial_rumor_spread: float = 0.3                   # 兼容旧参数名
+    initial_negative_spread: Optional[float] = None    # 初始负面信念传播率（新参数名，优先）
     network_type: str = "small_world"
     use_llm: bool = True
 
@@ -87,7 +89,8 @@ class StartRequest(BaseModel):
     public_m: int = 3                 # 公域网络 BA 模型参数
 
     # 增强版数学模型参数
-    debunk_credibility: float = 0.7      # 辟谣来源可信度 [0, 1]
+    debunk_credibility: float = 0.7       # 兼容旧参数名
+    response_credibility: Optional[float] = None  # 权威回应来源可信度（新参数名，优先） [0, 1]
     authority_factor: float = 0.5        # 权威影响力系数 [0, 1]
     backfire_strength: float = 0.3       # 逆火效应强度 [0, 1]
     silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
@@ -98,8 +101,8 @@ class StartRequest(BaseModel):
     init_distribution: Optional[Dict[str, float]] = None
     """真实分布锚定，格式:
     {
-        "believe_rumor": 0.25,  # 初始相信谣言比例
-        "believe_truth": 0.15,  # 初始相信真相比例
+        "believe_rumor": 0.25,  # 初始误信比例
+        "believe_truth": 0.15,  # 初始正确认知比例
         "neutral": 0.60         # 中立比例
     }
     """
@@ -270,7 +273,7 @@ async def start_simulation(params: StartRequest):
         credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
         entity_count = len(pending_knowledge_graph.get('entities', []))
         logger.info(f"检测到待注入事件，情感={sentiment}, 可信度={credibility}, 实体数={entity_count}")
-        # 注意：这里不直接设置initial_rumor_spread，而是在引擎创建后调用set_initial_distribution_from_news
+        # 注意：这里不直接设置initial_negative_spread，而是在引擎创建后调用set_initial_distribution_from_news
 
     # 自动计算并发数（如果未指定）
     max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
@@ -284,20 +287,25 @@ async def start_simulation(params: StartRequest):
         connection_pool_size=params.connection_pool_size
     )
 
+    # 参数兼容解析：新参数名优先，旧参数名兜底
+    effective_initial_spread = params.initial_negative_spread if params.initial_negative_spread is not None else params.initial_rumor_spread
+    effective_debunk_delay = params.response_delay if params.response_delay is not None else params.debunk_delay
+    effective_credibility = params.response_credibility if params.response_credibility is not None else params.debunk_credibility
+
     # 根据是否启用双层网络选择引擎
     if params.use_dual_network:
         logger.info(f"使用双层网络引擎, 社群数: {params.num_communities}, LLM模式: {params.use_llm}")
         engine = SimulationEngineDual(
             population_size=params.population_size,
             cocoon_strength=params.cocoon_strength,
-            debunk_delay=params.debunk_delay,
-            initial_rumor_spread=params.initial_rumor_spread,
+            debunk_delay=effective_debunk_delay,
+            initial_rumor_spread=effective_initial_spread,
             use_llm=params.use_llm,
             llm_config=llm_config,
             num_communities=params.num_communities,
             public_m=params.public_m,
             # 增强版数学模型参数
-            debunk_credibility=params.debunk_credibility,
+            debunk_credibility=effective_credibility,
             authority_factor=params.authority_factor,
             backfire_strength=params.backfire_strength,
             silence_threshold=params.silence_threshold,
@@ -308,13 +316,13 @@ async def start_simulation(params: StartRequest):
         engine = SimulationEngine(
             population_size=params.population_size,
             cocoon_strength=params.cocoon_strength,
-            debunk_delay=params.debunk_delay,
-            initial_rumor_spread=params.initial_rumor_spread,
+            debunk_delay=effective_debunk_delay,
+            initial_rumor_spread=effective_initial_spread,
             network_type=params.network_type,
             use_llm=params.use_llm,
             llm_config=llm_config,
             # 增强版数学模型参数
-            debunk_credibility=params.debunk_credibility,
+            debunk_credibility=effective_credibility,
             authority_factor=params.authority_factor,
             backfire_strength=params.backfire_strength,
             silence_threshold=params.silence_threshold,
@@ -951,6 +959,7 @@ async def websocket_simulation(websocket: WebSocket):
 
     auto_mode = False
     auto_task: Optional[asyncio.Task] = None
+    max_steps = 50  # 默认值，会在start action中被更新
 
     async def send_progress(step: int, total: int, agent_id: int = None, agent_opinion: float = None):
         """发送进度更新"""
@@ -962,7 +971,7 @@ async def websocket_simulation(websocket: WebSocket):
                 "total": total,
                 "percentage": round(step / total * 100, 1) if total > 0 else 0,
                 "current_step": engine.step_count if engine else 0,
-                "max_steps": max_steps if 'max_steps' in dir() else 50
+                "max_steps": max_steps
             }
 
             # 添加 Agent 详细信息
@@ -973,9 +982,9 @@ async def websocket_simulation(websocket: WebSocket):
                 # 根据观点值判断立场
                 if agent_opinion is not None:
                     if agent_opinion < -0.3:
-                        stance = "信谣言"
+                        stance = "误信"
                     elif agent_opinion > 0.3:
-                        stance = "信真相"
+                        stance = "正确认知"
                     else:
                         stance = "中立"
                     progress_data["agent_stance"] = stance
@@ -988,8 +997,7 @@ async def websocket_simulation(websocket: WebSocket):
 
     async def auto_step_loop(interval: int):
         """自动推演循环"""
-        global engine
-        max_steps = 50
+        nonlocal max_steps
         while auto_mode and engine and engine.step_count < max_steps:
             try:
                 state = await engine.async_step()
@@ -998,6 +1006,9 @@ async def websocket_simulation(websocket: WebSocket):
                     "data": state.to_dict()
                 })
                 await asyncio.sleep(interval / 1000)
+            except asyncio.CancelledError:
+                logger.info("自动推演任务已取消")
+                break
             except Exception as e:
                 logger.error(f"自动推演错误: {e}")
                 await websocket.send_json({
@@ -1018,6 +1029,7 @@ async def websocket_simulation(websocket: WebSocket):
                 use_llm = params.get("use_llm", True)
                 population_size = params.get("population_size", 200)
                 use_dual_network = params.get("use_dual_network", True)
+                max_steps = params.get("max_steps", 50)  # 从前端获取最大步数
 
                 # 自动计算并发数（如果未指定）
                 max_concurrent = params.get("max_concurrent")
@@ -1034,20 +1046,25 @@ async def websocket_simulation(websocket: WebSocket):
                     connection_pool_size=params.get("connection_pool_size", 600)
                 )
 
+                # 参数兼容解析：新参数名优先，旧参数名兜底
+                effective_initial_spread = params.get("initial_negative_spread", params.get("initial_rumor_spread", 0.3))
+                effective_debunk_delay = params.get("response_delay", params.get("debunk_delay", 10))
+                effective_credibility = params.get("response_credibility", params.get("debunk_credibility", 0.7))
+
                 # 根据是否启用双层网络选择引擎
                 if use_dual_network:
                     logger.info(f"使用双层网络引擎, 社群数: {params.get('num_communities', 8)}, LLM模式: {use_llm}")
                     engine = SimulationEngineDual(
                         population_size=population_size,
                         cocoon_strength=params.get("cocoon_strength", 0.5),
-                        debunk_delay=params.get("debunk_delay", 10),
-                        initial_rumor_spread=params.get("initial_rumor_spread", 0.3),
+                        debunk_delay=effective_debunk_delay,
+                        initial_rumor_spread=effective_initial_spread,
                         use_llm=use_llm,
                         llm_config=llm_config,
                         num_communities=params.get("num_communities", 8),
                         public_m=params.get("public_m", 3),
                         # 增强版数学模型参数
-                        debunk_credibility=params.get("debunk_credibility", 0.7),
+                        debunk_credibility=effective_credibility,
                         authority_factor=params.get("authority_factor", 0.5),
                         backfire_strength=params.get("backfire_strength", 0.3),
                         silence_threshold=params.get("silence_threshold", 0.3),
@@ -1058,13 +1075,13 @@ async def websocket_simulation(websocket: WebSocket):
                     engine = SimulationEngine(
                         population_size=population_size,
                         cocoon_strength=params.get("cocoon_strength", 0.5),
-                        debunk_delay=params.get("debunk_delay", 10),
-                        initial_rumor_spread=params.get("initial_rumor_spread", 0.3),
+                        debunk_delay=effective_debunk_delay,
+                        initial_rumor_spread=effective_initial_spread,
                         network_type=params.get("network_type", "small_world"),
                         use_llm=use_llm,
                         llm_config=llm_config,
                         # 增强版数学模型参数
-                        debunk_credibility=params.get("debunk_credibility", 0.7),
+                        debunk_credibility=effective_credibility,
                         authority_factor=params.get("authority_factor", 0.5),
                         backfire_strength=params.get("backfire_strength", 0.3),
                         silence_threshold=params.get("silence_threshold", 0.3),
@@ -1118,8 +1135,35 @@ async def websocket_simulation(websocket: WebSocket):
                 auto_task = asyncio.create_task(auto_step_loop(interval))
                 logger.info(f"自动推演已启动, 间隔 {interval}ms")
 
+            elif action == "pause":
+                # 暂停自动推演（保留引擎状态，可恢复）
+                auto_mode = False
+                if auto_task:
+                    auto_task.cancel()
+                    auto_task = None
+                logger.info("自动推演已暂停")
+
+            elif action == "resume":
+                # 恢复自动推演
+                if engine is None:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "请先启动模拟"
+                    })
+                    continue
+                if engine.step_count >= max_steps:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "推演已完成，无法恢复"
+                    })
+                    continue
+                interval = msg.get("interval", 2000)
+                auto_mode = True
+                auto_task = asyncio.create_task(auto_step_loop(interval))
+                logger.info(f"自动推演已恢复, 间隔 {interval}ms")
+
             elif action == "stop":
-                # 停止自动推演
+                # 停止自动推演（终止推演）
                 auto_mode = False
                 if auto_task:
                     auto_task.cancel()
@@ -1186,15 +1230,17 @@ async def get_prediction():
         prediction_model = PredictionModel()
     
     prediction_model.update(engine.history)
-    
-    # 获取当前状态
+
+    # 获取当前状态（兼容新旧键名）
     current_state = {
+        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
         "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
+        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
         "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
         "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
         "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
     }
-    
+
     # 执行预测
     prediction = prediction_model.predict(current_state)
     
@@ -1233,15 +1279,17 @@ async def get_risk_alerts():
     
     # 获取风险引擎
     risk_engine = get_risk_engine()
-    
-    # 获取当前状态
+
+    # 获取当前状态（兼容新旧键名）
     current_state = {
+        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
         "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
+        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
         "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
         "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
         "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
     }
-    
+
     # 执行风险检查
     alerts = risk_engine.check(current_state, engine.history)
     
@@ -1286,13 +1334,16 @@ async def get_prediction_trajectory(steps: int = 10):
         prediction_model = PredictionModel()
     
     prediction_model.update(engine.history)
-    
+
+    # 获取当前状态（兼容新旧键名）
     current_state = {
+        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
         "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
+        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
         "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
         "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5
     }
-    
+
     trajectory = prediction_model.get_trajectory(current_state, steps=steps)
     
     return {

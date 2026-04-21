@@ -44,7 +44,8 @@ npm install
 
 **终端 1 - 后端:**
 ```bash
-uvicorn backend.app:app --reload --port 8000
+# 从项目根目录启动
+python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
 
 **终端 2 - 前端:**
@@ -135,7 +136,6 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-        # WebSocket 长连接超时设置
         proxy_read_timeout 86400;
     }
 }
@@ -212,27 +212,6 @@ services:
 
 ---
 
-### 方案三：云平台部署
-
-#### 阿里云 ECS
-
-1. 创建 ECS 实例（推荐 2核4G）
-2. 安装 Docker
-3. 使用方案二部署
-
-#### 腾讯云 CloudBase
-
-```bash
-# 安装 cloudbase CLI
-npm install -g @cloudbase/cli
-
-# 部署前端
-cloudbase init
-cloudbase hosting deploy frontend/dist -e your-env-id
-```
-
----
-
 ## LLM 配置
 
 ### DeepSeek API
@@ -289,60 +268,19 @@ location /ws/ {
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
-    
+
     # 长连接优化
     proxy_read_timeout 86400;
     proxy_send_timeout 86400;
-    
+
     # 缓冲区设置
     proxy_buffering off;
 }
 ```
 
-### 数据库优化
-
-报告文件存储在 `reports/` 目录，建议：
-- 定期清理旧报告
-- 使用对象存储（如 OSS）存储报告
-
-### 前端优化
-
-```javascript
-// vite.config.js 配置
-export default defineConfig({
-  build: {
-    target: 'es2015',
-    minify: 'terser',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'echarts': ['echarts'],
-          'd3': ['d3'],
-          'marked': ['marked']
-        }
-      }
-    }
-  }
-})
-```
-
 ---
 
 ## 监控与日志
-
-### 日志配置
-
-```python
-# backend/app.py
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
-)
-```
 
 ### 健康检查
 
@@ -351,7 +289,7 @@ logging.basicConfig(
 curl http://localhost:8000/
 
 # 检查 WebSocket
-wscat -c ws://localhost:8000/ws/simulation
+wscat -c ws://localhost:8000/ws
 ```
 
 ### 监控指标
@@ -386,16 +324,6 @@ app.add_middleware(
 )
 ```
 
-### 敏感信息保护
-
-```bash
-# .env 文件权限
-chmod 600 .env
-
-# 确保 .env 在 .gitignore 中
-echo ".env" >> .gitignore
-```
-
 ---
 
 ## 故障排查
@@ -406,20 +334,9 @@ echo ".env" >> .gitignore
 |------|------|----------|
 | WebSocket 连接失败 | 端口被占用或未启动 | 检查后端是否运行 |
 | LLM API 调用失败 | API Key 错误 | 检查 .env 配置 |
-| 前端页面空白 | 构建失败 | 检查 npm install |
 | 推演速度慢 | 并发设置过高 | 降低 max_concurrent |
 | 知识图谱解析超时 | LLM 响应慢 | 使用快速注入模式 |
-| 预测数据异常 | 历史数据不足 | 等待更多推演步骤 |
-
-### 查看日志
-
-```bash
-# 后端日志
-tail -f app.log
-
-# Docker 日志
-docker logs -f info-cocoon-backend
-```
+| 参数名报错 | 使用旧参数名 | 新旧参数名均可，检查拼写 |
 
 ### 端口问题排查
 
@@ -467,41 +384,14 @@ API_TIMEOUT=60
 {
   "mode": "news",
   "cocoon_strength": 0.5,
-  "debunk_delay": 10,
+  "response_delay": 10,
   "population_size": 200,
   "use_llm": true,
   "use_dual_network": true,
   "init_distribution": {
-    "believe_rumor": 0.30,
-    "believe_truth": 0.15,
+    "believe_negative": 0.30,
+    "believe_positive": 0.15,
     "neutral": 0.55
   }
 }
-```
-
----
-
-## 版本更新
-
-### v2.0 更新内容
-
-1. **双模式支持**：沙盘推演 + 新闻推演
-2. **真实分布锚定**：支持输入真实舆情数据
-3. **预测区间**：输出置信区间而非单值
-4. **干预建议**：自动分析最佳干预时机
-5. **快速注入**：秒级响应事件注入
-6. **知识驱动演化**：知识图谱参与观点计算
-7. **使用说明**：集成在线帮助文档
-
-### 升级指南
-
-```bash
-# 拉取最新代码
-git pull
-
-# 更新依赖
-pip install -r requirements.txt
-cd frontend && npm install
-
-# 重启服务
 ```

@@ -174,20 +174,20 @@ class TestKnowledgeDrivenEvolution:
     def test_compute_batch_influence(self, sample_entities, sample_relations):
         """测试批量影响力计算"""
         from backend.simulation.knowledge_evolution import KnowledgeDrivenEvolution
-        
+
         evolution = KnowledgeDrivenEvolution(sample_entities, sample_relations)
-        
+
         n_agents = 100
         opinions = np.random.uniform(-0.5, 0.5, n_agents)
         personas = ["意见领袖" if i < 10 else "普通用户" for i in range(n_agents)]
-        
+
         influences = evolution.compute_batch_influence(
             opinions=opinions,
             personas=personas,
             cocoon_strength=0.5,
-            debunk_released=False
+            response_released=False
         )
-        
+
         assert len(influences) == n_agents
         assert np.all(np.abs(influences) <= 0.15)  # 不超过最大影响
     

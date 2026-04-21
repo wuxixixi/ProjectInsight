@@ -92,7 +92,7 @@ class SimulationEngine:
         self.time_acceleration = time_acceleration
 
         self.step_count = 0
-        self.responded = False
+        self.responded = False  # 新名称（兼容属性debunked会返回此值）
         self.current_state: Optional[SimulationState] = None
 
         # 增强版数学模型实例
@@ -136,6 +136,15 @@ class SimulationEngine:
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
         self.progress_callback = callback
+
+    @property
+    def debunked(self) -> bool:
+        """向后兼容属性：debunked → responded"""
+        return self.responded
+
+    @debunked.setter
+    def debunked(self, value: bool):
+        self.responded = value
 
     def set_news(self, content: str, source: str = "public", parse_graph: bool = True):
         """
@@ -417,7 +426,8 @@ class SimulationEngine:
             # LLM 模式
             self.llm_population = LLMAgentPopulation(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_negative_spread,  # 内部使用旧参数名
+                initial_negative_spread=self.initial_negative_spread,
+                initial_rumor_spread=self.initial_negative_spread,  # 兼容旧参数名
                 network_type=self.network_type,
                 llm_config=self.llm_config
             )
@@ -430,7 +440,8 @@ class SimulationEngine:
             # 数学模型模式
             self.population = AgentPopulation(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_negative_spread,  # 内部使用旧参数名
+                initial_negative_spread=self.initial_negative_spread,
+                initial_rumor_spread=self.initial_negative_spread,  # 兼容旧参数名
                 network_type=self.network_type
             )
 
@@ -576,7 +587,7 @@ class SimulationEngine:
             # 批量异步决策（传入知识图谱）
             await pop.batch_decide(
                 self.llm_client,
-                debunk_released=self.responded,  # 内部使用旧参数名
+                response_released=self.responded,
                 cocoon_strength=self.cocoon_strength,
                 progress_callback=self.progress_callback,
                 knowledge_graph=self.knowledge_graph  # 传入知识图谱
@@ -615,7 +626,7 @@ class SimulationEngine:
             fear_of_isolation=pop.fear_of_isolation,
             neighbors=neighbors_list,
             influencer_ids=self._get_influencer_ids(),
-            debunk_released=self.responded,  # 内部使用旧参数名
+            response_released=self.responded,
             step_count=self.step_count
         )
         
@@ -626,7 +637,7 @@ class SimulationEngine:
                 opinions=new_opinions,
                 personas=personas,
                 cocoon_strength=self.cocoon_strength,
-                debunk_released=self.responded  # 内部使用旧参数名
+                response_released=self.responded  # 已重命名参数
             )
             
             # 应用知识影响
@@ -854,7 +865,7 @@ class SimulationEngine:
 
         final_result = self._analyze_result(final_state)
         cocoon_effect = self._analyze_cocoon_effect()
-        response_effect = self._analyze_response_effect(negative_trend, truth_trend)
+        response_effect = self._analyze_response_effect(negative_trend, positive_trend)
 
         mode_str = "LLM 驱动" if self.use_llm else "数学模型"
 

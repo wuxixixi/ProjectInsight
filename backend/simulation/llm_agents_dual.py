@@ -58,7 +58,7 @@ TA说这事关你们的切身利益，让你务必注意。
 
 # Agent 决策 Prompt 模板 (双层模态版本 + 观点变化限制 + 知识图谱)
 AGENT_PROMPT_TEMPLATE_DUAL = """你是一个社交媒体用户，正在关注一个热点事件的讨论。
-观点范围: -1(完全相信谣言) 到 1(完全相信真相)，0 表示中立。
+观点范围: -1(完全误信) 到 1(完全正确认知)，0 表示中立。
 
 ## 你的个人特征
 - 当前观点: {opinion:.2f}
@@ -101,7 +101,7 @@ AGENT_PROMPT_TEMPLATE_DUAL = """你是一个社交媒体用户，正在关注一
 - none: 不转发，保持沉默
 
 请直接返回 JSON 格式（不要其他文字）:
-{{"new_opinion": 数值在-1到1之间(注意变化幅度限制), "reasoning": "简短理由(20字内)", "emotion": "情绪状态(冷静/愤怒/焦虑/怀疑/释然)", "action": "行动选择(转发/评论/观望/辟谣/沉默)", "is_silent": boolean, "publish_channel": "public/private/both/none", "generated_comment": "评论内容(30字内)"}}
+{{"new_opinion": 数值在-1到1之间(注意变化幅度限制), "reasoning": "简短理由(20字内)", "emotion": "情绪状态(冷静/愤怒/焦虑/怀疑/释然)", "action": "行动选择(转发/评论/观望/权威回应/沉默)", "is_silent": boolean, "publish_channel": "public/private/both/none", "generated_comment": "评论内容(30字内)"}}
 """
 
 
@@ -138,8 +138,8 @@ class LLMAgent:
         self.belief_strength = belief_strength
         self.influence = influence
         self.susceptibility = susceptibility
-        self.exposed_to_rumor = opinion < -0.2
-        self.exposed_to_truth = False
+        self.exposed_to_negative = opinion < -0.2
+        self.exposed_to_positive = False
 
         # 人设背景
         self.persona = get_persona(agent_id, opinion, susceptibility)
@@ -163,6 +163,25 @@ class LLMAgent:
         # 信息接收记录
         self.received_public_info: List[Dict] = []
         self.received_private_info: List[Dict] = []
+
+    # ==================== 兼容属性访问器 ====================
+    @property
+    def exposed_to_rumor(self) -> bool:
+        """兼容旧属性名: exposed_to_rumor → exposed_to_negative"""
+        return self.exposed_to_negative
+
+    @exposed_to_rumor.setter
+    def exposed_to_rumor(self, value: bool):
+        self.exposed_to_negative = value
+
+    @property
+    def exposed_to_truth(self) -> bool:
+        """兼容旧属性名: exposed_to_truth → exposed_to_positive"""
+        return self.exposed_to_positive
+
+    @exposed_to_truth.setter
+    def exposed_to_truth(self, value: bool):
+        self.exposed_to_positive = value
 
     def _build_graph_section(self, knowledge_graph: Dict) -> str:
         """
@@ -246,7 +265,7 @@ class LLMAgent:
         """
         # 根据人设类型筛选相关实体
         persona_type = self.persona.get("type", "")
-        
+
         priority_types = []
         if "低媒介素养" in persona_type or "从众" in persona_type:
             # 关注人物和情绪化内容
@@ -259,18 +278,18 @@ class LLMAgent:
             priority_types = ["人物", "组织", "概念"]
         else:
             priority_types = ["人物", "事件", "组织"]
-        
+
         # 按优先级排序
         prioritized = []
         for entity in entities:
             entity_type = entity.get("type", "其他")
             if entity_type in priority_types:
                 prioritized.append(entity)
-        
+
         # 如果筛选后的数量不足，返回原列表的前几个
         if len(prioritized) < 2:
             return entities[:3]
-        
+
         return prioritized[:3]
 
     def scan_public_climate(
@@ -280,29 +299,37 @@ class LLMAgent:
     ) -> Dict:
         """扫描公域舆论气候（支持快照一致性）"""
         if not public_neighbors:
-            return {"total": 0, "pro_rumor_ratio": 0.0, "pro_truth_ratio": 0.0, 
-                    "neutral_ratio": 1.0, "silent_ratio": 0.0, "avg_opinion": 0.0}
+            return {"total": 0, "pro_negative_ratio": 0.0, "pro_positive_ratio": 0.0,
+                    "neutral_ratio": 1.0, "silent_ratio": 0.0, "avg_opinion": 0.0,
+                    # 兼容旧键名
+                    "pro_rumor_ratio": 0.0, "pro_truth_ratio": 0.0}
 
         total = len(public_neighbors)
-        
+
         # 使用快照中的观点（如果提供）
         if opinion_snapshot:
             opinions = [opinion_snapshot.get(n.id, n.opinion) for n in public_neighbors]
         else:
             opinions = [n.opinion for n in public_neighbors]
-        
-        pro_rumor = sum(1 for o in opinions if o < -0.2)
-        pro_truth = sum(1 for o in opinions if o > 0.2)
-        neutral = total - pro_rumor - pro_truth
+
+        pro_negative = sum(1 for o in opinions if o < -0.2)
+        pro_positive = sum(1 for o in opinions if o > 0.2)
+        neutral = total - pro_negative - pro_positive
         avg_opinion = sum(opinions) / total
+
+        pro_negative_ratio = pro_negative / total
+        pro_positive_ratio = pro_positive / total
 
         return {
             "total": total,
-            "pro_rumor_ratio": pro_rumor / total,
-            "pro_truth_ratio": pro_truth / total,
+            "pro_negative_ratio": pro_negative_ratio,
+            "pro_positive_ratio": pro_positive_ratio,
             "neutral_ratio": neutral / total,
             "silent_ratio": 0.0,  # 公域网络不追踪沉默
-            "avg_opinion": avg_opinion
+            "avg_opinion": avg_opinion,
+            # 兼容旧键名
+            "pro_rumor_ratio": pro_negative_ratio,
+            "pro_truth_ratio": pro_positive_ratio,
         }
 
     def scan_private_climate(
@@ -312,29 +339,37 @@ class LLMAgent:
     ) -> Dict:
         """扫描私域舆论气候（支持快照一致性）"""
         if not private_neighbors:
-            return {"total": 0, "pro_rumor_ratio": 0.0, "pro_truth_ratio": 0.0,
-                    "neutral_ratio": 1.0, "silent_ratio": 0.0, "avg_opinion": 0.0}
+            return {"total": 0, "pro_negative_ratio": 0.0, "pro_positive_ratio": 0.0,
+                    "neutral_ratio": 1.0, "silent_ratio": 0.0, "avg_opinion": 0.0,
+                    # 兼容旧键名
+                    "pro_rumor_ratio": 0.0, "pro_truth_ratio": 0.0}
 
         total = len(private_neighbors)
-        
+
         # 使用快照中的观点（如果提供）
         if opinion_snapshot:
             opinions = [opinion_snapshot.get(n.id, n.opinion) for n in private_neighbors]
         else:
             opinions = [n.opinion for n in private_neighbors]
-        
-        pro_rumor = sum(1 for o in opinions if o < -0.2)
-        pro_truth = sum(1 for o in opinions if o > 0.2)
-        neutral = total - pro_rumor - pro_truth
+
+        pro_negative = sum(1 for o in opinions if o < -0.2)
+        pro_positive = sum(1 for o in opinions if o > 0.2)
+        neutral = total - pro_negative - pro_positive
         avg_opinion = sum(opinions) / total
+
+        pro_negative_ratio = pro_negative / total
+        pro_positive_ratio = pro_positive / total
 
         return {
             "total": total,
-            "pro_rumor_ratio": pro_rumor / total,
-            "pro_truth_ratio": pro_truth / total,
+            "pro_negative_ratio": pro_negative_ratio,
+            "pro_positive_ratio": pro_positive_ratio,
             "neutral_ratio": neutral / total,
             "silent_ratio": 0.0,
-            "avg_opinion": avg_opinion
+            "avg_opinion": avg_opinion,
+            # 兼容旧键名
+            "pro_rumor_ratio": pro_negative_ratio,
+            "pro_truth_ratio": pro_positive_ratio,
         }
 
     def build_prompt_dual(
@@ -343,7 +378,7 @@ class LLMAgent:
         private_neighbors: List['LLMAgent'],
         news_content: str,
         news_source: str,
-        debunk_released: bool,
+        response_released: bool,
         cocoon_strength: float,
         opinion_snapshot: Optional[Dict] = None,
         knowledge_graph: Optional[Dict] = None
@@ -356,7 +391,7 @@ class LLMAgent:
             private_neighbors: 私域邻居列表
             news_content: 新闻内容
             news_source: 新闻来源
-            debunk_released: 是否已辟谣
+            response_released: 是否已发布权威回应
             cocoon_strength: 茧房强度
             opinion_snapshot: 观点快照，用于并发一致性
             knowledge_graph: 知识图谱数据（可选）
@@ -390,16 +425,16 @@ class LLMAgent:
         # 信息内容
         info_lines.append(f"内容: {news_content}")
 
-        # 辟谣状态
-        if debunk_released:
-            info_lines.append("【官方辟谣】已发布，指出谣言不实")
+        # 权威回应状态
+        if response_released:
+            info_lines.append("【权威回应】已发布，指出信息不实")
 
         # 算法茧房效应
         if cocoon_strength > 0.3:
             if self.opinion < 0:
-                info_lines.append("算法推荐: 更多支持谣言的内容")
+                info_lines.append("算法推荐: 更多支持负面信念的内容")
             else:
-                info_lines.append("算法推荐: 更多支持真相的内容")
+                info_lines.append("算法推荐: 更多支持正确认知的内容")
 
         info_section = "\n".join(f"- {line}" for line in info_lines)
 
@@ -408,8 +443,8 @@ class LLMAgent:
         if public_climate["total"] > 0:
             public_climate_section = f"""- 公域粉丝数: {public_climate['total']}
 - 公域平均观点: {public_climate['avg_opinion']:.2f}
-- 公域谣言率: {public_climate['pro_rumor_ratio']*100:.0f}%
-- 公域真相率: {public_climate['pro_truth_ratio']*100:.0f}%"""
+- 公域负面信念率: {public_climate['pro_negative_ratio']*100:.0f}%
+- 公域正确认知率: {public_climate['pro_positive_ratio']*100:.0f}%"""
         else:
             public_climate_section = "- 暂无公域粉丝"
 
@@ -418,39 +453,45 @@ class LLMAgent:
         if private_climate["total"] > 0:
             private_climate_section = f"""- 私域好友数: {private_climate['total']}
 - 私域平均观点: {private_climate['avg_opinion']:.2f}
-- 私域谣言率: {private_climate['pro_rumor_ratio']*100:.0f}%
-- 私域真相率: {private_climate['pro_truth_ratio']*100:.0f}%"""
+- 私域负面信念率: {private_climate['pro_negative_ratio']*100:.0f}%
+- 私域正确认知率: {private_climate['pro_positive_ratio']*100:.0f}%"""
         else:
             private_climate_section = "- 暂无私域好友"
 
         # 保存气候数据（双层结构 + 扁平汇总）
-        # 计算扁平汇总结构（用于前端透视面板）
+        # 计算扁平汇总结构（用于前端透视面板兼容）
         all_neighbors = public_neighbors + private_neighbors
         if all_neighbors:
             all_opinions = [opinion_snapshot.get(n.id, n.opinion) for n in all_neighbors] if opinion_snapshot else [n.opinion for n in all_neighbors]
             total_all = len(all_neighbors)
-            pro_rumor_all = sum(1 for o in all_opinions if o < -0.2)
-            pro_truth_all = sum(1 for o in all_opinions if o > 0.2)
-            neutral_all = total_all - pro_rumor_all - pro_truth_all
+            pro_negative_all = sum(1 for o in all_opinions if o < -0.2)
+            pro_positive_all = sum(1 for o in all_opinions if o > 0.2)
+            neutral_all = total_all - pro_negative_all - pro_positive_all
             avg_opinion_all = sum(all_opinions) / total_all
         else:
             total_all = 0
-            pro_rumor_all = 0
-            pro_truth_all = 0
+            pro_negative_all = 0
+            pro_positive_all = 0
             neutral_all = 1
             avg_opinion_all = 0
-        
+
+        pro_negative_ratio_all = pro_negative_all / total_all if total_all > 0 else 0.0
+        pro_positive_ratio_all = pro_positive_all / total_all if total_all > 0 else 0.0
+
         self.perceived_climate = {
             # 双层结构（保留用于内部分析）
             "public": public_climate,
             "private": private_climate,
             # 扁平结构（用于前端透视面板兼容）
             "total": total_all,
-            "pro_rumor_ratio": pro_rumor_all / total_all if total_all > 0 else 0.0,
-            "pro_truth_ratio": pro_truth_all / total_all if total_all > 0 else 0.0,
+            "pro_negative_ratio": pro_negative_ratio_all,
+            "pro_positive_ratio": pro_positive_ratio_all,
             "neutral_ratio": neutral_all / total_all if total_all > 0 else 1.0,
             "silent_ratio": 0.0,
-            "avg_opinion": avg_opinion_all
+            "avg_opinion": avg_opinion_all,
+            # 兼容旧键名
+            "pro_rumor_ratio": pro_negative_ratio_all,
+            "pro_truth_ratio": pro_positive_ratio_all,
         }
 
         prompt = AGENT_PROMPT_TEMPLATE_DUAL.format(
@@ -479,14 +520,14 @@ class LLMAgent:
         news_content: str,
         news_source: str,
         knowledge_graph: Optional[Dict] = None,
-        debunk_released: bool = False,
+        response_released: bool = False,
         cocoon_strength: float = 0.5,
         opinion_snapshot: Optional[Dict] = None
     ) -> Dict:
         """双模态决策（支持快照一致性）"""
         prompt, received_news = self.build_prompt_dual(
             public_neighbors, private_neighbors, news_content, news_source,
-            debunk_released, cocoon_strength, opinion_snapshot, knowledge_graph
+            response_released, cocoon_strength, opinion_snapshot, knowledge_graph
         )
 
         messages = [{"role": "user", "content": prompt}]
@@ -579,8 +620,11 @@ class LLMAgent:
             "belief_strength": float(self.belief_strength),
             "influence": float(self.influence),
             "susceptibility": float(self.susceptibility),
-            "exposed_to_rumor": bool(self.exposed_to_rumor),
-            "exposed_to_truth": bool(self.exposed_to_truth),
+            "exposed_to_negative": bool(self.exposed_to_negative),
+            "exposed_to_positive": bool(self.exposed_to_positive),
+            # 兼容旧键名
+            "exposed_to_rumor": bool(self.exposed_to_negative),
+            "exposed_to_truth": bool(self.exposed_to_positive),
             "persona": self.persona,
             "fear_of_isolation": float(self.fear_of_isolation),
             "conviction": float(self.conviction),
@@ -601,7 +645,8 @@ class LLMAgentPopulationDual:
     def __init__(
         self,
         size: int = 200,
-        initial_rumor_spread: float = 0.3,
+        initial_negative_spread: float = 0.3,
+        initial_rumor_spread: float = None,  # 兼容旧参数名
         llm_config: Optional[LLMConfig] = None,
         # 双层网络参数
         num_communities: int = 8,
@@ -611,6 +656,10 @@ class LLMAgentPopulationDual:
     ):
         self.size = size
         self.llm_config = llm_config or LLMConfig()
+
+        # 兼容旧参数名
+        if initial_rumor_spread is not None:
+            initial_negative_spread = initial_rumor_spread
 
         # 构建双层网络
         self.dual_network = DualLayerNetwork(
@@ -626,9 +675,9 @@ class LLMAgentPopulationDual:
 
         # 初始化观点分布
         opinions = np.zeros(size)
-        rumor_believers = int(size * initial_rumor_spread)
-        opinions[:rumor_believers] = np.random.uniform(-0.8, -0.3, rumor_believers)
-        opinions[rumor_believers:] = np.random.uniform(-0.2, 0.3, size - rumor_believers)
+        negative_believers = int(size * initial_negative_spread)
+        opinions[:negative_believers] = np.random.uniform(-0.8, -0.3, negative_believers)
+        opinions[negative_believers:] = np.random.uniform(-0.2, 0.3, size - negative_believers)
 
         # 初始化属性
         belief_strengths = np.random.beta(2, 2, size)
@@ -649,7 +698,17 @@ class LLMAgentPopulationDual:
             )
             self.agents.append(agent)
 
-        self.exposed_to_truth = np.zeros(size, dtype=bool)
+        self.exposed_to_positive = np.zeros(size, dtype=bool)
+
+    # ==================== 兼容属性访问器 ====================
+    @property
+    def exposed_to_truth(self) -> np.ndarray:
+        """兼容旧属性名: exposed_to_truth → exposed_to_positive"""
+        return self.exposed_to_positive
+
+    @exposed_to_truth.setter
+    def exposed_to_truth(self, value: np.ndarray):
+        self.exposed_to_positive = value
 
     def get_public_neighbors(self, agent_id: int) -> List[int]:
         """获取公域邻居ID"""
@@ -683,7 +742,7 @@ class LLMAgentPopulationDual:
         news_content: str,
         news_source: str,
         knowledge_graph: Optional[Dict] = None,
-        debunk_released: bool = False,
+        response_released: bool = False,
         cocoon_strength: float = 0.5,
         progress_callback=None
     ) -> List[Dict]:
@@ -709,7 +768,7 @@ class LLMAgentPopulationDual:
                 news_content,
                 news_source,
                 knowledge_graph,
-                debunk_released,
+                response_released,
                 cocoon_strength,
                 opinion_snapshot  # 传入快照
             )
@@ -741,20 +800,24 @@ class LLMAgentPopulationDual:
 
         return processed
 
-    def apply_debunking(self, effectiveness: float = 0.2):
+    def apply_authoritative_response(self, effectiveness: float = 0.2):
         """
-        应用辟谣效果（动态版本）
-        
+        应用权威回应效果（动态版本）
+
         Args:
-            effectiveness: 基础辟谣效果系数（由引擎根据延迟和茧房强度计算）
+            effectiveness: 基础权威回应效果系数（由引擎根据延迟和茧房强度计算）
         """
-        self.exposed_to_truth[:] = True
+        self.exposed_to_positive[:] = True
         for agent in self.agents:
-            agent.exposed_to_truth = True
+            agent.exposed_to_positive = True
             if agent.opinion < 0:
                 # 动态计算：考虑信念强度和易感性
                 impact = effectiveness * (1 - agent.belief_strength * 0.5) * (0.5 + agent.susceptibility * 0.5)
                 agent.opinion = min(agent.opinion + impact, 1.0)
+
+    def apply_debunking(self, effectiveness: float = 0.2):
+        """兼容旧方法名: apply_debunking → apply_authoritative_response"""
+        return self.apply_authoritative_response(effectiveness)
 
     def get_opinion_histogram(self, bins: int = 20) -> Dict[str, List]:
         """计算观点分布直方图"""
@@ -773,11 +836,16 @@ class LLMAgentPopulationDual:
 
         # 整体统计
         overall_stats = {
-            "rumor_spread_rate": np.mean([o < -0.2 for o in opinions]),
-            "truth_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
+            "negative_belief_rate": np.mean([o < -0.2 for o in opinions]),
+            "positive_belief_rate": np.mean([o > 0.2 for o in opinions]),
             "avg_opinion": float(np.mean(opinions)),
             "polarization_index": float(np.std(opinions) * 2),
-            "silence_rate": np.mean([a.is_silent for a in self.agents])
+            "silence_rate": np.mean([a.is_silent for a in self.agents]),
+            # 兼容旧键名
+            "negative_spread_rate": np.mean([o < -0.2 for o in opinions]),
+            "positive_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
+            "rumor_spread_rate": np.mean([o < -0.2 for o in opinions]),
+            "truth_acceptance_rate": np.mean([o > 0.2 for o in opinions]),
         }
 
         # 公域统计（大V和其粉丝的观点）
@@ -788,11 +856,11 @@ class LLMAgentPopulationDual:
 
         if public_agent_ids:
             public_opinions = [self.agents[aid].opinion for aid in public_agent_ids if aid < len(self.agents)]
-            public_rumor_rate = np.mean([o < -0.2 for o in public_opinions]) if public_opinions else 0
-            public_truth_rate = np.mean([o > 0.2 for o in public_opinions]) if public_opinions else 0
+            public_negative_rate = np.mean([o < -0.2 for o in public_opinions]) if public_opinions else 0
+            public_positive_rate = np.mean([o > 0.2 for o in public_opinions]) if public_opinions else 0
         else:
-            public_rumor_rate = overall_stats["rumor_spread_rate"]
-            public_truth_rate = overall_stats["truth_acceptance_rate"]
+            public_negative_rate = overall_stats["negative_spread_rate"]
+            public_positive_rate = overall_stats["positive_acceptance_rate"]
 
         # 私域统计（按社群聚合）
         community_stats = {}
@@ -800,22 +868,32 @@ class LLMAgentPopulationDual:
             members = self.dual_network.get_community_members(comm_id)
             if members:
                 comm_opinions = [self.agents[mid].opinion for mid in members if mid < len(self.agents)]
+                comm_negative_rate = np.mean([o < -0.2 for o in comm_opinions]) if comm_opinions else 0
+                comm_positive_rate = np.mean([o > 0.2 for o in comm_opinions]) if comm_opinions else 0
                 community_stats[f"community_{comm_id}"] = {
                     "size": len(comm_opinions),
                     "avg_opinion": float(np.mean(comm_opinions)) if comm_opinions else 0,
-                    "rumor_rate": np.mean([o < -0.2 for o in comm_opinions]) if comm_opinions else 0
+                    "negative_rate": comm_negative_rate,
+                    "positive_rate": comm_positive_rate,
+                    # 兼容旧键名
+                    "rumor_rate": comm_negative_rate,
                 }
 
-        # 私域整体谣言率（社群内部的平均）
-        private_rumor_rate = np.mean([s["rumor_rate"] for s in community_stats.values()]) if community_stats else 0
-        private_truth_rate = np.mean([s.get("truth_rate", 0) for s in community_stats.values()]) if community_stats else 0
+        # 私域整体负面信念率（社群内部的平均）
+        private_negative_rate = np.mean([s["negative_rate"] for s in community_stats.values()]) if community_stats else 0
+        private_positive_rate = np.mean([s.get("positive_rate", 0) for s in community_stats.values()]) if community_stats else 0
 
         return {
             **overall_stats,
-            "public_rumor_rate": float(public_rumor_rate),
-            "public_truth_rate": float(public_truth_rate),
-            "private_rumor_rate": float(private_rumor_rate),
-            "private_truth_rate": float(private_truth_rate),
+            "public_negative_rate": float(public_negative_rate),
+            "public_positive_rate": float(public_positive_rate),
+            "private_negative_rate": float(private_negative_rate),
+            "private_positive_rate": float(private_positive_rate),
+            # 兼容旧键名
+            "public_rumor_rate": float(public_negative_rate),
+            "public_truth_rate": float(public_positive_rate),
+            "private_rumor_rate": float(private_negative_rate),
+            "private_truth_rate": float(private_positive_rate),
             "num_communities": self.dual_network.num_communities,
             "num_influencers": len(self.dual_network.influencer_ids),
             "community_stats": community_stats

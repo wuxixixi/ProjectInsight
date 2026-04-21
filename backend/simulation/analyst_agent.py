@@ -99,8 +99,10 @@ class DataSampler:
                 }
             },
             # 关键节点
-            "debunk_released": engine.debunked,
-            "debunk_step": engine.debunk_delay
+            "response_released": engine.responded,
+            "debunk_released": engine.responded,  # 兼容旧名
+            "response_step": engine.response_delay,
+            "debunk_step": engine.response_delay  # 兼容旧名
         }
 
     @staticmethod

@@ -16,9 +16,8 @@
 ```
 -1 ─────────────────────────────────────────── 0 ─────────────────────────────────────────── 1
   │                                        │                                        │
-  │                                        │                                        │
-完全相信谣言                              中立                                   完全相信真相
-(Rumor Believer)                        (Neutral)                             (Truth Acceptor)
+完全误信负面信念                              中立                                   完全正确认知
+(Negative Believer)                     (Neutral)                            (Positive Believer)
 ```
 
 ## 推演模式
@@ -59,7 +58,7 @@
 基于社会心理学理论，通过公式计算观点演化：
 
 ```
-new_opinion = f(social_influence, cocoon_effect, debunking, polarization, knowledge_influence)
+new_opinion = f(social_influence, cocoon_effect, authority_response, polarization, knowledge_influence)
 ```
 
 #### 1. 社交影响 (Social Influence)
@@ -83,17 +82,17 @@ cocoon_adjustment = cocoon_strength * (old_opinion - avg_recommendation)
 - `cocoon_strength = 0`：无茧房效应
 - `cocoon_strength = 1`：完全茧房，只看到同温层内容
 
-#### 3. 官方辟谣 (Official Debunking)
+#### 3. 权威回应 (Authority Response)
 
-辟谣信息对相信谣言者的影响：
+权威回应信息对误信者的影响：
 
 ```
-if debunking_active:
-    if opinion < 0:  # 相信谣言
-        adjustment = -debunk_credibility * authority_factor * (1 + backfire)
-        # backfire: 逆火效应（部分人反而更相信谣言）
-    else:  # 已经相信真相
-        adjustment = debunk_credibility * authority_factor
+if response_released:
+    if opinion < 0:  # 持有负面信念
+        adjustment = -response_credibility * authority_factor * (1 + backfire)
+        # backfire: 逆火效应（部分人反而更坚持误信）
+    else:  # 已持有正面信念
+        adjustment = response_credibility * authority_factor
 ```
 
 #### 4. 群体极化 (Group Polarization)
@@ -130,7 +129,7 @@ knowledge_influence = entity_impact * evidence_strength * persona_factor
 
 | 参数 | 范围 | 说明 |
 |------|------|------|
-| debunk_credibility | 0~1 | 辟谣来源可信度 |
+| response_credibility | 0~1 | 权威回应来源可信度 |
 | authority_factor | 0~1 | 权威影响力系数 |
 | backfire_strength | 0~1 | 逆火效应强度 |
 | silence_threshold | 0~1 | 沉默阈值 |
@@ -156,6 +155,10 @@ class LLMAgent:
     # 人设属性
     persona: Persona                  # 7种人设类型
 
+    # 暴露状态
+    exposed_to_negative: bool          # 是否接触负面信息
+    exposed_to_positive: bool          # 是否接触正面信息
+
     # 决策相关
     emotion: str                      # 情绪状态
     action: str                       # 行动选择
@@ -171,7 +174,7 @@ class LLMAgent:
 |----------|------|----------|
 | 理性分析者 | 注重逻辑和数据 | 谨慎决策、易被证据说服 |
 | 情感驱动者 | 重视情感共鸣 | 易受情绪化内容影响 |
-| 权威服从者 | 信任权威来源 | 相信官方辟谣 |
+| 权威服从者 | 信任权威来源 | 相信官方权威回应 |
 | 怀疑论者 | 质疑一切信息 | 难以被说服、倾向于中立 |
 | 社交活跃者 | 频繁互动传播 | 高影响力、带动他人 |
 | 沉默观察者 | 较少发言 | 低影响力、被动接受 |
@@ -187,7 +190,7 @@ class LLMAgent:
      ┌──────────────┐
      │  输入上下文   │
      │  (邻居观点)  │
-     │  (辟谣信息)  │
+     │  (权威回应)  │
      │  (接收新闻)  │
      │  (知识图谱)  │ ← 新闻模式专用
      └──────┬───────┘
@@ -229,20 +232,20 @@ class LLMAgent:
 - 摘要: {summary}
 
 当前信息环境：
-- 谣言传播率: {rumor_rate}%
-- 真相接受率: {truth_rate}%
+- 误信率: {negative_belief_rate}%
+- 正确认知率: {positive_belief_rate}%
 - 你收到的信息: {received_news}
 
-你当前的观点: {current_opinion} (-1到1，-1=完全相信谣言，1=完全相信真相)
+你当前的观点: {current_opinion} (-1到1，-1=完全误信，1=完全正确认知)
 你的信念强度: {belief_strength} (越高越难改变)
 你的易感性: {susceptibility} (越高越容易受他人影响)
 
 邻居们的观点: {neighbor_opinions}
 
 请决定：
-1. 你的新观点是什么？（考虑邻居影响、知识图谱和你的信念强度）
+1. 你的新观点是什么？
 2. 你的情绪状态是什么？
-3. 你会采取什么行动？（转发/评论/观望/辟谣）
+3. 你会采取什么行动？（转发/评论/观望/接受权威回应）
 4. 如果评论，你会说什么？
 5. 简述你的推理过程。
 ```
@@ -283,28 +286,28 @@ class LLMAgent:
 
 ---
 
-## 辟谣机制
+## 权威回应机制
 
-### 辟谣时机
+### 权威回应时机
 
-辟谣延迟以"步"为单位，每步代表一个时间单位（可理解为一天或一个传播周期）：
+权威回应延迟以"步"为单位，每步代表一个时间单位：
 
 ```
 步数: 0    5    10   15   20   25
       │    │    │    │    │    │
       ├────┴────┴────┴────┴────┤
-谣言传播                    辟谣发布
+负面信息传播                   权威回应发布
       ←── 延迟 = 10 步 ──→
 ```
 
-### 辟谣效果
+### 权威回应效果
 
-辟谣效果受以下因素影响：
+权威回应效果受以下因素影响：
 
-1. **可信度** (`debunk_credibility`): 辟谣来源的权威性
+1. **可信度** (`response_credibility`): 权威回应来源的权威性
 2. **权威因子** (`authority_factor`): 发布者的影响力
-3. **逆火效应** (`backfire_strength`): 部分人群反而更相信谣言
-4. **时机**: 延迟越长，谣言传播范围越广，辟谣越困难
+3. **逆火效应** (`backfire_strength`): 部分人群反而更坚持误信
+4. **时机**: 延迟越长，负面信念传播范围越广，权威回应越困难
 
 ---
 
@@ -328,15 +331,15 @@ class LLMAgent:
 {
   "entities": [
     {"name": "王某杞", "type": "人物", "description": "某科技公司CEO", "importance": 1},
-    {"name": "某科技公司", "type": "组织", "description": "新闻中提及的科技公司", "importance": 2},
-    {"name": "北京", "type": "地点", "description": "发布会举办地点", "importance": 4},
-    {"name": "100亿元", "type": "概念", "description": "公司计划投资的金额", "importance": 3}
+    {"name": "某科技公司", "type": "组织", "description": "科技公司", "importance": 2},
+    {"name": "北京", "type": "地点", "description": "发布会地点", "importance": 4},
+    {"name": "100亿元", "type": "概念", "description": "投资金额", "importance": 3}
   ],
   "relations": [
     {"source": "王某杞", "target": "某科技公司", "action": "担任CEO", "type": "关联"},
     {"source": "某科技公司", "target": "100亿元", "action": "计划投资", "type": "影响"}
   ],
-  "summary": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元。",
+  "summary": "某科技公司CEO王某杞在北京发布会宣布投资100亿元。",
   "sentiment": "正面",
   "credibility_hint": "高可信"
 }
@@ -440,7 +443,7 @@ def compute_entity_influence(agent, entity, cocoon_strength):
 
 ```json
 {
-  "rumor_spread_rate": {
+  "negative_belief_rate": {
     "expected": 0.52,      // 最可能值
     "optimistic": 0.38,    // 乐观场景（下界）
     "pessimistic": 0.66,   // 悲观场景（上界）
@@ -458,7 +461,7 @@ def compute_entity_influence(agent, entity, cocoon_strength):
 │                    预测轨迹示意                                      │
 └─────────────────────────────────────────────────────────────────────┘
 
-谣言传播率
+误信率
   │
 1.0 ┤                           ╭────────── 悲观场景
     │                      ╭────╯
@@ -480,9 +483,9 @@ def compute_entity_influence(agent, entity, cocoon_strength):
 
 | 风险等级 | 条件 | 含义 |
 |----------|------|------|
-| critical | 谣言率>50% 或 极化>0.8 | 需立即干预 |
-| high | 谣言率>35% 或 极化>0.6 | 高度关注 |
-| medium | 谣言率>20% 或 极化>0.4 | 持续监控 |
+| critical | 误信率>50% 或 极化>0.8 | 需立即干预 |
+| high | 误信率>35% 或 极化>0.6 | 高度关注 |
+| medium | 误信率>20% 或 极化>0.4 | 持续监控 |
 | low | 其他情况 | 正常 |
 
 ### 干预时机建议
@@ -492,8 +495,8 @@ def compute_entity_influence(agent, entity, cocoon_strength):
 ```python
 def recommend_intervention(current_state, prediction):
     # 计算干预窗口
-    if prediction.rumor_rate_at_step(10) > 0.5:
-        # 预测10步后谣言失控，建议立即干预
+    if prediction.negative_belief_rate_at_step(10) > 0.5:
+        # 预测10步后误信失控，建议立即干预
         return {
             "recommended_step": current_step + 3,
             "urgency": "high"

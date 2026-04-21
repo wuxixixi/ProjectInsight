@@ -5,7 +5,7 @@
 | 项目 | 说明 |
 |------|------|
 | 基础 URL | http://localhost:8000 |
-| WebSocket | ws://localhost:8000/ws/simulation |
+| WebSocket | ws://localhost:8000/ws |
 | 数据格式 | JSON |
 
 ## REST API
@@ -27,46 +27,6 @@
 
 ---
 
-## 推演模式
-
-### 模式参数说明
-
-推演模式通过 `/api/simulation/start` 接口的 `mode` 参数指定，无需单独调用模式设置接口。
-
-**模式类型**:
-| 值 | 说明 |
-|------|------|
-| `sandbox` | 沙盘推演模式（默认），参数驱动，研究传播机制 |
-| `news` | 新闻推演模式，真实分布锚定，预测现实演进 |
-
-**启动参数示例（新闻模式）**:
-```json
-{
-  "mode": "news",
-  "init_distribution": {
-    "believe_rumor": 0.30,
-    "believe_truth": 0.15,
-    "neutral": 0.55
-  },
-  "cocoon_strength": 0.5,
-  "population_size": 200,
-  "use_llm": true
-}
-```
-
-**启动参数示例（沙盘模式）**:
-```json
-{
-  "mode": "sandbox",
-  "initial_rumor_spread": 0.3,
-  "cocoon_strength": 0.5,
-  "population_size": 200,
-  "use_llm": true
-}
-```
-
----
-
 ## 推演管理
 
 ### POST /api/simulation/start
@@ -76,27 +36,46 @@
 **请求体:**
 ```json
 {
+  "mode": "sandbox",
   "cocoon_strength": 0.5,
-  "debunk_delay": 10,
+  "response_delay": 10,
   "population_size": 200,
-  "initial_rumor_spread": 0.3,
+  "initial_negative_spread": 0.3,
   "network_type": "small_world",
   "use_llm": true,
   "use_dual_network": true,
   "num_communities": 8,
-  "public_m": 3,
-  "max_concurrent": 50,
-  "connection_pool_size": 600,
-  "timeout": 60,
-  "max_retries": 5,
-  "debunk_credibility": 0.7,
+  "response_credibility": 0.7,
   "authority_factor": 0.5,
   "backfire_strength": 0.3,
   "silence_threshold": 0.3,
   "polarization_factor": 0.3,
-  "echo_chamber_factor": 0.2
+  "echo_chamber_factor": 0.2,
+  "init_distribution": {
+    "believe_negative": 0.30,
+    "believe_positive": 0.15,
+    "neutral": 0.55
+  }
 }
 ```
+
+**参数说明:**
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| mode | string | "sandbox" | 推演模式（sandbox/news） |
+| cocoon_strength | float | 0.5 | 算法茧房强度 [0-1] |
+| response_delay | int | 10 | 权威回应延迟步数 |
+| population_size | int | 200 | Agent数量 |
+| initial_negative_spread | float | 0.3 | 初始误信率（沙盘模式） |
+| network_type | string | "barabasi_albert" | 网络类型 |
+| use_llm | bool | true | 是否使用LLM模式 |
+| use_dual_network | bool | true | 是否使用双层网络 |
+| num_communities | int | 8 | 私域社群数量 |
+| response_credibility | float | 0.7 | 权威回应可信度 |
+| init_distribution | object | null | 真实分布锚定（新闻模式） |
+
+> **向后兼容**: 旧参数名仍然有效，如 `debunk_delay` → `response_delay`，`initial_rumor_spread` → `initial_negative_spread`
 
 **响应示例:**
 ```json
@@ -104,12 +83,16 @@
   "step": 0,
   "agents": [...],
   "edges": [...],
-  "rumor_spread_rate": 0.3,
-  "truth_acceptance_rate": 0.0,
+  "negative_belief_rate": 0.3,
+  "positive_belief_rate": 0.0,
   "avg_opinion": -0.85,
-  "polarization_index": 0.42
+  "polarization_index": 0.42,
+  "rumor_spread_rate": 0.3,
+  "truth_acceptance_rate": 0.0
 }
 ```
+
+> **注意**: 响应同时返回新旧两种字段名，确保向后兼容
 
 ---
 
@@ -123,8 +106,8 @@
   "step": 1,
   "agents": [...],
   "edges": [...],
-  "rumor_spread_rate": 0.35,
-  "truth_acceptance_rate": 0.05,
+  "negative_belief_rate": 0.35,
+  "positive_belief_rate": 0.05,
   "avg_opinion": -0.72,
   "polarization_index": 0.48
 }
@@ -143,13 +126,13 @@
   "agents": [...],
   "public_edges": [...],
   "private_edges": [...],
-  "rumor_spread_rate": 0.45,
-  "truth_acceptance_rate": 0.15,
+  "negative_belief_rate": 0.45,
+  "positive_belief_rate": 0.15,
   "avg_opinion": -0.35,
   "polarization_index": 0.62,
   "silence_rate": 0.12,
-  "public_rumor_rate": 0.48,
-  "private_rumor_rate": 0.42,
+  "public_negative_rate": 0.48,
+  "private_negative_rate": 0.42,
   "num_communities": 8,
   "num_influencers": 5
 }
@@ -174,7 +157,7 @@
 
 ## 预测接口
 
-### GET /api/prediction
+### GET /api/prediction/update
 
 获取当前预测结果（新闻模式）
 
@@ -184,18 +167,18 @@
   "success": true,
   "data": {
     "current_state": {
-      "rumor_spread_rate": 0.45,
-      "truth_acceptance_rate": 0.15,
+      "negative_belief_rate": 0.45,
+      "positive_belief_rate": 0.15,
       "polarization_index": 0.62
     },
     "prediction": {
-      "rumor_spread_rate": {
+      "negative_belief_rate": {
         "expected": 0.52,
         "optimistic": 0.38,
         "pessimistic": 0.66,
         "confidence": 0.95
       },
-      "truth_acceptance_rate": {
+      "positive_belief_rate": {
         "expected": 0.22,
         "optimistic": 0.35,
         "pessimistic": 0.09
@@ -209,26 +192,26 @@
     },
     "strategies": [
       {
-        "type": "debunk",
+        "type": "response",
         "priority": 1,
-        "description": "官方权威辟谣",
-        "expected_effect": "预计降低谣言传播率15-25%"
+        "description": "官方权威回应",
+        "expected_effect": "预计降低误信率15-25%"
       },
       {
         "type": "amplify",
         "priority": 2,
-        "description": "放大真相传播",
-        "expected_effect": "预计提升真相接受率10-20%"
+        "description": "放大正面信念传播",
+        "expected_effect": "预计提升正确认知率10-20%"
       }
     ],
-    "reasoning": "当前谣言传播率已达45%，预测将持续上升..."
+    "reasoning": "当前误信率已达45%，预测将持续上升..."
   }
 }
 ```
 
 ---
 
-### GET /api/prediction/trajectory
+### GET /api/prediction/timeline
 
 获取预测轨迹数据
 
@@ -241,12 +224,12 @@
   "success": true,
   "data": {
     "steps": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    "rumor_spread_rate": {
+    "negative_belief_rate": {
       "expected": [0.45, 0.48, 0.51, 0.54, 0.56, 0.58, 0.60, 0.61, 0.62, 0.63, 0.64],
       "optimistic": [0.45, 0.42, 0.39, 0.36, 0.33, 0.30, 0.28, 0.26, 0.24, 0.23, 0.22],
       "pessimistic": [0.45, 0.54, 0.63, 0.72, 0.79, 0.85, 0.88, 0.90, 0.92, 0.93, 0.94]
     },
-    "truth_acceptance_rate": {
+    "positive_belief_rate": {
       "expected": [0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25],
       "optimistic": [0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.44, 0.48, 0.51, 0.54, 0.56],
       "pessimistic": [0.15, 0.12, 0.09, 0.07, 0.05, 0.04, 0.03, 0.02, 0.02, 0.01, 0.01]
@@ -280,21 +263,21 @@
   "old_opinion": -0.6,
   "new_opinion": -0.35,
   "received_news": [
-    "官方发布辟谣公告"
+    "官方发布权威回应公告"
   ],
   "llm_raw_response": "...",
   "emotion": "理性",
   "action": "评论",
   "generated_comment": "仔细看了官方公告，发现之前的消息确实有误...",
-  "reasoning": "考虑到邻居观点和官方证据，我选择相信真相",
+  "reasoning": "考虑到邻居观点和官方证据，我选择正确认知",
   "has_decided": true,
   "fear_of_isolation": 0.4,
   "conviction": 0.6,
   "is_silent": false,
   "perceived_climate": {
     "total": 15,
-    "pro_rumor_ratio": 0.4,
-    "pro_truth_ratio": 0.33,
+    "pro_negative_ratio": 0.4,
+    "pro_positive_ratio": 0.33,
     "neutral_ratio": 0.27,
     "silent_ratio": 0.1,
     "avg_opinion": -0.15
@@ -392,8 +375,12 @@
 
 解析新闻文本为知识图谱
 
-**查询参数:**
-- `content`: 新闻文本内容
+**请求体:**
+```json
+{
+  "content": "某科技公司CEO在北京发布会宣布将投资100亿元"
+}
+```
 
 **响应示例:**
 ```json
@@ -401,30 +388,32 @@
   "success": true,
   "data": {
     "entities": [
-      {"name": "王某杞", "type": "人物", "description": "某科技公司CEO"},
-      {"name": "某科技公司", "type": "组织", "description": "新闻中提及的科技公司"},
-      {"name": "北京", "type": "地点", "description": "发布会举办地点"},
-      {"name": "100亿元", "type": "概念", "description": "公司计划投资的金额"}
+      {"name": "王某杞", "type": "人物", "description": "某科技公司CEO", "importance": 1},
+      {"name": "某科技公司", "type": "组织", "description": "科技公司", "importance": 2},
+      {"name": "北京", "type": "地点", "description": "发布会地点", "importance": 4},
+      {"name": "100亿元", "type": "概念", "description": "投资金额", "importance": 3}
     ],
     "relations": [
       {"source": "王某杞", "target": "某科技公司", "action": "担任CEO", "type": "关联"},
       {"source": "某科技公司", "target": "100亿元", "action": "计划投资", "type": "影响"}
     ],
-    "summary": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元。"
+    "summary": "某科技公司CEO王某杞在北京发布会宣布投资100亿元。",
+    "sentiment": "正面",
+    "credibility_hint": "高可信"
   }
 }
 ```
 
 ---
 
-#### POST /api/event/airdrop
+#### POST /api/event/inject
 
-注入突发事件，触发知识图谱解析并在推演中使用
+注入事件（支持快速注入）
 
 **请求体:**
 ```json
 {
-  "content": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元",
+  "content": "事件内容",
   "source": "public",
   "skip_parse": false
 }
@@ -443,15 +432,11 @@
   "success": true,
   "data": {
     "event": {
-      "content": "某科技公司CEO王某杞在北京发布会上宣布公司将投资100亿元",
+      "content": "...",
       "step": 5,
       "skip_parse": false
     },
-    "knowledge_graph": {
-      "entities": [...],
-      "relations": [...],
-      "summary": "..."
-    },
+    "knowledge_graph": {...},
     "parse_time": 15.3
   }
 }
@@ -475,59 +460,37 @@
 
 ---
 
-#### GET /api/event/knowledge-graph
+## 风险预警
 
-获取当前推演的知识图谱
+#### GET /api/risk/check
+
+检查当前风险状态
 
 **响应示例:**
 ```json
 {
   "success": true,
   "data": {
-    "entities": [...],
-    "relations": [...],
-    "summary": "..."
-  }
-}
-```
-
----
-
-## 文档接口
-
-#### GET /api/docs/usage
-
-获取使用说明文档内容
-
-**响应示例:**
-```json
-{
-  "success": true,
-  "content": "# 使用说明\n\n## 1. 选择推演模式\n...",
-  "filename": "README.md"
-}
-```
-
----
-
-## 数学模型
-
-#### GET /api/math-model/explanation
-
-获取增强版数学模型的理论解释
-
-**响应示例:**
-```json
-{
-  "theories": {
-    "echo_chamber": "算法推荐形成信息茧房的机制...",
-    "spiral_of_silence": "沉默的螺旋理论...",
-    "group_polarization": "群体极化理论..."
-  },
-  "parameters": {
-    "cocoon_strength": {
-      "name": "算法茧房强度",
-      "description": "推荐算法强化既有观点的程度"
+    "risk_level": "high",
+    "alerts": [
+      {
+        "rule": "negative_high",
+        "message": "负面信念率超过50%，存在高风险",
+        "value": 0.52,
+        "threshold": 0.5
+      },
+      {
+        "rule": "polarization_high",
+        "message": "极化指数超过0.6，群体严重分裂",
+        "value": 0.65,
+        "threshold": 0.6
+      }
+    ],
+    "intervention_suggested": true,
+    "recommended_timing": {
+      "current_step": 8,
+      "best_intervention_step": 10,
+      "window_closing": false
     }
   }
 }
@@ -540,7 +503,7 @@
 ### 连接地址
 
 ```
-ws://localhost:8000/ws/simulation
+ws://localhost:8000/ws
 ```
 
 ### 客户端 → 服务端
@@ -552,28 +515,19 @@ ws://localhost:8000/ws/simulation
   "params": {
     "mode": "news",
     "cocoon_strength": 0.5,
-    "debunk_delay": 10,
+    "response_delay": 10,
     "population_size": 200,
-    "initial_rumor_spread": 0.3,
+    "initial_negative_spread": 0.3,
     "use_llm": true,
     "use_dual_network": true,
-    "num_communities": 8,
-    "max_concurrent": 50,
     "init_distribution": {
-      "believe_rumor": 0.30,
-      "believe_truth": 0.15,
+      "believe_negative": 0.30,
+      "believe_positive": 0.15,
       "neutral": 0.55
     }
   }
 }
 ```
-
-**参数说明**:
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| mode | 否 | 推演模式，默认 sandbox |
-| init_distribution | 否 | 新闻模式专用，真实分布锚定 |
-| 其他参数 | 否 | 详见上文 REST API 说明 |
 
 #### 执行单步
 ```json
@@ -607,15 +561,13 @@ ws://localhost:8000/ws/simulation
     "step": 5,
     "agents": [...],
     "edges": [...],
-    "rumor_spread_rate": 0.45,
-    "truth_acceptance_rate": 0.15,
+    "negative_belief_rate": 0.45,
+    "positive_belief_rate": 0.15,
     "avg_opinion": -0.35,
     "polarization_index": 0.62,
     "silence_rate": 0.12,
-    "public_rumor_rate": 0.48,
-    "private_rumor_rate": 0.42,
-    "public_truth_rate": 0.18,
-    "private_truth_rate": 0.12,
+    "public_negative_rate": 0.48,
+    "private_negative_rate": 0.42,
     "num_communities": 8,
     "num_influencers": 5
   }
@@ -645,22 +597,22 @@ ws://localhost:8000/ws/simulation
 }
 ```
 
+#### 风险预警推送
+```json
+{
+  "type": "risk_alert",
+  "data": {
+    "risk_level": "critical",
+    "alerts": [...]
+  }
+}
+```
+
 #### 错误推送
 ```json
 {
   "type": "error",
   "message": "推演引擎未初始化"
-}
-```
-
-#### 报告生成完成
-```json
-{
-  "type": "report",
-  "data": {
-    "report_path": "reports/intelligence_report_1234567890.md",
-    "report_filename": "intelligence_report_1234567890.md"
-  }
 }
 ```
 
@@ -676,7 +628,7 @@ ws://localhost:8000/ws/simulation
 }
 ```
 
-**常见错误码:**
+**常见错误信息:**
 
 | 错误信息 | 说明 |
 |----------|------|
@@ -696,7 +648,7 @@ ws://localhost:8000/ws/simulation
 | /api/simulation/start | 100-500ms | 5-30s（初始化Agent） |
 | /api/simulation/step | 10-50ms | 通过WebSocket |
 | /api/event/parse | N/A | 10-60s |
-| /api/event/airdrop | N/A | 10-60s（完整解析） |
-| /api/event/airdrop (skip_parse) | N/A | 0.1-2s（快速注入） |
-| /api/prediction | 10-100ms | 10-100ms |
+| /api/event/inject | N/A | 10-60s（完整解析） |
+| /api/event/inject (skip_parse) | N/A | 0.1-2s（快速注入） |
+| /api/prediction/update | 10-100ms | 10-100ms |
 | /api/report/generate | N/A | 30-120s |

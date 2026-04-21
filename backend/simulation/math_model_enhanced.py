@@ -61,7 +61,7 @@ class EnhancedMathModel:
         fear_of_isolation: np.ndarray,
         neighbors: List[List[int]],
         influencer_ids: List[int] = None,
-        debunk_released: bool = False,
+        response_released: bool = False,
         step_count: int = 0
     ) -> Tuple[np.ndarray, np.ndarray, Dict]:
         """
@@ -101,7 +101,7 @@ class EnhancedMathModel:
 
         # 5. 辟谣效果（如果已发布）
         debunk_change = np.zeros(size)
-        if debunk_released:
+        if response_released:
             debunk_change = self._debunk_with_backfire(
                 opinions, belief_strength, susceptibility, step_count
             )
