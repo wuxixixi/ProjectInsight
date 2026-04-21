@@ -562,6 +562,7 @@ class AnalystAgent:
 
         # 提取并格式化事件信息
         news_content = context['macro'].get('news_content', '未提供新闻事件内容')
+        events_summary = context['macro'].get('events_summary', news_content)  # 所有事件摘要
         news_source = context['macro'].get('news_source', 'public')
         news_source_label = "公共媒体（公域信息）" if news_source == "public" else "私密渠道（私域信息）"
         knowledge_graph = context['macro'].get('knowledge_graph', {})
@@ -591,7 +592,7 @@ class AnalystAgent:
             converted_samples=converted_samples,
             stubborn_samples=stubborn_samples,
             extreme_samples=extreme_samples,
-            news_content=news_content,
+            news_content=events_summary,  # 使用所有事件摘要
             news_source_label=news_source_label,
             event_summary=kg_formatted['summary'],
             event_keywords=kg_formatted['keywords'],
@@ -665,6 +666,7 @@ class AnalystAgent:
 
         # 提取并格式化事件信息
         news_content = context['macro'].get('news_content', '未提供新闻事件内容')
+        events_summary = context['macro'].get('events_summary', news_content)  # 所有事件摘要
         news_source = context['macro'].get('news_source', 'public')
         news_source_label = "公共媒体（公域信息）" if news_source == "public" else "私密渠道（私域信息）"
         knowledge_graph = context['macro'].get('knowledge_graph', {})
@@ -694,7 +696,7 @@ class AnalystAgent:
             converted_samples=converted_samples,
             stubborn_samples=stubborn_samples,
             extreme_samples=extreme_samples,
-            news_content=news_content,
+            news_content=events_summary,  # 使用所有事件摘要
             news_source_label=news_source_label,
             event_summary=kg_formatted['summary'],
             event_keywords=kg_formatted['keywords'],
