@@ -483,7 +483,8 @@
       </div>
 
       <!-- 预测与风险预警区域 -->
-      <div class="prediction-alerts-area" v-if="isRunning && currentStep >= 3">
+      <!-- 推演中：第3步后显示；推演停止后：有预测数据时显示 -->
+      <div class="prediction-alerts-area" v-if="(isRunning && currentStep >= 3) || (!isRunning && prediction && prediction.available)">
         <!-- 预测区间展示 -->
         <div class="prediction-panel" v-if="prediction && prediction.available">
           <div class="prediction-header">
@@ -1114,6 +1115,40 @@
       </div>
     </div>
 
+    <!-- 推演完成引导弹窗 -->
+    <div v-if="showCompletionModal" class="completion-modal-overlay" @click.self="showCompletionModal = false">
+      <div class="completion-modal">
+        <div class="completion-icon">🎉</div>
+        <h3 class="completion-title">推演完成</h3>
+        <p class="completion-desc">已完成 {{ maxSteps }} 步推演，可以生成分析报告查看完整结果</p>
+        <div class="completion-stats" v-if="prediction && prediction.recommendation">
+          <div class="completion-stat-item">
+            <span class="stat-label">风险等级</span>
+            <span :class="['stat-value', 'risk-' + prediction.recommendation.risk_level]">{{ prediction.recommendation.risk_level.toUpperCase() }}</span>
+          </div>
+          <div class="completion-stat-item">
+            <span class="stat-label">谣言传播率</span>
+            <span class="stat-value">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
+          </div>
+          <div class="completion-stat-item">
+            <span class="stat-label">真相接受率</span>
+            <span class="stat-value truth">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
+          </div>
+        </div>
+        <div class="completion-actions">
+          <button class="btn-completion btn-report" @click="showCompletionModal = false; generateReport()">
+            <span>📄</span> 生成推演报告
+          </button>
+          <button v-if="useLLM" class="btn-completion btn-intelligence" @click="showCompletionModal = false; generateIntelligenceReport()" :disabled="reportGenerating">
+            <span>🧠</span> {{ reportGenerating ? '撰写中...' : '生成智库专报' }}
+          </button>
+          <button class="btn-completion btn-later" @click="showCompletionModal = false">
+            稍后查看
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 报告弹窗 -->
     <div v-if="reportGenerated" class="report-modal-overlay" @click.self="closeReport">
       <div class="report-modal">
@@ -1430,6 +1465,9 @@
 import * as echarts from 'echarts'
 import { marked } from 'marked'
 
+const API_BASE = window.location.origin
+const WS_BASE = `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`
+
 export default {
   name: 'App',
 
@@ -1590,6 +1628,9 @@ export default {
       reportGenerating: false,
       intelligenceContent: '',
       intelligenceFilename: '',
+
+      // 推演完成弹窗
+      showCompletionModal: false,
 
       // Agent透视弹窗
       showAgentModal: false,
@@ -1840,8 +1881,8 @@ export default {
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
-      // 直接连接后端 8000 端口
-      const wsUrl = 'ws://localhost:8000/ws/simulation'
+      // 使用动态地址（开发环境走代理，生产环境直接访问）
+      const wsUrl = `${WS_BASE}/ws/simulation`
       console.log('连接 WebSocket:', wsUrl)
 
       try {
@@ -1942,6 +1983,11 @@ export default {
       this.animatedStep = 0
       this.debunked = false
       this.agentProgress = ''
+
+      // 重置预测和风险预警
+      this.prediction = null
+      this.riskAlerts = null
+
       this.trendHistory = {
         steps: [],
         rumorRates: [],
@@ -2005,6 +2051,10 @@ export default {
       this.isRunning = false
       this.agentProgress = ''
       this.sendAction('stop')
+      // 用户主动停止时也展开报告面板
+      if (this.currentStep > 0) {
+        this.expandedGroups.report = true
+      }
     },
 
     generateReport() {
@@ -2017,7 +2067,7 @@ export default {
       this.reportContent = ''
       try {
         const response = await fetch(
-          'http://localhost:8000/api/report/content?filename=' + encodeURIComponent(this.reportFilename)
+          API_BASE + '/api/report/content?filename=' + encodeURIComponent(this.reportFilename)
         )
         const data = await response.json()
         if (data.success) {
@@ -2044,7 +2094,7 @@ export default {
 
       this.mathModelLoading = true
       try {
-        const response = await fetch('http://localhost:8000' + '/api/math-model/explanation')
+        const response = await fetch(API_BASE + '/api/math-model/explanation')
         const data = await response.json()
         this.mathModelExplanation = data
       } catch (error) {
@@ -2061,7 +2111,7 @@ export default {
     async fetchUsageContent() {
       this.usageLoading = true
       try {
-        const response = await fetch('http://localhost:8000' + '/api/docs/usage')
+        const response = await fetch(API_BASE + '/api/docs/usage')
         const data = await response.json()
         if (data.success && data.content) {
           this.usageContent = marked(data.content)
@@ -2084,7 +2134,7 @@ export default {
       this.parsedKnowledgeGraph = null
       
       try {
-        const response = await fetch('http://localhost:8000' + '/api/event/parse', {
+        const response = await fetch(API_BASE + '/api/event/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: this.newsContent })
@@ -2135,7 +2185,7 @@ export default {
         const timeoutId = setTimeout(() => controller.abort(), timeout)
 
         const response = await fetch(
-          'http://localhost:8000' + '/api/event/airdrop',
+          API_BASE + '/api/event/airdrop',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2255,7 +2305,7 @@ export default {
     // 刷新推演状态（事件注入后调用）
     async refreshSimulationState() {
       try {
-        const response = await fetch('http://localhost:8000/api/simulation/state')
+        const response = await fetch(API_BASE + '/api/simulation/state')
         const data = await response.json()
         if (data.step !== undefined) {
           this.updateState(data)
@@ -2273,7 +2323,7 @@ export default {
       this.reportListLoading = true
       this.reportList = []
       try {
-        const response = await fetch('http://localhost:8000' + '/api/report/list')
+        const response = await fetch(API_BASE + '/api/report/list')
         const data = await response.json()
         this.reportList = data.reports || []
       } catch (error) {
@@ -2306,7 +2356,7 @@ export default {
     downloadReport() {
       if (this.reportFilename) {
         const link = document.createElement('a')
-        link.href = 'http://localhost:8000' + '/api/report/download?filename=' + encodeURIComponent(this.reportFilename)
+        link.href = API_BASE + '/api/report/download?filename=' + encodeURIComponent(this.reportFilename)
         link.download = this.reportFilename
         link.click()
       }
@@ -2322,7 +2372,7 @@ export default {
 
       try {
         // 使用 EventSource 进行流式接收
-        const eventSource = new EventSource('http://localhost:8000' + '/api/report/stream')
+        const eventSource = new EventSource(API_BASE + '/api/report/stream')
 
         eventSource.onmessage = (event) => {
           try {
@@ -2396,7 +2446,7 @@ export default {
 
     async openReportInApp() {
       try {
-        const response = await fetch('http://localhost:8000' + '/api/report/open', {
+        const response = await fetch(API_BASE + '/api/report/open', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: this.reportPath })
@@ -2420,7 +2470,7 @@ export default {
       this.agentSnapshot = null
 
       try {
-        const response = await fetch(`${'http://localhost:8000'}/api/agent/${agentId}/inspect`)
+        const response = await fetch(`${API_BASE}/api/agent/${agentId}/inspect`)
         const data = await response.json()
         this.agentSnapshot = data
       } catch (error) {
@@ -2495,6 +2545,13 @@ export default {
           step: 0, total: 0, percentage: 0, agentId: null,
           agentOpinion: 0, agentStance: '', currentStep: 0, maxSteps: 50
         }
+        // 推演完成，获取最终预测数据
+        this.fetchPrediction()
+        this.fetchRiskAlerts()
+        // 推演完成，显示引导弹窗
+        this.showCompletionModal = true
+        // 自动展开报告面板
+        this.expandedGroups.report = true
       }
 
       this.renderOpinionChart()
@@ -2512,7 +2569,7 @@ export default {
 
     async fetchPrediction() {
       try {
-        const response = await fetch('http://localhost:8000/api/prediction')
+        const response = await fetch(API_BASE + '/api/prediction')
         const data = await response.json()
         if (data.success) {
           this.prediction = data.data
@@ -2524,7 +2581,7 @@ export default {
 
     async fetchRiskAlerts() {
       try {
-        const response = await fetch('http://localhost:8000/api/risk-alerts')
+        const response = await fetch(API_BASE + '/api/risk-alerts')
         const data = await response.json()
         if (data.success) {
           this.riskAlerts = data.data
@@ -5865,6 +5922,162 @@ export default {
 }
 
 /* ==================== 报告弹窗 ==================== */
+/* 推演完成引导弹窗 */
+.completion-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 350;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.completion-modal {
+  width: 420px;
+  background: linear-gradient(145deg, #0f172a, #1e1b4b);
+  border: 1px solid rgba(100, 181, 246, 0.3);
+  border-radius: 16px;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(100, 181, 246, 0.25);
+  animation: slideUp 0.4s ease;
+}
+
+.completion-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.completion-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 0 0 8px;
+}
+
+.completion-desc {
+  font-size: 14px;
+  color: #94a3b8;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.completion-stats {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 14px 0;
+  margin-bottom: 20px;
+  border-top: 1px solid rgba(100, 181, 246, 0.15);
+  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
+}
+
+.completion-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.completion-stat-item .stat-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.completion-stat-item .stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f97316;
+}
+
+.completion-stat-item .stat-value.truth {
+  color: #34d399;
+}
+
+.completion-stat-item .stat-value.risk-low { color: #34d399; }
+.completion-stat-item .stat-value.risk-medium { color: #fbbf24; }
+.completion-stat-item .stat-value.risk-high { color: #f97316; }
+.completion-stat-item .stat-value.risk-critical { color: #ef4444; }
+
+.completion-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-completion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-completion:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-report {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+}
+
+.btn-report:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+}
+
+.btn-intelligence {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.btn-intelligence:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+}
+
+.btn-later {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.btn-later:hover:not(:disabled) {
+  background: rgba(100, 116, 139, 0.25);
+  color: #cbd5e1;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .report-modal-overlay {
   position: fixed;
   inset: 0;

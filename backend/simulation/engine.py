@@ -35,20 +35,20 @@ class SimulationEngine:
     核心机制:
     1. 算法茧房效应: 根据用户观点推荐相似内容, 强化既有观点
     2. 社交传播: 个体受邻居影响更新观点
-    3. 官方辟谣: 延迟后发布真相, 影响观点
+    3. 官方权威回应: 延迟后发布正确认知, 影响观点
     """
 
     def __init__(
         self,
         population_size: int = 200,
         cocoon_strength: float = 0.5,
-        debunk_delay: int = 10,
-        initial_rumor_spread: float = 0.3,
+        response_delay: int = 10,
+        initial_negative_spread: float = 0.3,
         network_type: str = "small_world",
         use_llm: bool = True,
         llm_config: Optional[LLMConfig] = None,
         # 增强版数学模型参数
-        debunk_credibility: float = 0.7,
+        response_credibility: float = 0.7,
         authority_factor: float = 0.5,
         backfire_strength: float = 0.3,
         silence_threshold: float = 0.3,
@@ -57,18 +57,29 @@ class SimulationEngine:
         # Phase 3: 运行模式参数
         mode: str = "sandbox",
         init_distribution: Optional[Dict[str, float]] = None,
-        time_acceleration: float = 1.0
+        time_acceleration: float = 1.0,
+        # 兼容旧参数名（别名）
+        debunk_delay: Optional[int] = None,
+        initial_rumor_spread: Optional[float] = None,
+        debunk_credibility: Optional[float] = None
     ):
+        # 处理兼容参数：优先使用新参数名，旧参数名作为别名
+        if debunk_delay is not None:
+            response_delay = debunk_delay
+        if initial_rumor_spread is not None:
+            initial_negative_spread = initial_rumor_spread
+        if debunk_credibility is not None:
+            response_credibility = debunk_credibility
         self.population_size = population_size
         self.cocoon_strength = cocoon_strength
-        self.debunk_delay = debunk_delay
-        self.initial_rumor_spread = initial_rumor_spread
+        self.response_delay = response_delay
+        self.initial_negative_spread = initial_negative_spread
         self.network_type = network_type
         self.use_llm = use_llm
         self.llm_config = llm_config or LLMConfig()
 
         # 增强版数学模型参数
-        self.debunk_credibility = debunk_credibility
+        self.response_credibility = response_credibility
         self.authority_factor = authority_factor
         self.backfire_strength = backfire_strength
         self.silence_threshold = silence_threshold
@@ -81,14 +92,14 @@ class SimulationEngine:
         self.time_acceleration = time_acceleration
 
         self.step_count = 0
-        self.debunked = False
+        self.responded = False
         self.current_state: Optional[SimulationState] = None
 
         # 增强版数学模型实例
         math_params = EnhancedMathParams(
             cocoon_strength=cocoon_strength,
-            debunk_delay=debunk_delay,
-            debunk_credibility=debunk_credibility,
+            debunk_delay=response_delay,  # 内部使用旧参数名
+            debunk_credibility=response_credibility,  # 内部使用旧参数名
             authority_factor=authority_factor,
             backfire_strength=backfire_strength,
             silence_threshold=silence_threshold,
@@ -228,8 +239,8 @@ class SimulationEngine:
         应用事件冲击到Agent群体
 
         冲击效果：
-        - 负面新闻：推高谣言传播率（观点向-1偏移）
-        - 正面新闻：推高真相接受率（观点向+1偏移）
+        - 负面新闻：推高误信率（观点向-1偏移）
+        - 正面新闻：推高正面信念率（观点向+1偏移）
         - 可信度影响冲击强度
 
         Args:
@@ -268,8 +279,8 @@ class SimulationEngine:
             affected_mask = np.ones(len(opinions), dtype=bool)
 
         # 计算观点偏移
-        # 负面新闻 → 观点向-1偏移（相信谣言）
-        # 正面新闻 → 观点向+1偏移（相信真相）
+        # 负面新闻 → 观点向-1偏移（相信负面信念）
+        # 正面新闻 → 观点向+1偏移（相信正面信念）
         # 中性新闻 → 轻微随机波动
         if sentiment == "负面":
             shift_direction = -1
@@ -353,50 +364,50 @@ class SimulationEngine:
         """
         根据新闻内容设置初始观点分布
 
-        替代固定的 initial_rumor_spread 参数
+        替代固定的 initial_negative_spread 参数
 
         Args:
             sentiment: 情感倾向
             credibility: 可信度
             entity_count: 实体数量
         """
-        # 基础谣言传播率
-        base_rumor_spread = 0.3
+        # 基础误信率
+        base_negative_spread = 0.3
 
         # 情感影响
         if sentiment == "负面":
-            # 负面新闻更容易引发谣言传播
-            rumor_boost = 0.15
+            # 负面新闻更容易引发误信
+            negative_boost = 0.15
         elif sentiment == "正面":
-            rumor_boost = -0.05
+            negative_boost = -0.05
         else:
-            rumor_boost = 0.0
+            negative_boost = 0.0
 
         # 可信度影响
         if credibility == "低可信":
-            # 低可信度新闻，真相接受率低
-            truth_penalty = 0.05
+            # 低可信度新闻，正面信念率低
+            positive_penalty = 0.05
         elif credibility == "高可信":
-            truth_penalty = -0.03
+            positive_penalty = -0.03
         else:
-            truth_penalty = 0.0
+            positive_penalty = 0.0
 
-        # 实体影响：涉及实体越多，关注度越高，谣言传播率可能越高
+        # 实体影响：涉及实体越多，关注度越高，误信率可能越高
         entity_factor = min(0.1, entity_count * 0.015)
 
-        # 计算最终初始谣言传播率
-        self.initial_rumor_spread = np.clip(
+        # 计算最终初始误信率
+        self.initial_negative_spread = np.clip(
             base_rumor_spread + rumor_boost + truth_penalty + entity_factor,
             0.1, 0.6
         )
 
         logger.info(f"根据新闻设置初始分布: 情感={sentiment}, 可信度={credibility}, "
-                   f"实体数={entity_count}, 初始谣言传播率={self.initial_rumor_spread:.3f}")
+                   f"实体数={entity_count}, 初始误信率={self.initial_negative_spread:.3f}")
 
     def initialize(self) -> SimulationState:
         """初始化模拟"""
         self.step_count = 0
-        self.debunked = False
+        self.responded = False
         self.history = []
         self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -406,7 +417,7 @@ class SimulationEngine:
             # LLM 模式
             self.llm_population = LLMAgentPopulation(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_rumor_spread,
+                initial_rumor_spread=self.initial_negative_spread,  # 内部使用旧参数名
                 network_type=self.network_type,
                 llm_config=self.llm_config
             )
@@ -419,7 +430,7 @@ class SimulationEngine:
             # 数学模型模式
             self.population = AgentPopulation(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_rumor_spread,
+                initial_rumor_spread=self.initial_negative_spread,  # 内部使用旧参数名
                 network_type=self.network_type
             )
 
@@ -450,16 +461,16 @@ class SimulationEngine:
         n_truth = int(n * believe_truth)
         n_neutral = n - n_rumor - n_truth
 
-        logger.info(f"应用真实分布锚定: 谣言={n_rumor}, 真相={n_truth}, 中立={n_neutral}")
+        logger.info(f"应用真实分布锚定: 误信={n_rumor}, 正面信念={n_truth}, 中立={n_neutral}")
 
         # 生成观点值
         opinions = np.zeros(n)
 
-        # 相信谣言: -0.8 ~ -0.3
+        # 相信负面信念: -0.8 ~ -0.3
         if n_rumor > 0:
             opinions[:n_rumor] = np.random.uniform(-0.8, -0.3, n_rumor)
 
-        # 相信真相: 0.3 ~ 0.8
+        # 相信正面信念: 0.3 ~ 0.8
         start = n_rumor
         end = start + n_truth
         if n_truth > 0:
@@ -476,8 +487,8 @@ class SimulationEngine:
         self.population.opinions = opinions
 
         # 更新暴露状态
-        self.population.exposed_to_rumor = opinions < -0.2
-        self.population.exposed_to_truth = opinions > 0.2
+        self.population.exposed_to_negative = opinions < -0.2
+        self.population.exposed_to_positive = opinions > 0.2
 
     def _apply_init_distribution_llm(self):
         """
@@ -494,7 +505,7 @@ class SimulationEngine:
         n_rumor = int(n * believe_rumor)
         n_truth = int(n * believe_truth)
 
-        logger.info(f"LLM模式应用真实分布锚定: 谣言={n_rumor}, 真相={n_truth}")
+        logger.info(f"LLM模式应用真实分布锚定: 误信={n_rumor}, 正面信念={n_truth}")
 
         for i, agent in enumerate(self.llm_population.agents):
             if i < n_rumor:
@@ -517,9 +528,9 @@ class SimulationEngine:
 
         self.step_count += 1
 
-        # 检查是否发布辟谣
-        if self.step_count >= self.debunk_delay and not self.debunked:
-            self._release_debunking()
+        # 检查是否发布权威回应
+        if self.step_count >= self.response_delay and not self.responded:
+            self._release_authority_response()
 
         if self.use_llm:
             # LLM 驱动模式
@@ -544,9 +555,9 @@ class SimulationEngine:
 
         self.step_count += 1
 
-        # 检查是否发布辟谣
-        if self.step_count >= self.debunk_delay and not self.debunked:
-            self._release_debunking()
+        # 检查是否发布权威回应
+        if self.step_count >= self.response_delay and not self.responded:
+            self._release_authority_response()
 
         # 数学模型模式 - 直接调用同步方法
         self._math_step()
@@ -565,7 +576,7 @@ class SimulationEngine:
             # 批量异步决策（传入知识图谱）
             await pop.batch_decide(
                 self.llm_client,
-                debunk_released=self.debunked,
+                debunk_released=self.responded,  # 内部使用旧参数名
                 cocoon_strength=self.cocoon_strength,
                 progress_callback=self.progress_callback,
                 knowledge_graph=self.knowledge_graph  # 传入知识图谱
@@ -585,7 +596,7 @@ class SimulationEngine:
         2. 算法茧房效应
         3. 沉默的螺旋
         4. 群体极化效应
-        5. 辟谣与逆火效应
+        5. 权威回应与逆火效应
         6. 认知失调
         7. 知识图谱驱动演化（Phase 1 新增）
         """
@@ -604,7 +615,7 @@ class SimulationEngine:
             fear_of_isolation=pop.fear_of_isolation,
             neighbors=neighbors_list,
             influencer_ids=self._get_influencer_ids(),
-            debunk_released=self.debunked,
+            debunk_released=self.responded,  # 内部使用旧参数名
             step_count=self.step_count
         )
         
@@ -615,7 +626,7 @@ class SimulationEngine:
                 opinions=new_opinions,
                 personas=personas,
                 cocoon_strength=self.cocoon_strength,
-                debunk_released=self.debunked
+                debunk_released=self.responded  # 内部使用旧参数名
             )
             
             # 应用知识影响
@@ -630,9 +641,9 @@ class SimulationEngine:
         pop.belief_strength = new_belief
         pop.is_silent = is_silent
 
-        # 标记曝光真相（辟谣后）
-        if self.debunked:
-            pop.exposed_to_truth = np.ones(pop.size, dtype=bool)
+        # 标记曝光正确认知（权威回应后）
+        if self.responded:
+            pop.exposed_to_positive = np.ones(pop.size, dtype=bool)
 
         # 记录指标到日志
         logger.debug(f"Math model metrics: {metrics}")
@@ -710,7 +721,7 @@ class SimulationEngine:
                     opinion_gap = avg_neighbor_op - old_op
 
                     if abs(opinion_gap) > 0.1:
-                        direction = "真相" if opinion_gap > 0 else "谣言"
+                        direction = "正面信念" if opinion_gap > 0 else "负面信念"
                         reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
 
                 # 检查意见领袖影响
@@ -721,7 +732,7 @@ class SimulationEngine:
             # 2. 茧房效应
             cocoon_effect = self.cocoon_strength * old_op * 0.1
             if abs(cocoon_effect) > 0.01:
-                direction = "强化" if old_op < 0 else "真相方向"
+                direction = "强化" if old_op < 0 else "正面信念方向"
                 reasons.append(f"算法推荐{direction}观点")
 
             # 3. 沉默状态
@@ -730,20 +741,20 @@ class SimulationEngine:
             elif pop.fear_of_isolation[i] > 0.6:
                 reasons.append("孤立恐惧较高但未沉默")
 
-            # 4. 辟谣影响
-            if self.debunked and old_op < 0:
+            # 4. 权威回应影响
+            if self.responded and old_op < 0:
                 if new_op > old_op:
-                    reasons.append("收到辟谣信息，观点向真相偏移")
+                    reasons.append("收到权威回应信息，观点向正确认知偏移")
                 elif new_op < old_op:
-                    reasons.append("辟谣触发逆火效应，观点反加强")
+                    reasons.append("权威回应触发逆火效应，观点反加强")
 
             # 5. 观点变化总结
             if abs(opinion_change) < 0.01:
                 reasons.append("观点基本稳定")
             elif opinion_change > 0:
-                reasons.append(f"观点向真相偏移{abs(opinion_change):.3f}")
+                reasons.append(f"观点向正面信念偏移{abs(opinion_change):.3f}")
             else:
-                reasons.append(f"观点向谣言偏移{abs(opinion_change):.3f}")
+                reasons.append(f"观点向负面信念偏移{abs(opinion_change):.3f}")
 
             reasoning = "；".join(reasons) if reasons else "观点微调"
 
@@ -757,7 +768,7 @@ class SimulationEngine:
                 "influence": float(pop.influence[i]),
                 "old_opinion": float(old_op),
                 "new_opinion": float(new_op),
-                "received_news": ["辟谣信息"] if self.debunked else [],
+                "received_news": ["权威回应信息"] if self.responded else [],
                 "llm_raw_response": None,  # 数学模型无LLM响应
                 "emotion": "冷静",
                 "action": "沉默" if is_silent[i] else "观望",
@@ -777,15 +788,15 @@ class SimulationEngine:
             # 保存到全局存储
             AGENT_DECISION_SNAPSHOTS[i] = snapshot
 
-    def _release_debunking(self):
+    def _release_authority_response(self):
         """
-        发布官方辟谣信息
+        发布官方权威回应信息
 
-        辟谣效果现在由增强版数学模型在 compute_step 中统一处理，
-        包括逆火效应。这里只标记辟谣已发布。
+        权威回应效果现在由增强版数学模型在 compute_step 中统一处理，
+        包括逆火效应。这里只标记权威回应已发布。
         """
-        self.debunked = True
-        logger.info(f"Step {self.step_count}: 发布辟谣")
+        self.responded = True
+        logger.info(f"Step {self.step_count}: 发布权威回应")
 
     def _compute_state(self) -> SimulationState:
         """计算当前状态统计"""
@@ -799,8 +810,8 @@ class SimulationEngine:
             pop = self.population
             opinion_dist = pop.get_opinion_histogram()
             stats = {
-                "rumor_spread_rate": float(np.mean(pop.opinions < -0.2)),
-                "truth_acceptance_rate": float(np.mean(pop.opinions > 0.2)),
+                "negative_belief_rate": float(np.mean(pop.opinions < -0.2)),
+                "positive_belief_rate": float(np.mean(pop.opinions > 0.2)),
                 "avg_opinion": float(np.mean(pop.opinions)),
                 "polarization_index": float(np.std(pop.opinions) * 2),
                 "silence_rate": float(np.mean(pop.is_silent))
@@ -818,8 +829,8 @@ class SimulationEngine:
             agents=agents,
             edges=edges,
             opinion_distribution=opinion_dist,
-            rumor_spread_rate=stats["rumor_spread_rate"],
-            truth_acceptance_rate=stats["truth_acceptance_rate"],
+            negative_belief_rate=stats.get("negative_belief_rate", stats.get("rumor_spread_rate", 0.0)),
+            positive_belief_rate=stats.get("positive_belief_rate", stats.get("truth_acceptance_rate", 0.0)),
             avg_opinion=stats["avg_opinion"],
             polarization_index=stats["polarization_index"],
             silence_rate=stats.get("silence_rate", 0.0),
@@ -835,14 +846,15 @@ class SimulationEngine:
         final_state = self.history[-1]
         initial_state = self.history[0]
 
-        rumor_trend = [h['rumor_spread_rate'] for h in self.history]
-        truth_trend = [h['truth_acceptance_rate'] for h in self.history]
+        # 兼容新旧字段名
+        negative_trend = [h.get('negative_belief_rate', h.get('rumor_spread_rate', 0)) for h in self.history]
+        positive_trend = [h.get('positive_belief_rate', h.get('truth_acceptance_rate', 0)) for h in self.history]
         opinion_trend = [h['avg_opinion'] for h in self.history]
         polarization_trend = [h['polarization_index'] for h in self.history]
 
         final_result = self._analyze_result(final_state)
         cocoon_effect = self._analyze_cocoon_effect()
-        debunk_effect = self._analyze_debunk_effect(rumor_trend, truth_trend)
+        response_effect = self._analyze_response_effect(negative_trend, truth_trend)
 
         mode_str = "LLM 驱动" if self.use_llm else "数学模型"
 
@@ -857,8 +869,8 @@ class SimulationEngine:
 |------|-----|
 | 群体规模 | {self.population_size} 人 |
 | 算法茧房强度 | {self.cocoon_strength:.2f} |
-| 官方辟谣延迟 | {self.debunk_delay} 步 |
-| 初始谣言传播率 | {self.initial_rumor_spread:.0%} |
+| 官方权威回应延迟 | {self.response_delay} 步 |
+| 初始误信率 | {self.initial_negative_spread:.0%} |
 | 社交网络类型 | {self._network_type_name()} |
 | 总推演步数 | {len(self.history) - 1} 步 |
 
@@ -868,8 +880,8 @@ class SimulationEngine:
 
 | 指标 | 初始值 | 最终值 | 变化 |
 |------|--------|--------|------|
-| 谣言传播率 | {initial_state['rumor_spread_rate']:.1%} | {final_state['rumor_spread_rate']:.1%} | {self._change_arrow(initial_state['rumor_spread_rate'], final_state['rumor_spread_rate'])} |
-| 真相接受率 | {initial_state['truth_acceptance_rate']:.1%} | {final_state['truth_acceptance_rate']:.1%} | {self._change_arrow(initial_state['truth_acceptance_rate'], final_state['truth_acceptance_rate'])} |
+| 误信率 | {initial_state.get('negative_belief_rate', initial_state.get('rumor_spread_rate', 0)):.1%} | {final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)):.1%} | {self._change_arrow(initial_state.get('negative_belief_rate', initial_state.get('rumor_spread_rate', 0)), final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)))} |
+| 正面信念率 | {initial_state.get('positive_belief_rate', initial_state.get('truth_acceptance_rate', 0)):.1%} | {final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0)):.1%} | {self._change_arrow(initial_state.get('positive_belief_rate', initial_state.get('truth_acceptance_rate', 0)), final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0)))} |
 | 平均观点 | {initial_state['avg_opinion']:.3f} | {final_state['avg_opinion']:.3f} | {self._change_arrow(initial_state['avg_opinion'], final_state['avg_opinion'], reverse=True)} |
 | 极化指数 | {initial_state['polarization_index']:.3f} | {final_state['polarization_index']:.3f} | {self._change_arrow(initial_state['polarization_index'], final_state['polarization_index'], reverse=True)} |
 
@@ -885,9 +897,9 @@ class SimulationEngine:
 
 {cocoon_effect}
 
-### 2. 辟谣效果分析
+### 2. 权威回应效果分析
 
-{debunk_effect}
+{response_effect}
 
 ### 3. 极化趋势分析
 
@@ -930,19 +942,19 @@ class SimulationEngine:
 
     def _analyze_result(self, final_state: Dict) -> Dict:
         """分析最终结果"""
-        rumor_rate = final_state['rumor_spread_rate']
-        truth_rate = final_state['truth_acceptance_rate']
+        rumor_rate = final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0))
+        truth_rate = final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0))
         polarization = final_state['polarization_index']
 
         if rumor_rate > 0.5:
             return {
-                'title': '⚠️ 谣言占主导',
-                'description': f'最终有{rumor_rate:.0%}的人相信谣言，仅{truth_rate:.0%}接受真相。'
+                'title': '⚠️ 误信占主导',
+                'description': f'最终有{rumor_rate:.0%}的人持有负面信念，仅{truth_rate:.0%}接受正面信念。'
             }
         elif truth_rate > 0.5:
             return {
-                'title': '✅ 真相占主导',
-                'description': f'最终有{truth_rate:.0%}的人接受真相，仅{rumor_rate:.0%}相信谣言。'
+                'title': '✅ 正面信念占主导',
+                'description': f'最终有{truth_rate:.0%}的人接受正面信念，仅{rumor_rate:.0%}持有负面信念。'
             }
         elif polarization > 0.8:
             return {
@@ -952,7 +964,7 @@ class SimulationEngine:
         else:
             return {
                 'title': '⚖️ 群体趋于中立',
-                'description': f'多数人持中立态度，谣言率{rumor_rate:.0%}，真相率{truth_rate:.0%}。'
+                'description': f'多数人持中立态度，误信率{rumor_rate:.0%}，正面信念率{truth_rate:.0%}。'
             }
 
     def _analyze_cocoon_effect(self) -> str:
@@ -964,25 +976,25 @@ class SimulationEngine:
         else:
             return f"茧房强度中等({self.cocoon_strength:.2f})，存在一定程度的茧房效应。"
 
-    def _analyze_debunk_effect(self, rumor_trend: List, truth_trend: List) -> str:
-        """分析辟谣效果"""
-        if self.debunk_delay >= len(self.history):
-            return "本次模拟未触发辟谣机制。"
+    def _analyze_response_effect(self, negative_trend: List, positive_trend: List) -> str:
+        """分析权威回应效果"""
+        if self.response_delay >= len(self.history):
+            return "本次模拟未触发权威回应机制。"
 
-        debunk_step = self.debunk_delay
-        if debunk_step < len(rumor_trend):
-            before_rumor = rumor_trend[max(0, debunk_step-2)]
-            after_rumor = rumor_trend[min(debunk_step+3, len(rumor_trend)-1)]
-            effect = before_rumor - after_rumor
+        response_step = self.response_delay
+        if response_step < len(negative_trend):
+            before_negative = negative_trend[max(0, response_step-2)]
+            after_negative = negative_trend[min(response_step+3, len(negative_trend)-1)]
+            effect = before_negative - after_negative
 
             if effect > 0.1:
-                return f"辟谣在第{self.debunk_delay}步发布后，谣言传播率从{before_rumor:.1%}下降至{after_rumor:.1%}，**效果显著**。"
+                return f"权威回应在第{self.response_delay}步发布后，误信率从{before_negative:.1%}下降至{after_negative:.1%}，**效果显著**。"
             elif effect > 0:
-                return f"辟谣在第{self.debunk_delay}步发布后，谣言传播率小幅下降{effect:.1%}。"
+                return f"权威回应在第{self.response_delay}步发布后，误信率小幅下降{effect:.1%}。"
             else:
-                return "辟谣后谣言传播率未明显下降，可能辟谣时机过晚。"
+                return "权威回应后误信率未明显下降，可能回应时机过晚。"
 
-        return "辟谣效果数据不足。"
+        return "权威回应效果数据不足。"
 
     def _analyze_polarization(self, polarization_trend: List) -> str:
         """分析极化趋势"""
@@ -1003,14 +1015,14 @@ class SimulationEngine:
         """生成建议"""
         recommendations = []
 
-        if final_state['rumor_spread_rate'] > 0.4:
-            recommendations.append("- 建议提前辟谣时间，减少谣言发酵期")
+        if final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)) > 0.4:
+            recommendations.append("- 建议提前权威回应时间，减少误信发酵期")
 
         if final_state['polarization_index'] > 0.7:
             recommendations.append("- 高极化风险，建议降低算法茧房强度")
 
-        if self.cocoon_strength > 0.6 and final_state['rumor_spread_rate'] > 0.3:
-            recommendations.append("- 茧房效应过强阻碍真相传播，建议优化推荐算法")
+        if self.cocoon_strength > 0.6 and final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)) > 0.3:
+            recommendations.append("- 茧房效应过强阻碍正面信念传播，建议优化推荐算法")
 
         if not recommendations:
             recommendations.append("- 当前参数配置下舆论状况良好")

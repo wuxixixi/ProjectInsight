@@ -30,11 +30,11 @@ class AgentPopulation:
         self.network_type = network_type
 
         # 初始化观点分布
-        # 初始时部分人相信谣言(opinion < 0), 其他人中立或倾向真相
+        # 初始时部分人持负面信念(opinion < 0), 其他人中立或倾向正面信念
         self.opinions = np.zeros(size)
-        rumor_believers = int(size * initial_rumor_spread)
-        self.opinions[:rumor_believers] = np.random.uniform(-0.8, -0.3, rumor_believers)
-        self.opinions[rumor_believers:] = np.random.uniform(-0.2, 0.3, size - rumor_believers)
+        negative_believers = int(size * initial_rumor_spread)
+        self.opinions[:negative_believers] = np.random.uniform(-0.8, -0.3, negative_believers)
+        self.opinions[negative_believers:] = np.random.uniform(-0.2, 0.3, size - negative_believers)
 
         # 信念强度 - 越强越难改变观点
         self.belief_strength = np.random.beta(2, 2, size)  # 集中在中等
@@ -56,12 +56,31 @@ class AgentPopulation:
         self.is_silent = np.zeros(size, dtype=bool)
 
         # 曝光状态
-        self.exposed_to_rumor = np.zeros(size, dtype=bool)
-        self.exposed_to_rumor[:rumor_believers] = True
-        self.exposed_to_truth = np.zeros(size, dtype=bool)
+        self.exposed_to_negative = np.zeros(size, dtype=bool)
+        self.exposed_to_negative[:negative_believers] = True
+        self.exposed_to_positive = np.zeros(size, dtype=bool)
 
         # 构建社交网络
         self.network = self._build_network(network_type)
+
+    # --- 兼容别名：供外部接口和旧代码使用 ---
+    @property
+    def exposed_to_rumor(self) -> np.ndarray:
+        """兼容别名: exposed_to_negative"""
+        return self.exposed_to_negative
+
+    @exposed_to_rumor.setter
+    def exposed_to_rumor(self, value: np.ndarray):
+        self.exposed_to_negative = value
+
+    @property
+    def exposed_to_truth(self) -> np.ndarray:
+        """兼容别名: exposed_to_positive"""
+        return self.exposed_to_positive
+
+    @exposed_to_truth.setter
+    def exposed_to_truth(self, value: np.ndarray):
+        self.exposed_to_positive = value
 
     def _build_network(self, network_type: str) -> nx.Graph:
         """构建社交网络"""
@@ -104,8 +123,8 @@ class AgentPopulation:
                 "fear_of_isolation": float(self.fear_of_isolation[i]),
                 "conviction": float(self.conviction[i]),
                 "is_silent": bool(self.is_silent[i]),
-                "exposed_to_rumor": bool(self.exposed_to_rumor[i]),
-                "exposed_to_truth": bool(self.exposed_to_truth[i])
+                "exposed_to_negative": bool(self.exposed_to_negative[i]),
+                "exposed_to_positive": bool(self.exposed_to_positive[i])
             })
         return agents
 

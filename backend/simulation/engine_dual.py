@@ -37,8 +37,8 @@ class SimulationEngineDual:
         self,
         population_size: int = 200,
         cocoon_strength: float = 0.5,
-        debunk_delay: int = 10,
-        initial_rumor_spread: float = 0.3,
+        debunk_delay: int = 10,  # 兼容旧参数名
+        initial_rumor_spread: float = 0.3,  # 兼容旧参数名
         use_llm: bool = True,
         llm_config: Optional[LLMConfig] = None,
         # 双层网络参数
@@ -47,7 +47,7 @@ class SimulationEngineDual:
         intra_community_prob: float = 0.3,
         inter_community_prob: float = 0.01,
         # 增强版数学模型参数
-        debunk_credibility: float = 0.7,
+        debunk_credibility: float = 0.7,  # 兼容旧参数名
         authority_factor: float = 0.5,
         backfire_strength: float = 0.3,
         silence_threshold: float = 0.3,
@@ -56,8 +56,11 @@ class SimulationEngineDual:
     ):
         self.population_size = population_size
         self.cocoon_strength = cocoon_strength
-        self.debunk_delay = debunk_delay
-        self.initial_rumor_spread = initial_rumor_spread
+        # 兼容旧参数名：新属性名映射
+        self.response_delay = debunk_delay
+        self.debunk_delay = debunk_delay  # 保留兼容
+        self.initial_negative_spread = initial_rumor_spread
+        self.initial_rumor_spread = initial_rumor_spread  # 保留兼容
         self.use_llm = use_llm
         self.llm_config = llm_config or LLMConfig()
 
@@ -66,7 +69,8 @@ class SimulationEngineDual:
         self.public_m = public_m
 
         # 增强版数学模型参数
-        self.debunk_credibility = debunk_credibility
+        self.response_credibility = debunk_credibility
+        self.debunk_credibility = debunk_credibility  # 保留兼容
         self.authority_factor = authority_factor
         self.backfire_strength = backfire_strength
         self.silence_threshold = silence_threshold
@@ -74,7 +78,8 @@ class SimulationEngineDual:
         self.echo_chamber_factor = echo_chamber_factor
 
         self.step_count = 0
-        self.debunked = False
+        self.responded = False
+        self.debunked = False  # 保留兼容
         self.current_state: Optional[SimulationState] = None
 
         # 增强版数学模型实例
@@ -112,7 +117,7 @@ class SimulationEngineDual:
         self.news_source = "public"  # 默认公域信息
         self.knowledge_graph: Dict = {}  # 知识图谱数据
         self._graph_parser: Optional[GraphParserAgent] = None  # 图谱解析器
-        
+
         # 知识驱动演化器（Phase 1 新增）
         self.knowledge_evolution: Optional[KnowledgeDrivenEvolution] = None
         self.use_knowledge_evolution: bool = False
@@ -143,7 +148,7 @@ class SimulationEngineDual:
         """
         self.news_content = content
         self.news_source = source
-        
+
         if parse_graph:
             # 解析知识图谱
             logger.info("正在解析新闻知识图谱...")
@@ -158,7 +163,7 @@ class SimulationEngineDual:
     ):
         """
         设置知识图谱，启用知识驱动演化
-        
+
         Args:
             entities: 实体列表
             relations: 关系列表
@@ -167,7 +172,7 @@ class SimulationEngineDual:
         if not entities:
             logger.warning("实体列表为空，不启用知识驱动演化")
             return
-        
+
         self.knowledge_evolution = KnowledgeDrivenEvolution(
             entities=entities,
             relations=relations,
@@ -175,7 +180,7 @@ class SimulationEngineDual:
         )
         self.use_knowledge_evolution = True
         logger.info(f"知识图谱已设置，启用知识驱动演化: {len(entities)} 实体, {len(relations)} 关系")
-        
+
         # 记录知识图谱
         self.knowledge_graph = {
             "entities": entities,
@@ -350,31 +355,32 @@ class SimulationEngineDual:
         entity_count: int = 0
     ):
         """根据新闻内容设置初始观点分布"""
-        base_rumor_spread = 0.3
+        base_negative_spread = 0.3
 
         if sentiment == "负面":
-            rumor_boost = 0.15
+            negative_boost = 0.15
         elif sentiment == "正面":
-            rumor_boost = -0.05
+            negative_boost = -0.05
         else:
-            rumor_boost = 0.0
+            negative_boost = 0.0
 
         if credibility == "低可信":
-            truth_penalty = 0.05
+            positive_penalty = 0.05
         elif credibility == "高可信":
-            truth_penalty = -0.03
+            positive_penalty = -0.03
         else:
-            truth_penalty = 0.0
+            positive_penalty = 0.0
 
         entity_factor = min(0.1, entity_count * 0.015)
 
-        self.initial_rumor_spread = np.clip(
-            base_rumor_spread + rumor_boost + truth_penalty + entity_factor,
+        self.initial_negative_spread = np.clip(
+            base_negative_spread + negative_boost + positive_penalty + entity_factor,
             0.1, 0.6
         )
+        self.initial_rumor_spread = self.initial_negative_spread  # 兼容
 
         logger.info(f"根据新闻设置初始分布(双层): 情感={sentiment}, 可信度={credibility}, "
-                   f"实体数={entity_count}, 初始谣言传播率={self.initial_rumor_spread:.3f}")
+                   f"实体数={entity_count}, 初始负面信念传播率={self.initial_negative_spread:.3f}")
 
     def consume_pending_events(self) -> List[Dict]:
         """
@@ -406,7 +412,8 @@ class SimulationEngineDual:
     def initialize(self) -> SimulationState:
         """初始化模拟"""
         self.step_count = 0
-        self.debunked = False
+        self.responded = False
+        self.debunked = False  # 兼容
         self.history = []
         self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -414,7 +421,7 @@ class SimulationEngineDual:
             # LLM 模式 - 双层网络版本
             self.llm_population = LLMAgentPopulationDual(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_rumor_spread,
+                initial_rumor_spread=self.initial_negative_spread,
                 llm_config=self.llm_config,
                 num_communities=self.num_communities,
                 public_m=self.public_m,
@@ -426,7 +433,7 @@ class SimulationEngineDual:
             # 数学模型模式 - 也创建双层网络用于统计
             self.population = AgentPopulation(
                 size=self.population_size,
-                initial_rumor_spread=self.initial_rumor_spread,
+                initial_rumor_spread=self.initial_negative_spread,
                 network_type="scale_free"  # 使用无标度网络作为默认
             )
             # 创建双层网络用于统计
@@ -456,9 +463,9 @@ class SimulationEngineDual:
 
         self.step_count += 1
 
-        # 检查是否发布辟谣
-        if self.step_count >= self.debunk_delay and not self.debunked:
-            self._release_debunking()
+        # 检查是否发布权威回应
+        if self.step_count >= self.response_delay and not self.responded:
+            self._release_authority_response()
 
         if self.use_llm:
             # LLM 驱动模式
@@ -476,7 +483,7 @@ class SimulationEngineDual:
     def step(self) -> SimulationState:
         """
         同步执行单步推演 (数学模型模式)
-        
+
         注意：LLM 模式请使用 async_step()
         """
         if self.use_llm:
@@ -487,9 +494,9 @@ class SimulationEngineDual:
 
         self.step_count += 1
 
-        # 检查是否发布辟谣
-        if self.step_count >= self.debunk_delay and not self.debunked:
-            self._release_debunking()
+        # 检查是否发布权威回应
+        if self.step_count >= self.response_delay and not self.responded:
+            self._release_authority_response()
 
         # 数学模型模式 - 直接调用同步方法
         self._math_step()
@@ -511,7 +518,8 @@ class SimulationEngineDual:
                 news_content=self.news_content,
                 news_source=self.news_source,
                 knowledge_graph=self.knowledge_graph,
-                debunk_released=self.debunked,
+                response_released=self.responded,
+                debunk_released=self.debunked,  # 兼容
                 cocoon_strength=self.cocoon_strength,
                 progress_callback=self.progress_callback
             )
@@ -530,7 +538,7 @@ class SimulationEngineDual:
         2. 算法茧房效应
         3. 沉默的螺旋
         4. 群体极化效应
-        5. 辟谣与逆火效应
+        5. 权威回应与逆火效应
         6. 认知失调
         7. 知识图谱驱动演化（Phase 1 新增）
         """
@@ -552,10 +560,10 @@ class SimulationEngineDual:
             fear_of_isolation=pop.fear_of_isolation,
             neighbors=neighbors_list,
             influencer_ids=influencer_ids,
-            debunk_released=self.debunked,
+            debunk_released=self.responded,
             step_count=self.step_count
         )
-        
+
         # === Phase 1: 知识图谱驱动演化 ===
         if self.use_knowledge_evolution and self.knowledge_evolution:
             personas = self._get_personas()
@@ -563,12 +571,12 @@ class SimulationEngineDual:
                 opinions=new_opinions,
                 personas=personas,
                 cocoon_strength=self.cocoon_strength,
-                debunk_released=self.debunked
+                debunk_released=self.responded
             )
-            
+
             # 应用知识影响
             new_opinions = np.clip(new_opinions + knowledge_influence, -1, 1)
-            
+
             avg_influence = np.mean(np.abs(knowledge_influence))
             if avg_influence > 0.001:
                 logger.debug(f"知识驱动演化: 平均影响 {avg_influence:.4f}")
@@ -578,9 +586,9 @@ class SimulationEngineDual:
         pop.belief_strength = new_belief
         pop.is_silent = is_silent
 
-        # 标记曝光真相（辟谣后）
-        if self.debunked:
-            pop.exposed_to_truth = np.ones(pop.size, dtype=bool)
+        # 标记曝光正确认知（权威回应后）
+        if self.responded:
+            pop.exposed_to_positive = np.ones(pop.size, dtype=bool)
 
         # 记录指标到日志
         logger.debug(f"Math model metrics: {metrics}")
@@ -596,16 +604,16 @@ class SimulationEngineDual:
             threshold = np.percentile(self.population.influence, 95)
             return list(np.where(self.population.influence >= threshold)[0])
         return []
-    
+
     def _get_personas(self) -> List[str]:
         """
         获取所有Agent的人设类型
-        
+
         用于知识驱动演化的人设调节
         """
         if self.population is None:
             return []
-        
+
         # 从population获取人设，如果没有则返回默认值
         personas = []
         for i in range(self.population.size):
@@ -621,7 +629,7 @@ class SimulationEngineDual:
                     personas.append("媒体账号")
                 else:
                     personas.append("普通用户")
-        
+
         return personas
 
     def _generate_math_snapshots(
@@ -655,7 +663,7 @@ class SimulationEngineDual:
                 opinion_gap = avg_neighbor_op - old_op
 
                 if abs(opinion_gap) > 0.1:
-                    direction = "真相" if opinion_gap > 0 else "谣言"
+                    direction = "正确认知" if opinion_gap > 0 else "负面信念"
                     reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
 
                 # 检查意见领袖影响
@@ -666,7 +674,7 @@ class SimulationEngineDual:
             # 2. 茧房效应
             cocoon_effect = self.cocoon_strength * old_op * 0.1
             if abs(cocoon_effect) > 0.01:
-                direction = "强化" if old_op < 0 else "真相方向"
+                direction = "强化误信" if old_op < 0 else "正确认知方向"
                 reasons.append(f"算法推荐{direction}观点")
 
             # 3. 沉默状态
@@ -675,20 +683,20 @@ class SimulationEngineDual:
             elif pop.fear_of_isolation[i] > 0.6:
                 reasons.append("孤立恐惧较高但未沉默")
 
-            # 4. 辟谣影响
-            if self.debunked and old_op < 0:
+            # 4. 权威回应影响
+            if self.responded and old_op < 0:
                 if new_op > old_op:
-                    reasons.append("收到辟谣信息，观点向真相偏移")
+                    reasons.append("收到权威回应信息，观点向正确认知偏移")
                 elif new_op < old_op:
-                    reasons.append("辟谣触发逆火效应，观点反加强")
+                    reasons.append("权威回应触发逆火效应，观点反加强")
 
             # 5. 观点变化总结
             if abs(opinion_change) < 0.01:
                 reasons.append("观点基本稳定")
             elif opinion_change > 0:
-                reasons.append(f"观点向真相偏移{abs(opinion_change):.3f}")
+                reasons.append(f"观点向正确认知偏移{abs(opinion_change):.3f}")
             else:
-                reasons.append(f"观点向谣言偏移{abs(opinion_change):.3f}")
+                reasons.append(f"观点向负面信念偏移{abs(opinion_change):.3f}")
 
             reasoning = "；".join(reasons) if reasons else "观点微调"
 
@@ -702,7 +710,7 @@ class SimulationEngineDual:
                 "influence": float(pop.influence[i]),
                 "old_opinion": float(old_op),
                 "new_opinion": float(new_op),
-                "received_news": ["辟谣信息"] if self.debunked else [],
+                "received_news": ["权威回应信息"] if self.responded else [],
                 "llm_raw_response": None,  # 数学模型无LLM响应
                 "emotion": "冷静",
                 "action": "沉默" if is_silent[i] else "观望",
@@ -722,15 +730,16 @@ class SimulationEngineDual:
             # 保存到全局存储
             AGENT_DECISION_SNAPSHOTS[i] = snapshot
 
-    def _release_debunking(self):
+    def _release_authority_response(self):
         """
-        发布官方辟谣信息
+        发布官方权威回应信息
 
-        辟谣效果现在由增强版数学模型在 compute_step 中统一处理，
-        包括逆火效应。这里只标记辟谣已发布。
+        权威回应效果现在由增强版数学模型在 compute_step 中统一处理，
+        包括逆火效应。这里只标记权威回应已发布。
         """
-        self.debunked = True
-        logger.info(f"Step {self.step_count}: 发布辟谣")
+        self.responded = True
+        self.debunked = True  # 兼容
+        logger.info(f"Step {self.step_count}: 发布权威回应")
 
     def _compute_state(self) -> SimulationState:
         """计算当前状态统计"""
@@ -745,8 +754,8 @@ class SimulationEngineDual:
             pop = self.population
             opinion_dist = pop.get_opinion_histogram()
             stats = {
-                "rumor_spread_rate": float(np.mean(pop.opinions < -0.2)),
-                "truth_acceptance_rate": float(np.mean(pop.opinions > 0.2)),
+                "negative_belief_rate": float(np.mean(pop.opinions < -0.2)),
+                "positive_belief_rate": float(np.mean(pop.opinions > 0.2)),
                 "avg_opinion": float(np.mean(pop.opinions)),
                 "polarization_index": float(np.std(pop.opinions) * 2),
                 "silence_rate": float(np.mean(pop.is_silent)),
@@ -757,19 +766,19 @@ class SimulationEngineDual:
             if self.dual_network:
                 public_edges = self.dual_network.get_public_edges()
                 private_edges = self.dual_network.get_private_edges()
-                stats["public_rumor_rate"] = stats["rumor_spread_rate"]
-                stats["public_truth_rate"] = stats["truth_acceptance_rate"]
-                stats["private_rumor_rate"] = stats["rumor_spread_rate"]
-                stats["private_truth_rate"] = stats["truth_acceptance_rate"]
+                stats["public_negative_rate"] = stats["negative_belief_rate"]
+                stats["public_positive_rate"] = stats["positive_belief_rate"]
+                stats["private_negative_rate"] = stats["negative_belief_rate"]
+                stats["private_positive_rate"] = stats["positive_belief_rate"]
                 stats["num_communities"] = self.dual_network.num_communities
                 stats["num_influencers"] = len(self.dual_network.influencer_ids)
             else:
                 public_edges = pop.get_edges()
                 private_edges = []
-                stats["public_rumor_rate"] = stats["rumor_spread_rate"]
-                stats["public_truth_rate"] = stats["truth_acceptance_rate"]
-                stats["private_rumor_rate"] = stats["rumor_spread_rate"]
-                stats["private_truth_rate"] = stats["truth_acceptance_rate"]
+                stats["public_negative_rate"] = stats["negative_belief_rate"]
+                stats["public_positive_rate"] = stats["positive_belief_rate"]
+                stats["private_negative_rate"] = stats["negative_belief_rate"]
+                stats["private_positive_rate"] = stats["positive_belief_rate"]
                 stats["num_communities"] = 0
                 stats["num_influencers"] = 0
 
@@ -780,15 +789,15 @@ class SimulationEngineDual:
             private_edges=private_edges,
             edges=public_edges,  # 兼容旧版
             opinion_distribution=opinion_dist,
-            rumor_spread_rate=stats["rumor_spread_rate"],
-            truth_acceptance_rate=stats["truth_acceptance_rate"],
+            negative_belief_rate=stats["negative_belief_rate"],
+            positive_belief_rate=stats["positive_belief_rate"],
             avg_opinion=stats["avg_opinion"],
             polarization_index=stats["polarization_index"],
             silence_rate=stats.get("silence_rate", 0.0),
-            public_rumor_rate=stats.get("public_rumor_rate", stats["rumor_spread_rate"]),
-            public_truth_rate=stats.get("public_truth_rate", stats["truth_acceptance_rate"]),
-            private_rumor_rate=stats.get("private_rumor_rate", stats["rumor_spread_rate"]),
-            private_truth_rate=stats.get("private_truth_rate", stats["truth_acceptance_rate"]),
+            public_negative_rate=stats.get("public_negative_rate", stats["negative_belief_rate"]),
+            public_positive_rate=stats.get("public_positive_rate", stats["positive_belief_rate"]),
+            private_negative_rate=stats.get("private_negative_rate", stats["negative_belief_rate"]),
+            private_positive_rate=stats.get("private_positive_rate", stats["positive_belief_rate"]),
             num_communities=stats.get("num_communities", 0),
             num_influencers=stats.get("num_influencers", 0)
         )
@@ -835,8 +844,8 @@ class SimulationEngineDual:
 |------|-----|
 | 群体规模 | {self.population_size} 人 |
 | 算法茧房强度 | {self.cocoon_strength:.2f} |
-| 官方辟谣延迟 | {self.debunk_delay} 步 |
-| 初始谣言传播率 | {self.initial_rumor_spread:.0%} |
+| 权威回应延迟 | {self.response_delay} 步 |
+| 初始负面信念传播率 | {self.initial_negative_spread:.0%} |
 | 社群数量 | {self.num_communities} |
 | 总推演步数 | {len(self.history) - 1} 步 |
 
@@ -846,16 +855,16 @@ class SimulationEngineDual:
 
 | 指标 | 初始值 | 最终值 |
 |------|--------|--------|
-| 谣言传播率 | {initial_state['rumor_spread_rate']:.1%} | {final_state['rumor_spread_rate']:.1%} |
-| 真相接受率 | {initial_state['truth_acceptance_rate']:.1%} | {final_state['truth_acceptance_rate']:.1%} |
+| 负面信念传播率 | {initial_state['negative_belief_rate']:.1%} | {final_state['negative_belief_rate']:.1%} |
+| 正确认知接受率 | {initial_state['positive_belief_rate']:.1%} | {final_state['positive_belief_rate']:.1%} |
 | 沉默率 | {initial_state.get('silence_rate', 0):.1%} | {final_state.get('silence_rate', 0):.1%} |
 
 ### 公域 vs 私域对比
 
-| 渠道 | 谣言率 | 真相率 |
+| 渠道 | 负面信念率 | 正确认知率 |
 |------|--------|--------|
-| 公域网络 | {final_state.get('public_rumor_rate', 0):.1%} | {final_state.get('public_truth_rate', 0):.1%} |
-| 私域网络 | {final_state.get('private_rumor_rate', 0):.1%} | {final_state.get('private_truth_rate', 0):.1%} |
+| 公域网络 | {final_state.get('public_negative_rate', 0):.1%} | {final_state.get('public_positive_rate', 0):.1%} |
+| 私域网络 | {final_state.get('private_negative_rate', 0):.1%} | {final_state.get('private_positive_rate', 0):.1%} |
 
 ---
 
