@@ -499,12 +499,12 @@ class SimulationEngine:
             if self.mode == SimulationMode.NEWS and self.init_distribution:
                 self._apply_init_distribution()
 
-        self.current_state = self._compute_state()
-        self.history.append(self.current_state.to_dict())
-
-        # v3.0: 初始化 v3 Agent 状态
+        # v3.0: 先初始化 v3 Agent 状态（必须在 _compute_state 之前）
         if self.use_v3 and self.v3:
             self._initialize_v3()
+
+        self.current_state = self._compute_state()
+        self.history.append(self.current_state.to_dict())
 
         return self.current_state
 
