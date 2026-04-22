@@ -39,6 +39,13 @@ class Agent(BaseModel):
     is_influencer: bool = False    # 是否为大V（公域超级节点）
     community_id: int = 0          # 所属私域社群ID
     publish_channel: str = "none"  # 发布渠道
+    # v3.0 扩展字段
+    rumor_trust: float = 0.0       # 负面信念信任度
+    truth_trust: float = 0.0       # 正面信念信任度
+    cognitive_closed_need: float = 0.5  # 认知闭合需求
+    dominant_need: str = ""        # 主导需求层次
+    predicted_behavior: str = ""   # TPB 预测行为
+    behavior_confidence: float = 0.0  # 行为预测置信度
 
     @model_validator(mode='before')
     @classmethod
@@ -197,6 +204,13 @@ class SimulationState(BaseModel):
     # Phase 3: 新闻模式专用
     mode: str = "sandbox"              # 运行模式
     entity_impact_summary: Optional[Dict[str, float]] = None  # 实体影响摘要
+    # v3.0 统计字段
+    avg_rumor_trust: float = 0.0       # 平均负面信念信任度
+    avg_truth_trust: float = 0.0       # 平均正面信念信任度
+    need_distribution: Optional[Dict[str, int]] = None  # 需求层次分布
+    behavior_distribution: Optional[Dict[str, int]] = None  # 行为预测分布
+    total_exposures: int = 0           # 总曝光次数
+    truth_intervention_active: bool = False  # 辟谣干预是否激活
 
     @model_validator(mode='before')
     @classmethod
@@ -327,6 +341,13 @@ class SimulationState(BaseModel):
             "num_influencers": self.num_influencers,
             "mode": self.mode,
             "entity_impact_summary": self.entity_impact_summary,
+            # v3.0 统计字段
+            "avg_rumor_trust": self.avg_rumor_trust,
+            "avg_truth_trust": self.avg_truth_trust,
+            "need_distribution": self.need_distribution,
+            "behavior_distribution": self.behavior_distribution,
+            "total_exposures": self.total_exposures,
+            "truth_intervention_active": self.truth_intervention_active,
             # 旧字段名兼容（前端过渡期）
             "rumor_spread_rate": self.negative_belief_rate,
             "truth_acceptance_rate": self.positive_belief_rate,

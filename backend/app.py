@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="信息茧房推演系统",
     description="模拟算法推荐与权威回应对群体观点的影响",
-    version="2.0.0"
+    version="3.0.0"
 )
 
 # 允许前端跨域访问
@@ -266,7 +266,7 @@ def _state_to_dict(state) -> dict:
 @app.get("/")
 async def root():
     """健康检查"""
-    return {"status": "ok", "service": "信息茧房推演系统", "version": "2.0.0"}
+    return {"status": "ok", "service": "信息茧房推演系统", "version": "3.0.0"}
 
 
 @app.post("/api/simulation/start")

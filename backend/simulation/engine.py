@@ -2,18 +2,25 @@
 推演引擎核心
 支持 LLM 驱动和数学模型两种模式
 支持沙盘推演和新闻推演两种运行模式
+
+v3.0 新增:
+- use_v3: 启用新版 Agent/Environment/Psychology 模块
+- 新增字段: rumor_trust, truth_trust, dominant_need, predicted_behavior
 """
 import numpy as np
-from typing import Optional, Dict, List, Callable
+from typing import Optional, Dict, List, Callable, Any
 from datetime import datetime
 from pathlib import Path
 import asyncio
 import logging
+import uuid
 
 from .agents import AgentPopulation
 from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
 from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionConfig
+from .engine_v3 import EngineV3Integration
+from .agent import BeliefState
 from ..models.schemas import SimulationState, SimulationMode
 from ..llm.client import LLMClient, LLMConfig
 
@@ -61,7 +68,10 @@ class SimulationEngine:
         # 兼容旧参数名（别名）
         debunk_delay: Optional[int] = None,
         initial_rumor_spread: Optional[float] = None,
-        debunk_credibility: Optional[float] = None
+        debunk_credibility: Optional[float] = None,
+        # v3.0 新增参数
+        use_v3: bool = True,
+        v3_replay_db: Optional[str] = None
     ):
         # 处理兼容参数：优先使用新参数名，旧参数名作为别名
         if debunk_delay is not None:
@@ -136,6 +146,19 @@ class SimulationEngine:
         # 知识驱动演化器（Phase 1 新增）
         self.knowledge_evolution: Optional[KnowledgeDrivenEvolution] = None
         self.use_knowledge_evolution: bool = False
+
+        # v3.0 集成层
+        self.use_v3 = use_v3
+        self.v3: Optional[EngineV3Integration] = None
+        if use_v3:
+            self.v3 = EngineV3Integration(
+                simulation_id=str(uuid.uuid4())[:8],
+                enable_memory=True,
+                enable_psychology=True,
+                enable_message=True,
+                enable_replay=bool(v3_replay_db),
+                replay_db_path=v3_replay_db
+            )
 
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
@@ -479,7 +502,62 @@ class SimulationEngine:
         self.current_state = self._compute_state()
         self.history.append(self.current_state.to_dict())
 
+        # v3.0: 初始化 v3 Agent 状态
+        if self.use_v3 and self.v3:
+            self._initialize_v3()
+
         return self.current_state
+
+    def _initialize_v3(self):
+        """
+        初始化 v3 集成层
+
+        从现有 population 数据初始化 v3 Agent 状态
+        """
+        if not self.v3:
+            return
+        
+        if self.use_llm and self.llm_population:
+            pop = self.llm_population
+            opinions = np.array([a.opinion for a in pop.agents])
+            belief_strengths = np.array([a.belief_strength for a in pop.agents])
+            susceptibilities = np.array([a.susceptibility for a in pop.agents])
+            influences = np.array([a.influence for a in pop.agents])
+            fear_of_isolations = np.array([getattr(a, 'fear_of_isolation', 0.5) for a in pop.agents])
+            
+            # 构建邻接表
+            adjacency = {}
+            if hasattr(pop, 'graph'):
+                import networkx as nx
+                for i in range(pop.size):
+                    adjacency[i] = list(pop.graph.neighbors(i))
+            else:
+                for i in range(pop.size):
+                    adjacency[i] = []
+        else:
+            pop = self.population
+            opinions = pop.opinions
+            belief_strengths = pop.belief_strength
+            susceptibilities = pop.susceptibility
+            influences = pop.influence
+            fear_of_isolations = pop.fear_of_isolation
+            
+            # 构建邻接表
+            adjacency = {}
+            for i in range(pop.size):
+                adjacency[i] = pop.get_neighbors(i)
+        
+        # 初始化 v3 Agent 状态
+        self.v3.initialize_agents(
+            opinions=opinions,
+            belief_strengths=belief_strengths,
+            susceptibilities=susceptibilities,
+            influences=influences,
+            fear_of_isolations=fear_of_isolations,
+            adjacency=adjacency
+        )
+        
+        logger.info(f"v3 Integration initialized: {len(self.v3.belief_states)} agents")
 
     def _apply_init_distribution(self):
         """
@@ -566,9 +644,20 @@ class SimulationEngine:
 
         self.step_count += 1
 
+        # v3: 推演前处理
+        if self.use_v3 and self.v3:
+            self.v3.pre_step(self.step_count)
+
         # 检查是否发布权威回应
         if self.step_count >= self.response_delay and not self.responded:
             self._release_authority_response()
+            # v3: 添加辟谣干预
+            if self.use_v3 and self.v3:
+                self.v3.add_truth_intervention(
+                    content="官方权威回应",
+                    step=self.step_count,
+                    credibility=self.response_credibility
+                )
 
         if self.use_llm:
             # LLM 驱动模式
@@ -576,6 +665,10 @@ class SimulationEngine:
         else:
             # 数学模型模式
             self._math_step()
+
+        # v3: 推演后处理
+        if self.use_v3 and self.v3:
+            self.v3.post_step([])  # Agent states already updated in belief_states
 
         # 计算新状态
         self.current_state = self._compute_state()
@@ -593,12 +686,34 @@ class SimulationEngine:
 
         self.step_count += 1
 
+        # v3: 推演前处理
+        if self.use_v3 and self.v3:
+            self.v3.pre_step(self.step_count)
+
         # 检查是否发布权威回应
         if self.step_count >= self.response_delay and not self.responded:
             self._release_authority_response()
+            # v3: 添加辟谣干预
+            if self.use_v3 and self.v3:
+                self.v3.add_truth_intervention(
+                    content="官方权威回应",
+                    step=self.step_count,
+                    credibility=self.response_credibility
+                )
 
         # 数学模型模式 - 直接调用同步方法
         self._math_step()
+
+        # v3: 更新信念状态
+        if self.use_v3 and self.v3 and self.population:
+            for i in range(self.population.size):
+                belief = self.v3.belief_states.get(i, BeliefState())
+                belief.update_from_opinion(float(self.population.opinions[i]))
+                self.v3.belief_states[i] = belief
+
+        # v3: 推演后处理
+        if self.use_v3 and self.v3:
+            self.v3.post_step([])
 
         # 计算新状态
         self.current_state = self._compute_state()
@@ -913,6 +1028,17 @@ class SimulationEngine:
         if self.mode == SimulationMode.NEWS and self.knowledge_evolution:
             entity_impact_summary = self.knowledge_evolution.entity_impacts
 
+        # v3.0: 获取 v3 统计
+        v3_stats = {}
+        if self.use_v3 and self.v3:
+            v3_stats = self.v3.get_statistics()
+            
+            # 为每个 Agent 添加 v3 字段
+            for agent_dict in agents:
+                agent_id = agent_dict.get('id', 0)
+                v3_fields = self.v3.get_agent_v3_fields(agent_id)
+                agent_dict.update(v3_fields)
+
         return SimulationState(
             step=self.step_count,
             agents=agents,
@@ -939,7 +1065,13 @@ class SimulationEngine:
             polarization_index=stats["polarization_index"],
             silence_rate=stats.get("silence_rate", 0.0),
             mode=self.mode.value,
-            entity_impact_summary=entity_impact_summary
+            entity_impact_summary=entity_impact_summary,
+            # v3.0 统计
+            avg_rumor_trust=v3_stats.get("avg_rumor_trust", 0.0),
+            avg_truth_trust=v3_stats.get("avg_truth_trust", 0.0),
+            need_distribution=v3_stats.get("need_distribution"),
+            total_exposures=v3_stats.get("total_exposures", 0),
+            truth_intervention_active=v3_stats.get("truth_intervention_active", False)
         )
 
     def generate_report(self) -> str:

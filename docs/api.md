@@ -7,20 +7,55 @@
 | 基础 URL | http://localhost:8000 |
 | WebSocket | ws://localhost:8000/ws |
 | 数据格式 | JSON |
+| API 版本 | v2.0.0 |
 
-## REST API
+## 接口概览
+
+### 健康检查
+- `GET /` - 服务健康状态检查
+
+### 推演管理
+- `POST /api/simulation/start` - 启动推演模拟
+- `GET /api/simulation/step` - 执行单步推演（数学模型模式）
+- `GET /api/simulation/state` - 获取当前推演状态
+- `POST /api/simulation/finish` - 结束推演并生成基础报告
+
+### 智能体透视
+- `GET /api/agent/{agent_id}/inspect` - 获取指定智能体详细信息
+
+### 报告管理
+- `POST /api/report/generate` - 生成智库专报（LLM模式）
+- `GET /api/report/stream` - 流式生成智库专报
+- `GET /api/report/list` - 列出所有报告
+- `GET /api/report/content` - 获取报告内容
+- `GET /api/report/download` - 下载报告文件
+
+### 知识图谱
+- `POST /api/event/parse` - 解析新闻文本为知识图谱
+- `POST /api/event/inject` - 注入事件（支持快速注入）
+
+### 预测接口（新闻模式）
+- `GET /api/prediction/update` - 获取当前预测结果
+- `GET /api/prediction/timeline` - 获取预测轨迹数据
+
+### 风险预警
+- `GET /api/risk/check` - 检查当前风险状态
+
+---
+
+## REST API 详解
 
 ### 健康检查
 
 #### GET /
 
-检查服务是否正常运行
+**描述**: 检查服务是否正常运行
 
-**响应示例:**
+**响应**:
 ```json
 {
   "status": "ok",
-  "service": "信息茧房推演系统",
+  "service": "觉测·洞鉴信息茧房推演系统",
   "version": "2.0.0"
 }
 ```
@@ -31,9 +66,9 @@
 
 ### POST /api/simulation/start
 
-启动新的推演模拟
+**描述**: 启动新的推演模拟
 
-**请求体:**
+**请求体**:
 ```json
 {
   "mode": "sandbox",
@@ -59,7 +94,7 @@
 }
 ```
 
-**参数说明:**
+**参数说明**:
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -75,9 +110,9 @@
 | response_credibility | float | 0.7 | 权威回应可信度 |
 | init_distribution | object | null | 真实分布锚定（新闻模式） |
 
-> **向后兼容**: 旧参数名仍然有效，如 `debunk_delay` → `response_delay`，`initial_rumor_spread` → `initial_negative_spread`
+**兼容性说明**: 系统同时支持新旧参数名，如 `debunk_delay` → `response_delay`
 
-**响应示例:**
+**响应**:
 ```json
 {
   "step": 0,
@@ -86,21 +121,17 @@
   "negative_belief_rate": 0.3,
   "positive_belief_rate": 0.0,
   "avg_opinion": -0.85,
-  "polarization_index": 0.42,
-  "rumor_spread_rate": 0.3,
-  "truth_acceptance_rate": 0.0
+  "polarization_index": 0.42
 }
 ```
 
-> **注意**: 响应同时返回新旧两种字段名，确保向后兼容
-
 ---
 
-#### GET /api/simulation/step
+### GET /api/simulation/step
 
-执行单步推演（仅数学模型模式）
+**描述**: 执行单步推演（仅数学模型模式）
 
-**响应示例:**
+**响应**:
 ```json
 {
   "step": 1,
@@ -115,11 +146,11 @@
 
 ---
 
-#### GET /api/simulation/state
+### GET /api/simulation/state
 
-获取当前推演状态
+**描述**: 获取当前推演状态
 
-**响应示例:**
+**响应**:
 ```json
 {
   "step": 5,
@@ -140,11 +171,11 @@
 
 ---
 
-#### POST /api/simulation/finish
+### POST /api/simulation/finish
 
-结束推演并生成基础报告
+**描述**: 结束推演并生成基础报告
 
-**响应示例:**
+**响应**:
 ```json
 {
   "success": true,
@@ -159,9 +190,9 @@
 
 ### GET /api/prediction/update
 
-获取当前预测结果（新闻模式）
+**描述**: 获取当前预测结果（新闻模式）
 
-**响应示例:**
+**响应**:
 ```json
 {
   "success": true,
@@ -196,12 +227,6 @@
         "priority": 1,
         "description": "官方权威回应",
         "expected_effect": "预计降低误信率15-25%"
-      },
-      {
-        "type": "amplify",
-        "priority": 2,
-        "description": "放大正面信念传播",
-        "expected_effect": "预计提升正确认知率10-20%"
       }
     ],
     "reasoning": "当前误信率已达45%，预测将持续上升..."
@@ -211,45 +236,14 @@
 
 ---
 
-### GET /api/prediction/timeline
-
-获取预测轨迹数据
-
-**查询参数:**
-- `steps`: 预测步数（默认10）
-
-**响应示例:**
-```json
-{
-  "success": true,
-  "data": {
-    "steps": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    "negative_belief_rate": {
-      "expected": [0.45, 0.48, 0.51, 0.54, 0.56, 0.58, 0.60, 0.61, 0.62, 0.63, 0.64],
-      "optimistic": [0.45, 0.42, 0.39, 0.36, 0.33, 0.30, 0.28, 0.26, 0.24, 0.23, 0.22],
-      "pessimistic": [0.45, 0.54, 0.63, 0.72, 0.79, 0.85, 0.88, 0.90, 0.92, 0.93, 0.94]
-    },
-    "positive_belief_rate": {
-      "expected": [0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 0.23, 0.24, 0.25],
-      "optimistic": [0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.44, 0.48, 0.51, 0.54, 0.56],
-      "pessimistic": [0.15, 0.12, 0.09, 0.07, 0.05, 0.04, 0.03, 0.02, 0.02, 0.01, 0.01]
-    }
-  }
-}
-```
-
----
-
 ## 智能体透视
 
-#### GET /api/agent/{agent_id}/inspect
+### GET /api/agent/{agent_id}/inspect
 
-获取指定 Agent 的详细信息
-
-**路径参数:**
+**路径参数**:
 - `agent_id`: Agent ID
 
-**响应示例:**
+**响应**:
 ```json
 {
   "agent_id": 42,
@@ -269,19 +263,7 @@
   "emotion": "理性",
   "action": "评论",
   "generated_comment": "仔细看了官方公告，发现之前的消息确实有误...",
-  "reasoning": "考虑到邻居观点和官方证据，我选择正确认知",
-  "has_decided": true,
-  "fear_of_isolation": 0.4,
-  "conviction": 0.6,
-  "is_silent": false,
-  "perceived_climate": {
-    "total": 15,
-    "pro_negative_ratio": 0.4,
-    "pro_positive_ratio": 0.33,
-    "neutral_ratio": 0.27,
-    "silent_ratio": 0.1,
-    "avg_opinion": -0.15
-  }
+  "reasoning": "考虑到邻居观点和官方证据，我选择正确认知"
 }
 ```
 
@@ -289,11 +271,11 @@
 
 ## 报告管理
 
-#### POST /api/report/generate
+### POST /api/report/generate
 
-生成智库专报（LLM 模式）
+**描述**: 生成智库专报（LLM 模式）
 
-**响应示例:**
+**响应**:
 ```json
 {
   "success": true,
@@ -305,97 +287,30 @@
 
 ---
 
-#### GET /api/report/stream
-
-流式生成智库专报（SSE）
-
-**响应类型:** text/event-stream
-
-**消息格式:**
-```json
-{"content": "## 演练核心摘要\n"}
-{"content": "本次推演..."}
-{"done": true}
-```
-
----
-
-#### GET /api/report/list
-
-列出所有报告
-
-**响应示例:**
-```json
-{
-  "reports": [
-    {
-      "filename": "intelligence_report_1234567890.md",
-      "path": "reports/intelligence_report_1234567890.md",
-      "size": 15420,
-      "modified": 1234567890.0
-    }
-  ]
-}
-```
-
----
-
-#### GET /api/report/content
-
-获取报告内容
-
-**查询参数:**
-- `filename`: 报告文件名
-
-**响应示例:**
-```json
-{
-  "success": true,
-  "content": "# 智库专报\n\n...",
-  "filename": "intelligence_report_1234567890.md"
-}
-```
-
----
-
-#### GET /api/report/download
-
-下载报告文件
-
-**查询参数:**
-- `filename`: 报告文件名
-
-**响应:** 文件下载
-
----
-
 ## 知识图谱
 
-#### POST /api/event/parse
+### POST /api/event/parse
 
-解析新闻文本为知识图谱
+**描述**: 解析新闻文本为知识图谱
 
-**请求体:**
+**请求体**:
 ```json
 {
   "content": "某科技公司CEO在北京发布会宣布将投资100亿元"
 }
 ```
 
-**响应示例:**
+**响应**:
 ```json
 {
   "success": true,
   "data": {
     "entities": [
       {"name": "王某杞", "type": "人物", "description": "某科技公司CEO", "importance": 1},
-      {"name": "某科技公司", "type": "组织", "description": "科技公司", "importance": 2},
-      {"name": "北京", "type": "地点", "description": "发布会地点", "importance": 4},
-      {"name": "100亿元", "type": "概念", "description": "投资金额", "importance": 3}
+      {"name": "某科技公司", "type": "组织", "description": "科技公司", "importance": 2}
     ],
     "relations": [
-      {"source": "王某杞", "target": "某科技公司", "action": "担任CEO", "type": "关联"},
-      {"source": "某科技公司", "target": "100亿元", "action": "计划投资", "type": "影响"}
+      {"source": "王某杞", "target": "某科技公司", "action": "担任CEO", "type": "关联"}
     ],
     "summary": "某科技公司CEO王某杞在北京发布会宣布投资100亿元。",
     "sentiment": "正面",
@@ -406,11 +321,11 @@
 
 ---
 
-#### POST /api/event/inject
+### POST /api/event/inject
 
-注入事件（支持快速注入）
+**描述**: 注入事件（支持快速注入）
 
-**请求体:**
+**请求体**:
 ```json
 {
   "content": "事件内容",
@@ -419,30 +334,7 @@
 }
 ```
 
-**参数说明:**
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| content | string | 必填 | 事件文本内容 |
-| source | string | "public" | 来源 (public/private) |
-| skip_parse | boolean | false | 是否跳过图谱解析（快速模式） |
-
-**响应示例:**
-```json
-{
-  "success": true,
-  "data": {
-    "event": {
-      "content": "...",
-      "step": 5,
-      "skip_parse": false
-    },
-    "knowledge_graph": {...},
-    "parse_time": 15.3
-  }
-}
-```
-
-**快速模式响应（skip_parse=true）:**
+**快速模式响应**（skip_parse=true）:
 ```json
 {
   "success": true,
@@ -460,53 +352,14 @@
 
 ---
 
-## 风险预警
-
-#### GET /api/risk/check
-
-检查当前风险状态
-
-**响应示例:**
-```json
-{
-  "success": true,
-  "data": {
-    "risk_level": "high",
-    "alerts": [
-      {
-        "rule": "negative_high",
-        "message": "负面信念率超过50%，存在高风险",
-        "value": 0.52,
-        "threshold": 0.5
-      },
-      {
-        "rule": "polarization_high",
-        "message": "极化指数超过0.6，群体严重分裂",
-        "value": 0.65,
-        "threshold": 0.6
-      }
-    ],
-    "intervention_suggested": true,
-    "recommended_timing": {
-      "current_step": 8,
-      "best_intervention_step": 10,
-      "window_closing": false
-    }
-  }
-}
-```
-
----
-
 ## WebSocket API
 
 ### 连接地址
-
 ```
 ws://localhost:8000/ws
 ```
 
-### 客户端 → 服务端
+### 客户端 → 服务端消息
 
 #### 启动推演
 ```json
@@ -516,15 +369,7 @@ ws://localhost:8000/ws
     "mode": "news",
     "cocoon_strength": 0.5,
     "response_delay": 10,
-    "population_size": 200,
-    "initial_negative_spread": 0.3,
-    "use_llm": true,
-    "use_dual_network": true,
-    "init_distribution": {
-      "believe_negative": 0.30,
-      "believe_positive": 0.15,
-      "neutral": 0.55
-    }
+    "population_size": 200
   }
 }
 ```
@@ -534,24 +379,12 @@ ws://localhost:8000/ws
 {"action": "step"}
 ```
 
-#### 自动推演
-```json
-{"action": "auto", "interval": 2000}
-```
-
 #### 停止推演
 ```json
 {"action": "stop"}
 ```
 
-#### 结束推演
-```json
-{"action": "finish"}
-```
-
----
-
-### 服务端 → 客户端
+### 服务端 → 客户端消息
 
 #### 状态推送
 ```json
@@ -564,46 +397,7 @@ ws://localhost:8000/ws
     "negative_belief_rate": 0.45,
     "positive_belief_rate": 0.15,
     "avg_opinion": -0.35,
-    "polarization_index": 0.62,
-    "silence_rate": 0.12,
-    "public_negative_rate": 0.48,
-    "private_negative_rate": 0.42,
-    "num_communities": 8,
-    "num_influencers": 5
-  }
-}
-```
-
-#### 预测推送（新闻模式）
-```json
-{
-  "type": "prediction",
-  "data": {
-    "prediction": {...},
-    "risk_level": "high",
-    "strategies": [...],
-    "reasoning": "..."
-  }
-}
-```
-
-#### 进度推送
-```json
-{
-  "type": "progress",
-  "step": 50,
-  "total": 200,
-  "message": "Agent 50/200"
-}
-```
-
-#### 风险预警推送
-```json
-{
-  "type": "risk_alert",
-  "data": {
-    "risk_level": "critical",
-    "alerts": [...]
+    "polarization_index": 0.62
   }
 }
 ```
@@ -621,23 +415,20 @@ ws://localhost:8000/ws
 ## 错误响应
 
 所有 API 错误响应格式：
-
 ```json
 {
   "error": "错误描述信息"
 }
 ```
 
-**常见错误信息:**
+**常见错误**:
 
-| 错误信息 | 说明 |
-|----------|------|
-| 请先启动模拟 | 未调用 start 接口 |
-| LLM 模式请使用 WebSocket | LLM 模式不支持 REST step |
-| 推演引擎未初始化 | engine 对象为 None |
-| 智库专报仅支持LLM驱动模式 | 数学模型模式无法生成专报 |
-| 报告不存在 | 指定的报告文件不存在 |
-| 知识图谱解析超时 | LLM 响应超时，建议使用快速注入 |
+| 错误信息 | HTTP状态码 | 说明 |
+|----------|------------|------|
+| 请先启动模拟 | 400 | 未调用start接口 |
+| LLM模式请使用WebSocket | 400 | LLM模式不支持REST step |
+| 推演引擎未初始化 | 500 | engine对象为None |
+| 报告不存在 | 404 | 指定的报告文件不存在 |
 
 ---
 
@@ -645,10 +436,14 @@ ws://localhost:8000/ws
 
 | 接口 | 数学模型模式 | LLM模式 |
 |------|-------------|---------|
-| /api/simulation/start | 100-500ms | 5-30s（初始化Agent） |
+| /api/simulation/start | 100-500ms | 5-30s |
 | /api/simulation/step | 10-50ms | 通过WebSocket |
 | /api/event/parse | N/A | 10-60s |
-| /api/event/inject | N/A | 10-60s（完整解析） |
-| /api/event/inject (skip_parse) | N/A | 0.1-2s（快速注入） |
-| /api/prediction/update | 10-100ms | 10-100ms |
-| /api/report/generate | N/A | 30-120s |
+| /api/event/inject | N/A | 0.1-2s（快速模式） |
+
+---
+
+## 版本信息
+
+- **v2.0.0** (当前): 支持语义抽象、双模式推演、知识图谱
+- **v1.0.0**: 基础谣言传播模拟

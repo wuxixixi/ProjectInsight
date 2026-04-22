@@ -1,10 +1,35 @@
 # 觉测·洞鉴 - 信息茧房推演系统
 
-> 多智能体舆论认知干预沙盘
+> 多智能体舆论认知干预沙盘 v3.0
 
 **在线演示**: http://101.34.62.149
 
 可视化模拟算法推荐与官方辟谣对群体观点的影响，支持 LLM 驱动的智能体决策和智库专报自动生成。
+
+## v3.0 新特性
+
+### 🧠 心理学驱动模型
+- **马斯洛需求层次**：五层需求影响信息接受度
+  - 生理/安全/社交/尊重/认知需求动态主导
+  - 需求-内容匹配矩阵计算 receptivity
+- **计划行为理论 (TPB)**：预测传播行为
+  - 态度 + 主观规范 + 知觉行为控制 → 行为意向
+  - 六种行为预测：SHARE/COMMENT/VERIFY/OBSERVE/SILENCE/REJECT
+
+### 📊 双维度信念系统
+- **rumor_trust**：负面信念信任度 [-1, 1]
+- **truth_trust**：正面信念信任度 [-1, 1]
+- 兼容旧版 `opinion = truth_trust - rumor_trust`
+
+### 🌐 分层环境架构
+- **AlgorithmEnv**：算法茧房效应、推荐曝光
+- **SocialEnv**：网络拓扑、意见领袖、社交压力
+- **TruthEnv**：辟谣干预、可信度衰减
+
+### 💾 三层记忆系统
+- **短期记忆**：最近 10 条交互 (deque)
+- **长期记忆**：SQLite 持久化存储
+- **认知缓冲**：待处理的决策线索
 
 ## 核心功能
 
@@ -31,6 +56,7 @@
 | 后端 | Python 3.10+, FastAPI, NumPy, NetworkX, DeepSeek-V3 |
 | 前端 | Vue 3, Vite, ECharts, D3.js, Marked |
 | 测试 | pytest, pytest-asyncio |
+| v3新增 | Pydantic v2, SQLite (memory), AsyncIO |
 
 ## 快速开始
 

@@ -501,6 +501,35 @@
             <span class="kpi-value">{{ polarizationIndex.toFixed(3) }}</span>
           </div>
         </div>
+        <!-- v3.0 新增 KPI -->
+        <div class="kpi-card danger" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+          <div class="kpi-icon">📉</div>
+          <div class="kpi-content">
+            <span class="kpi-label">谣言信任度</span>
+            <span class="kpi-value">{{ (avgRumorTrust * 100).toFixed(1) }}<small>%</small></span>
+          </div>
+        </div>
+        <div class="kpi-card success" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+          <div class="kpi-icon">📈</div>
+          <div class="kpi-content">
+            <span class="kpi-label">真相信任度</span>
+            <span class="kpi-value">{{ (avgTruthTrust * 100).toFixed(1) }}<small>%</small></span>
+          </div>
+        </div>
+        <div class="kpi-card info" v-if="totalExposures > 0">
+          <div class="kpi-icon">👁️</div>
+          <div class="kpi-content">
+            <span class="kpi-label">总曝光量</span>
+            <span class="kpi-value">{{ totalExposures }}</span>
+          </div>
+        </div>
+        <div class="kpi-card" :class="truthInterventionActive ? 'success' : 'purple'" v-if="currentStep > 0">
+          <div class="kpi-icon">🛡️</div>
+          <div class="kpi-content">
+            <span class="kpi-label">辟谣干预</span>
+            <span class="kpi-value">{{ truthInterventionActive ? '已启动' : '未启动' }}</span>
+          </div>
+        </div>
         <div class="kpi-card knowledge clickable" @click="showInfoPanelWithHighlight('knowledge')" v-if="knowledgeGraph.entities && knowledgeGraph.entities.length > 0">
           <div class="kpi-icon">🧠</div>
           <div class="kpi-content">
@@ -655,6 +684,22 @@
               <span v-if="debunked" class="debunk-badge">权威回应已发布</span>
             </div>
             <div class="chart-body" ref="trendChart"></div>
+          </div>
+        </div>
+
+        <!-- v3.0 新增图表面板 -->
+        <div class="chart-row v3-charts" v-if="Object.keys(needDistribution).length > 0 || Object.keys(behaviorDistribution).length > 0">
+          <div class="chart-card need-dist-chart">
+            <div class="chart-header">
+              <h3>🧠 需求层次分布</h3>
+            </div>
+            <div class="chart-body" ref="needDistChart"></div>
+          </div>
+          <div class="chart-card behavior-dist-chart">
+            <div class="chart-header">
+              <h3>🎯 行为预测分布</h3>
+            </div>
+            <div class="chart-body" ref="behaviorDistChart"></div>
           </div>
         </div>
       </div>
@@ -1696,6 +1741,14 @@ export default {
       polarizationIndex: 0,
       silenceRate: 0,  // 沉默率
 
+      // v3.0 新增统计
+      avgRumorTrust: 0,
+      avgTruthTrust: 0,
+      needDistribution: {},
+      behaviorDistribution: {},
+      totalExposures: 0,
+      truthInterventionActive: false,
+
       // 动画数值
       animatedStep: 0,
 
@@ -1732,6 +1785,8 @@ export default {
       opinionChartInstance: null,
       networkChartInstance: null,
       trendChartInstance: null,
+      needDistChartInstance: null,
+      behaviorDistChartInstance: null,
 
       // 图表放大模态框
       chartModalOpen: false,
@@ -2031,6 +2086,8 @@ export default {
     this.opinionChartInstance?.dispose()
     this.networkChartInstance?.dispose()
     this.trendChartInstance?.dispose()
+    this.needDistChartInstance?.dispose()
+    this.behaviorDistChartInstance?.dispose()
   },
 
   methods: {
@@ -2848,6 +2905,14 @@ export default {
       this.silenceRate = data.silence_rate || 0
       this.debunked = data.step >= this.debunkDelay
 
+      // v3.0 新增字段
+      this.avgRumorTrust = data.avg_rumor_trust || 0
+      this.avgTruthTrust = data.avg_truth_trust || 0
+      this.needDistribution = data.need_distribution || {}
+      this.behaviorDistribution = data.behavior_distribution || {}
+      this.totalExposures = data.total_exposures || 0
+      this.truthInterventionActive = data.truth_intervention_active || false
+
       // Phase 3: 实体影响摘要
       if (data.entity_impact_summary) {
         this.entityImpactSummary = data.entity_impact_summary
@@ -2889,6 +2954,7 @@ export default {
       this.renderOpinionChart()
       this.renderNetworkChart()
       this.renderTrendChart()
+      this.renderV3Charts()
 
       // 每3步获取一次预测和风险预警
       if (this.currentStep >= 3 && this.currentStep % 3 === 0) {
@@ -2934,12 +3000,33 @@ export default {
 
       this.trendChartInstance = echarts.init(this.$refs.trendChart)
       this.renderTrendChart()
+
+      this.renderV3Charts()
+    },
+
+    renderV3Charts() {
+      this.$nextTick(() => {
+        if (this.$refs.needDistChart && Object.keys(this.needDistribution).length > 0) {
+          if (!this.needDistChartInstance) {
+            this.needDistChartInstance = echarts.init(this.$refs.needDistChart)
+          }
+          this.renderNeedDistChart()
+        }
+        if (this.$refs.behaviorDistChart && Object.keys(this.behaviorDistribution).length > 0) {
+          if (!this.behaviorDistChartInstance) {
+            this.behaviorDistChartInstance = echarts.init(this.$refs.behaviorDistChart)
+          }
+          this.renderBehaviorDistChart()
+        }
+      })
     },
 
     handleResize() {
       this.opinionChartInstance?.resize()
       this.networkChartInstance?.resize()
       this.trendChartInstance?.resize()
+      this.needDistChartInstance?.resize()
+      this.behaviorDistChartInstance?.resize()
       if (this.chartModalInstance) {
         this.chartModalInstance.resize()
       }
@@ -3866,6 +3953,118 @@ export default {
       }
 
       this.trendChartInstance?.setOption(option)
+    },
+
+    // ==================== v3.0 图表渲染 ====================
+
+    renderNeedDistChart() {
+      if (!this.needDistChartInstance) return
+
+      const needLabels = {
+        physiological: '生理需求',
+        safety: '安全需求',
+        love: '社交需求',
+        esteem: '尊重需求',
+        cognitive: '认知需求'
+      }
+      const needColors = {
+        physiological: '#ef4444',
+        safety: '#f97316',
+        love: '#3b82f6',
+        esteem: '#a855f7',
+        cognitive: '#22c55e'
+      }
+
+      const dist = this.needDistribution
+      const data = Object.entries(dist).map(([key, value]) => ({
+        name: needLabels[key] || key,
+        value: value,
+        itemStyle: { color: needColors[key] || '#9ca3af' }
+      }))
+
+      const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'item',
+          formatter: '{b}: {c} ({d}%)'
+        },
+        series: [{
+          type: 'pie',
+          radius: ['35%', '65%'],
+          center: ['50%', '50%'],
+          data: data,
+          label: {
+            color: '#d1d5db',
+            fontSize: 11,
+            formatter: '{b}\n{d}%'
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }]
+      }
+
+      this.needDistChartInstance.setOption(option)
+    },
+
+    renderBehaviorDistChart() {
+      if (!this.behaviorDistChartInstance) return
+
+      const behaviorLabels = {
+        SHARE: '📢 分享',
+        COMMENT: '💬 评论',
+        OBSERVE: '👁️ 观察',
+        SILENCE: '🤫 沉默',
+        VERIFY: '🔍 核查',
+        REJECT: '✋ 拒绝'
+      }
+      const behaviorColors = {
+        SHARE: '#ef4444',
+        COMMENT: '#f97316',
+        OBSERVE: '#60a5fa',
+        SILENCE: '#9ca3af',
+        VERIFY: '#22c55e',
+        REJECT: '#8b5cf6'
+      }
+
+      const dist = this.behaviorDistribution
+      const data = Object.entries(dist).map(([key, value]) => ({
+        name: behaviorLabels[key] || key,
+        value: value,
+        itemStyle: { color: behaviorColors[key] || '#9ca3af' }
+      }))
+
+      const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'item',
+          formatter: '{b}: {c} ({d}%)'
+        },
+        series: [{
+          type: 'pie',
+          radius: ['35%', '65%'],
+          center: ['50%', '50%'],
+          data: data,
+          label: {
+            color: '#d1d5db',
+            fontSize: 11,
+            formatter: '{b}\n{d}%'
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          }
+        }]
+      }
+
+      this.behaviorDistChartInstance.setOption(option)
     }
   }
 }
