@@ -456,3 +456,156 @@ class KnowledgeEvolutionValidator:
         result["significant"] = abs(result["final_negative_diff"]) > 0.05
 
         return result
+
+
+def merge_knowledge_graphs(
+    existing: Dict[str, Any],
+    incoming: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    融合两个知识图谱：实体去重合并 + 关系合并
+
+    规则：
+    - 实体：按 name 去重，同名实体保留 importance 更高的，合并 description
+    - 关系：按 (source, action, target) 去重，保留全部不重复关系
+    - summary：拼接两条摘要
+    - keywords：合并去重
+    - sentiment / credibility_hint：取最新（incoming 优先）
+    - ID 重映射：incoming 的实体 ID 可能与 existing 冲突，需要重新编号
+
+    Args:
+        existing: 现有知识图谱
+        incoming: 新注入的知识图谱
+
+    Returns:
+        融合后的知识图谱
+    """
+    if not existing or not existing.get("entities"):
+        return incoming
+    if not incoming or not incoming.get("entities"):
+        return existing
+
+    existing_entities = existing.get("entities", [])
+    incoming_entities = incoming.get("entities", [])
+    existing_relations = existing.get("relations", [])
+    incoming_relations = incoming.get("relations", [])
+
+    # === 1. 实体融合 ===
+    # 按 name 去重，同名保留 importance 更高的
+    entity_by_name = {}  # name -> entity dict
+    id_remap = {}        # incoming old id -> new id
+
+    # 先放入现有实体
+    next_id = 1
+    for e in existing_entities:
+        name = e.get("name", "")
+        if name not in entity_by_name:
+            entity_by_name[name] = dict(e)
+            # 确保ID为 e1, e2, ... 格式
+            entity_by_name[name]["id"] = f"e{next_id}"
+            next_id += 1
+
+    # 融合新实体
+    for e in incoming_entities:
+        name = e.get("name", "")
+        old_id = e.get("id", "")
+        if name in entity_by_name:
+            # 同名实体：保留 importance 更高的，补充 description
+            existing_e = entity_by_name[name]
+            existing_importance = existing_e.get("importance", 3)
+            incoming_importance = e.get("importance", 3)
+            if incoming_importance < existing_importance:
+                # 新实体更重要，用新的覆盖基础字段
+                existing_e["type"] = e.get("type", existing_e.get("type", "其他"))
+                existing_e["importance"] = incoming_importance
+            # 合并描述（如果不同）
+            existing_desc = existing_e.get("description", "")
+            incoming_desc = e.get("description", "")
+            if incoming_desc and incoming_desc != existing_desc:
+                if existing_desc:
+                    existing_e["description"] = f"{existing_desc}；{incoming_desc}"
+                else:
+                    existing_e["description"] = incoming_desc
+            # ID 映射：新实体的 old_id 映射到已有实体的 id
+            id_remap[old_id] = entity_by_name[name]["id"]
+        else:
+            # 新实体，分配新 ID
+            new_id = f"e{next_id}"
+            new_entity = dict(e)
+            new_entity["id"] = new_id
+            entity_by_name[name] = new_entity
+            id_remap[old_id] = new_id
+            next_id += 1
+
+    merged_entities = list(entity_by_name.values())
+
+    # === 2. 关系融合 ===
+    # 按 (source, action, target) 去重
+    relation_set = set()
+    merged_relations = []
+
+    def _add_relation(src, act, tgt):
+        key = (src, act, tgt)
+        if key not in relation_set:
+            relation_set.add(key)
+            merged_relations.append({
+                "source": src,
+                "action": act,
+                "target": tgt
+            })
+
+    # 先加入现有关系（source/target 可能是 ID 或 name）
+    for r in existing_relations:
+        src = r.get("source", "")
+        act = r.get("action", "")
+        tgt = r.get("target", "")
+        # 如果是 ID，尝试解析为 name
+        src_name = _resolve_id_to_name(src, existing_entities)
+        tgt_name = _resolve_id_to_name(tgt, existing_entities)
+        _add_relation(src_name or src, act, tgt_name or tgt)
+
+    # 再加入新关系（需要 ID 重映射）
+    for r in incoming_relations:
+        src = r.get("source", "")
+        act = r.get("action", "")
+        tgt = r.get("target", "")
+        # 先 ID 重映射
+        src = id_remap.get(src, src)
+        tgt = id_remap.get(tgt, tgt)
+        # 再解析为 name
+        src_name = _resolve_id_to_name(src, merged_entities)
+        tgt_name = _resolve_id_to_name(tgt, merged_entities)
+        _add_relation(src_name or src, act, tgt_name or tgt)
+
+    # === 3. 元数据融合 ===
+    existing_summary = existing.get("summary", "")
+    incoming_summary = incoming.get("summary", "")
+    if incoming_summary and incoming_summary != existing_summary:
+        merged_summary = f"{existing_summary}；{incoming_summary}" if existing_summary else incoming_summary
+    else:
+        merged_summary = existing_summary
+
+    existing_keywords = existing.get("keywords", [])
+    incoming_keywords = incoming.get("keywords", [])
+    merged_keywords = list(dict.fromkeys(existing_keywords + incoming_keywords))
+
+    # 情感和可信度取最新
+    merged_sentiment = incoming.get("sentiment", existing.get("sentiment", "中性"))
+    merged_credibility = incoming.get("credibility_hint", existing.get("credibility_hint", "不确定"))
+
+    return {
+        "entities": merged_entities,
+        "relations": merged_relations,
+        "summary": merged_summary,
+        "keywords": merged_keywords[:10],  # 最多保留10个关键词
+        "sentiment": merged_sentiment,
+        "credibility_hint": merged_credibility
+    }
+
+
+def _resolve_id_to_name(id_str: str, entities: List[Dict]) -> str:
+    """将实体 ID 解析为名称，如果找不到则返回空字符串"""
+    for e in entities:
+        if e.get("id") == id_str:
+            return e.get("name", "")
+    return ""

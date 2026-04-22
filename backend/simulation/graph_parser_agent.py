@@ -79,16 +79,23 @@ class GraphParserAgent:
         初始化图谱解析 Agent
 
         Args:
-            llm_config: LLM 配置，如果为 None 则使用默认配置
+            llm_config: LLM 配置，如果为 None 则使用优先级客户端
         """
-        self.llm_config = llm_config or LLMConfig()
+        if llm_config is None:
+            # 使用高优先级客户端，不受推演并发池影响
+            from ..llm.client import create_priority_llm_client
+            self._priority_client = create_priority_llm_client()
+            self.llm_config = self._priority_client.config
+        else:
+            self._priority_client = None
+            self.llm_config = llm_config
         self.llm_config.max_tokens = 2000
         self.llm_config.temperature = 0.2  # 更低温度以获得稳定JSON输出
 
     async def parse(self, news_content: str) -> Dict[str, Any]:
         """
         解析新闻文本为知识图谱
-        
+
         这是管线的核心步骤，输入长文本，输出结构化JSON图谱
 
         Args:
@@ -103,13 +110,23 @@ class GraphParserAgent:
         prompt = GRAPH_PARSER_PROMPT.format(news_content=news_content.strip())
 
         try:
-            llm_client = LLMClient(self.llm_config)
-            async with llm_client:
-                response = await llm_client.chat([{"role": "user", "content": prompt}])
+            # 使用优先级客户端（如有）或创建临时客户端
+            if self._priority_client:
+                llm_client = self._priority_client
+                async with llm_client:
+                    response = await llm_client.chat([{"role": "user", "content": prompt}])
+            else:
+                llm_client = LLMClient(self.llm_config)
+                async with llm_client:
+                    response = await llm_client.chat([{"role": "user", "content": prompt}])
 
             # 从 API 响应中提取内容
             content = self._extract_response_content(response)
-            
+
+            if not content:
+                logger.warning("LLM 响应内容为空，返回默认图谱")
+                return self._get_enhanced_default_graph(news_content)
+
             # 尝试解析 JSON
             graph_data = self._extract_json(content)
 
@@ -119,19 +136,32 @@ class GraphParserAgent:
                 logger.info(f"知识图谱解析成功: {len(graph_data.get('entities', []))} 个实体, {len(graph_data.get('relations', []))} 个关系")
                 return graph_data
             else:
-                logger.warning("知识图谱解析失败或数据不完整，返回增强版默认结构")
+                logger.warning(f"知识图谱解析失败或数据不完整，LLM响应前200字符: {content[:200] if content else 'None'}")
                 return self._get_enhanced_default_graph(news_content)
 
-        except Exception as e:
-            logger.error(f"知识图谱解析错误: {e}")
+        except asyncio.TimeoutError:
+            logger.error(f"知识图谱解析超时（{self.llm_config.timeout}秒），新闻前50字: {news_content[:50]}")
             return {
-                "entities": [{"id": "e1", "name": "解析异常", "type": "其他", "description": str(e), "importance": 1}],
+                "entities": [{"id": "e1", "name": "解析超时", "type": "其他", "description": f"LLM调用超时{self.llm_config.timeout}秒", "importance": 1}],
                 "relations": [],
                 "summary": news_content[:100] if len(news_content) > 100 else news_content,
                 "keywords": [],
                 "sentiment": "不确定",
                 "credibility_hint": "不确定",
-                "parse_error": True
+                "parse_error": True,
+                "error_type": "timeout"
+            }
+        except Exception as e:
+            logger.error(f"知识图谱解析错误: {type(e).__name__}: {e}")
+            return {
+                "entities": [{"id": "e1", "name": "解析异常", "type": "其他", "description": str(e)[:100], "importance": 1}],
+                "relations": [],
+                "summary": news_content[:100] if len(news_content) > 100 else news_content,
+                "keywords": [],
+                "sentiment": "不确定",
+                "credibility_hint": "不确定",
+                "parse_error": True,
+                "error_type": type(e).__name__
             }
 
     def _extract_response_content(self, response: Any) -> str:

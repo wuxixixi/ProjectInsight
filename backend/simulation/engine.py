@@ -167,33 +167,44 @@ class SimulationEngine:
         self,
         entities: List[Dict],
         relations: List[Dict],
-        config: KnowledgeEvolutionConfig = None
+        config: KnowledgeEvolutionConfig = None,
+        merge: bool = True
     ):
         """
         设置知识图谱，启用知识驱动演化
-        
+
         Args:
             entities: 实体列表
             relations: 关系列表
             config: 知识演化配置
+            merge: 是否与现有图谱融合（默认True）
         """
         if not entities:
             logger.warning("实体列表为空，不启用知识驱动演化")
             return
-        
+
+        # 融合模式：与现有图谱合并
+        if merge and self.knowledge_graph and self.knowledge_graph.get("entities"):
+            from .knowledge_evolution import merge_knowledge_graphs
+            incoming_graph = {"entities": entities, "relations": relations}
+            merged = merge_knowledge_graphs(self.knowledge_graph, incoming_graph)
+            entities = merged.get("entities", entities)
+            relations = merged.get("relations", relations)
+            self.knowledge_graph = merged
+            logger.info(f"知识图谱已融合: {len(entities)} 实体, {len(relations)} 关系")
+        else:
+            self.knowledge_graph = {
+                "entities": entities,
+                "relations": relations
+            }
+            logger.info(f"知识图谱已设置: {len(entities)} 实体, {len(relations)} 关系")
+
         self.knowledge_evolution = KnowledgeDrivenEvolution(
             entities=entities,
             relations=relations,
             config=config
         )
         self.use_knowledge_evolution = True
-        logger.info(f"知识图谱已设置，启用知识驱动演化: {len(entities)} 实体, {len(relations)} 关系")
-        
-        # 记录知识图谱
-        self.knowledge_graph = {
-            "entities": entities,
-            "relations": relations
-        }
 
     def broadcast_event(
         self,
@@ -432,6 +443,9 @@ class SimulationEngine:
         self.responded = False
         self.history = []
         self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.event_pool = []  # 清空事件池
+        self.news_content = ""
+        self.news_credibility = "不确定"
 
         logger.info(f"初始化推演引擎: 模式={self.mode.value}, 人口={self.population_size}")
 
@@ -836,12 +850,14 @@ class SimulationEngine:
             # 基础统计：opinion 与新闻接受度直接对应
             opinions = pop.opinions
             belief_strengths = pop.belief_strength
-            believe_mask = opinions > 0   # 相信新闻
-            reject_mask = opinions < 0    # 拒绝新闻
+            # 三个互斥类别：拒绝/中立/相信
+            reject_mask = opinions < -0.1    # 拒绝新闻
+            uncertain_mask = np.abs(opinions) <= 0.1  # 中立/不确定
+            believe_mask = opinions > 0.1    # 相信新闻
 
             believe_rate = float(np.mean(believe_mask))
             reject_rate = float(np.mean(reject_mask))
-            uncertain_rate = float(np.mean(opinions == 0))
+            uncertain_rate = float(np.mean(uncertain_mask))
 
             stats = {
                 # 基础统计（与 opinion 直接对应）

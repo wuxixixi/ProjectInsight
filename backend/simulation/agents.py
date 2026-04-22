@@ -36,11 +36,21 @@ class AgentPopulation:
 
         # 初始化观点分布
         # 阈值0: opinion < 0 为误信，opinion > 0 为正确认知，opinion = 0 为不确定
-        # 初始时部分人持负面信念(opinion < 0), 其他人持正面信念(opinion >= 0)
+        # 初始观点分布：负面信念 / 中立 / 正面信念 三段
+        # |opinion| < 0.1 为中立，opinion < -0.1 为误信，opinion > 0.1 为正确认知
         self.opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
+        # 中立人群约占 15%~25%，从剩余人群中分配
+        neutral_count = int(size * np.random.uniform(0.15, 0.25))
+        neutral_count = min(neutral_count, size - negative_believers)
+        positive_believers = size - negative_believers - neutral_count
+
+        # 负面信念者：opinion 在 [-0.8, -0.2]
         self.opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
-        self.opinions[negative_believers:] = np.random.uniform(0.0, 0.4, size - negative_believers)
+        # 中立人群：opinion 在 [-0.05, 0.05]
+        self.opinions[negative_believers:negative_believers + neutral_count] = np.random.uniform(-0.05, 0.05, neutral_count)
+        # 正面信念者：opinion 在 [0.1, 0.5]
+        self.opinions[negative_believers + neutral_count:] = np.random.uniform(0.1, 0.5, positive_believers)
 
         # 信念强度 - 越强越难改变观点
         self.belief_strength = np.random.beta(2, 2, size)  # 集中在中等

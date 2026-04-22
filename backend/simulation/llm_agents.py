@@ -635,11 +635,16 @@ class LLMAgentPopulation:
         self.network_type = network_type
         self.llm_config = llm_config or LLMConfig()
 
-        # 初始化观点分布
+        # 初始化观点分布：负面信念 / 中立 / 正面信念 三段
         opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
+        neutral_count = int(size * np.random.uniform(0.15, 0.25))
+        neutral_count = min(neutral_count, size - negative_believers)
+        positive_believers = size - negative_believers - neutral_count
+
         opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
-        opinions[negative_believers:] = np.random.uniform(0.0, 0.4, size - negative_believers)
+        opinions[negative_believers:negative_believers + neutral_count] = np.random.uniform(-0.05, 0.05, neutral_count)
+        opinions[negative_believers + neutral_count:] = np.random.uniform(0.1, 0.5, positive_believers)
 
         # 初始化属性
         belief_strengths = np.random.beta(2, 2, size)
@@ -818,17 +823,20 @@ class LLMAgentPopulation:
         """计算群体统计"""
         opinions = np.array([a.opinion for a in self.agents])
         belief_strengths = np.array([a.belief_strength for a in self.agents])
-        believe_mask = opinions > 0   # 相信新闻
-        reject_mask = opinions < 0    # 拒绝新闻
+        # 三个互斥类别：拒绝/中立/相信
+        reject_mask = opinions < -0.1
+        uncertain_mask = np.abs(opinions) <= 0.1
+        believe_mask = opinions > 0.1
 
         believe_rate = float(np.mean(believe_mask))
         reject_rate = float(np.mean(reject_mask))
+        uncertain_rate = float(np.mean(uncertain_mask))
 
         return {
             # 基础统计（与 opinion 直接对应）
             "believe_rate": believe_rate,
             "reject_rate": reject_rate,
-            "uncertain_rate": float(np.mean(opinions == 0)),
+            "uncertain_rate": uncertain_rate,
             # 深度统计
             "deep_believe_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
             "deep_reject_rate": float(np.mean(reject_mask & (belief_strengths > 0.5))),

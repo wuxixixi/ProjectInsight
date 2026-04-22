@@ -51,6 +51,28 @@ class LLMConfig:
     max_backoff: float = 32.0  # 最大退避时间(秒)
     jitter: bool = True  # 是否添加随机抖动
 
+    # 优先级标记（用于日志区分）
+    priority: bool = False  # 是否为高优先级请求
+
+
+def create_priority_llm_client() -> 'LLMClient':
+    """
+    创建高优先级 LLM 客户端，用于事件解析等关键任务
+
+    特点：
+    - 独立的 Semaphore，不受推演并发池影响
+    - 更短的超时（30秒），快速失败
+    - 更少的重试次数（2次）
+    - 并发数较高，保证事件解析快速完成
+    """
+    config = LLMConfig(
+        max_concurrent=20,  # 高并发，优先级通道不受推演阻塞
+        timeout=60,         # 推演中服务端负载高，需要更长超时
+        max_retries=3,      # 增加重试次数，提高成功率
+        priority=True       # 标记为高优先级
+    )
+    return LLMClient(config)
+
 
 class LLMClient:
     """

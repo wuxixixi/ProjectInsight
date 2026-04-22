@@ -66,7 +66,8 @@
           </div>
           <div class="event-actions-row">
             <button class="btn-event-add" @click="showEventAirdrop = true">➕ 添加</button>
-            <button v-if="!isRunning" class="btn-event-start" @click="startSimulation">🚀 开始推演</button>
+            <button v-if="!isRunning && !hasStopped" class="btn-event-start" @click="startSimulation">🚀 开始推演</button>
+            <button v-if="!isRunning && hasStopped" class="btn-event-reset" @click="resetSimulation">↻ 重新推演</button>
           </div>
         </div>
 
@@ -290,11 +291,15 @@
 
       <!-- 推演控制 -->
       <div class="control-actions">
-        <button v-if="!isRunning" class="btn-start" @click="startSimulation" :disabled="!isConnected || pendingEvents.length === 0">
+        <button v-if="!isRunning && !hasStopped" class="btn-start" @click="startSimulation" :disabled="!isConnected || pendingEvents.length === 0">
           <span class="btn-icon">▶</span>
           开始推演
         </button>
-        <template v-else>
+        <button v-if="!isRunning && hasStopped" class="btn-reset" @click="resetSimulation">
+          <span class="btn-icon">↻</span>
+          重新推演
+        </button>
+        <template v-if="isRunning">
           <div class="btn-group-row">
             <button v-if="!isPaused" class="btn-pause" @click="pauseSimulation">
               <span class="btn-icon">⏸</span>
@@ -1260,9 +1265,9 @@
       </div>
     </div>
 
-    <!-- 知识图谱解析弹窗 -->
+    <!-- 知识图谱弹窗 -->
     <div v-if="showKnowledgeGraph" class="kg-modal-overlay" @click.self="showKnowledgeGraph = false">
-      <div class="kg-modal">
+      <div class="kg-modal kg-modal-graph">
         <div class="kg-modal-header">
           <h3>🕸️ 知识图谱解析</h3>
           <button class="report-close-btn" @click="showKnowledgeGraph = false">✕</button>
@@ -1273,6 +1278,21 @@
             <p>正在解析新闻结构...</p>
           </div>
           <div v-else class="kg-content">
+            <!-- 动态图谱可视化区域 -->
+            <div class="kg-graph-container" v-if="knowledgeGraph.entities && knowledgeGraph.entities.length">
+              <div class="kg-graph-header">
+                <span class="kg-stats">📊 {{ knowledgeGraph.entities.length }} 实体 · {{ knowledgeGraph.relations?.length || 0 }} 关系</span>
+                <div class="kg-legend">
+                  <span class="kg-legend-item"><span class="kg-legend-dot person"></span>人物</span>
+                  <span class="kg-legend-item"><span class="kg-legend-dot org"></span>组织</span>
+                  <span class="kg-legend-item"><span class="kg-legend-dot location"></span>地点</span>
+                  <span class="kg-legend-item"><span class="kg-legend-dot event"></span>事件</span>
+                  <span class="kg-legend-item"><span class="kg-legend-dot other"></span>其他</span>
+                </div>
+              </div>
+              <div ref="knowledgeGraphChart" class="kg-graph-chart"></div>
+            </div>
+
             <!-- 事件摘要 -->
             <div v-if="knowledgeGraph.summary" class="kg-section">
               <h4>📝 事件摘要</h4>
@@ -1282,9 +1302,9 @@
             <div v-if="knowledgeGraph.entities && knowledgeGraph.entities.length" class="kg-section">
               <h4>🔷 实体 ({{ knowledgeGraph.entities.length }})</h4>
               <div class="kg-entities">
-                <span v-for="(entity, idx) in knowledgeGraph.entities" :key="idx" class="kg-entity-tag">
+                <span v-for="(entity, idx) in knowledgeGraph.entities" :key="idx" class="kg-entity-tag" :class="'kg-entity-' + (entity.type || 'other').toLowerCase()">
                   {{ entity.name }}
-                  <span class="kg-entity-type">{{ entity.type }}</span>
+                  <span class="kg-entity-type">{{ entity.type || '其他' }}</span>
                 </span>
               </div>
             </div>
@@ -1293,16 +1313,11 @@
               <h4>🔗 关系 ({{ knowledgeGraph.relations.length }})</h4>
               <div class="kg-relations">
                 <div v-for="(rel, idx) in knowledgeGraph.relations" :key="idx" class="kg-relation-item">
-                  <span class="kg-relation-source">{{ rel.source }}</span>
+                  <span class="kg-relation-source">{{ resolveEntityName(rel.source) }}</span>
                   <span class="kg-relation-action">{{ rel.action }}</span>
-                  <span class="kg-relation-target">{{ rel.target }}</span>
+                  <span class="kg-relation-target">{{ resolveEntityName(rel.target) }}</span>
                 </div>
               </div>
-            </div>
-            <!-- 原始JSON -->
-            <div class="kg-section">
-              <h4>📄 原始JSON</h4>
-              <pre class="kg-json">{{ JSON.stringify(knowledgeGraph, null, 2) }}</pre>
             </div>
           </div>
         </div>
@@ -1674,7 +1689,8 @@ export default {
       
       // 事件日志（透明化展示）
       eventLogs: [],  // 存储所有注入事件的日志
-      
+      hasStopped: false,  // 是否已停止推演（用于显示"重新推演"按钮）
+
       reportListLoading: false,
 
       // 智库专报
@@ -1778,15 +1794,22 @@ export default {
     // 事件注入加载提示（根据阶段动态调整）
     airdropLoadingHint() {
       const stage = this.airdropLoadingStage || ''
+      // 推演进行中的提示
+      if (this.isRunning) {
+        if (this.airdropSkipParse) {
+          return '推演进行中，事件将在当前步骤结束后注入（预计 10-30 秒）...'
+        }
+        return '⚠️ 推演进行中，大模型资源紧张，解析可能较慢（预计 30-90 秒）...'
+      }
       // 快速注入模式
       if (this.airdropSkipParse || stage.includes('快速')) {
-        return '快速注入模式，预计 1-2 秒...'
+        return '快速注入模式，预计 1-3 秒...'
       }
       if (stage.includes('阶段1') || stage.includes('解析')) {
-        return '大模型正在解析事件图谱，通常需要 10-60 秒...'
+        return '大模型正在解析事件图谱，通常需要 10-30 秒...'
       }
       if (stage.includes('阶段2') || stage.includes('完成')) {
-        return '图谱解析完成，正在处理事件...'
+        return '图谱解析完成，正在注入事件...'
       }
       if (stage.includes('阶段3') || stage.includes('处理完成')) {
         return '事件处理完成'
@@ -1880,6 +1903,24 @@ export default {
     showUsageDrawer(newVal) {
       if (newVal && !this.usageContent) {
         this.fetchUsageContent()
+      }
+    },
+    showKnowledgeGraph(newVal) {
+      if (newVal && this.knowledgeGraph.entities && this.knowledgeGraph.entities.length) {
+        this.$nextTick(() => {
+          this.renderKnowledgeGraphChart()
+        })
+      }
+      if (!newVal) {
+        // 清理 chart 实例和 resize 监听
+        if (this._kgChartResizeHandler) {
+          window.removeEventListener('resize', this._kgChartResizeHandler)
+          this._kgChartResizeHandler = null
+        }
+        if (this._kgChartInstance) {
+          this._kgChartInstance.dispose()
+          this._kgChartInstance = null
+        }
       }
     }
   },
@@ -2069,6 +2110,7 @@ export default {
 
     startSimulation() {
       this.isRunning = true
+      this.hasStopped = false
       this.currentStep = 0
       this.animatedStep = 0
       this.debunked = false
@@ -2157,12 +2199,42 @@ export default {
     stopSimulation() {
       this.isRunning = false
       this.isPaused = false
+      this.hasStopped = true
       this.agentProgress = ''
       this.sendAction('stop')
       // 用户主动停止时也展开报告面板
       if (this.currentStep > 0) {
         this.expandedGroups.report = true
       }
+    },
+
+    resetSimulation() {
+      // 重置推演状态，允许重新开始
+      this.hasStopped = false
+      this.currentStep = 0
+      this.animatedStep = 0
+      this.prediction = null
+      this.riskAlerts = null
+      this.trendHistory = {
+        steps: [],
+        rumorRates: [],
+        truthRates: [],
+        avgOpinions: [],
+        polarization: [],
+        silenceRates: [],
+        publicRumorRates: [],
+        privateRumorRates: []
+      }
+      this.publicEdges = []
+      this.privateEdges = []
+      this.publicRumorRate = 0
+      this.privateRumorRate = 0
+      this.numCommunities = 0
+      this.numInfluencers = 0
+      // 重新标记所有事件为待注入
+      this.eventLogs.forEach(log => {
+        log.pending = true
+      })
     },
 
     generateReport() {
@@ -2414,6 +2486,13 @@ export default {
       return entities.slice(0, 5).map(e => e.name).join(', ') + (entities.length > 5 ? ` +${entities.length - 5}` : '')
     },
 
+    // 将实体ID解析为名称
+    resolveEntityName(id) {
+      if (!this.knowledgeGraph?.entities) return id
+      const entity = this.knowledgeGraph.entities.find(e => e.id === id)
+      return entity ? entity.name : id
+    },
+
     // 刷新推演状态（事件注入后调用）
     async refreshSimulationState() {
       try {
@@ -2654,6 +2733,7 @@ export default {
 
       if (data.step >= this.maxSteps) {
         this.isRunning = false
+        this.hasStopped = true
         this.sendAction('stop')
         // 重置进度数据
         this.progressData = {
@@ -3210,6 +3290,165 @@ export default {
       this.opinionChartInstance?.setOption(option)
     },
 
+    renderKnowledgeGraphChart() {
+      const chartDom = this.$refs.knowledgeGraphChart
+      if (!chartDom) return
+
+      const kg = this.knowledgeGraph
+      if (!kg || !kg.entities || kg.entities.length === 0) return
+
+      // 中文类型 → 颜色/图标映射
+      const typeColorMap = {
+        '人物': '#f472b6',
+        '组织': '#60a5fa',
+        '地点': '#34d399',
+        '事件': '#fbbf24',
+        '时间': '#a78bfa',
+        '概念': '#fb923c',
+        '其他': '#94a3b8'
+      }
+
+      const typeIconMap = {
+        '人物': 'circle',
+        '组织': 'rect',
+        '地点': 'triangle',
+        '事件': 'diamond',
+        '时间': 'pin',
+        '概念': 'rect',
+        '其他': 'circle'
+      }
+
+      // 构建 ID → name 映射（关系的 source/target 可能是 ID）
+      const idToName = {}
+      kg.entities.forEach(e => {
+        if (e.id) idToName[e.id] = e.name
+      })
+
+      // 构建节点（用 name 作为节点标识，ECharts 按 name 匹配边）
+      const nodes = kg.entities.map(e => {
+        const t = e.type || '其他'
+        const color = typeColorMap[t] || '#94a3b8'
+        return {
+          name: e.name,
+          symbolSize: Math.max(30, 20 + (e.importance || 3) * 6),
+          symbol: typeIconMap[t] || 'circle',
+          itemStyle: {
+            color: color,
+            borderColor: 'rgba(255,255,255,0.3)',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: color + '80'
+          },
+          label: {
+            show: true,
+            color: '#e2e8f0',
+            fontSize: 12,
+            fontWeight: 500,
+            position: 'bottom',
+            distance: 5
+          },
+          category: t,
+          _type: t
+        }
+      })
+
+      // 构建边：将 ID 转换为 name
+      const links = (kg.relations || []).map(r => {
+        const sourceName = idToName[r.source] || r.source
+        const targetName = idToName[r.target] || r.target
+        return {
+          source: sourceName,
+          target: targetName,
+          label: {
+            show: true,
+            formatter: r.action || r.relation || '',
+            color: '#94a3b8',
+            fontSize: 10,
+            backgroundColor: 'rgba(15,23,42,0.8)',
+            padding: [2, 4],
+            borderRadius: 3
+          },
+          lineStyle: {
+            color: '#475569',
+            width: 1.5,
+            curveness: 0.2
+          }
+        }
+      })
+
+      // 分类（中文）
+      const categorySet = new Set(kg.entities.map(e => e.type || '其他'))
+      const categories = [...categorySet].map(t => ({
+        name: t,
+        itemStyle: { color: typeColorMap[t] || '#94a3b8' }
+      }))
+
+      const chart = echarts.init(chartDom, null, { renderer: 'canvas' })
+
+      const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: 'rgba(15,23,42,0.95)',
+          borderColor: 'rgba(139,92,246,0.3)',
+          textStyle: { color: '#e2e8f0', fontSize: 12 },
+          formatter: (params) => {
+            if (params.dataType === 'node') {
+              return `<b>${params.name}</b><br/>类型: ${params.data._type || '其他'}`
+            }
+            if (params.dataType === 'edge') {
+              const label = typeof params.data.label?.formatter === 'function'
+                ? '' : (params.data.label?.formatter || '')
+              return `${params.data.source} → <b>${label}</b> → ${params.data.target}`
+            }
+            return ''
+          }
+        },
+        legend: {
+          data: categories.map(c => c.name),
+          textStyle: { color: '#94a3b8', fontSize: 11 },
+          top: 0,
+          right: 10,
+          orient: 'vertical'
+        },
+        animationDuration: 1500,
+        animationEasingUpdate: 'quinticInOut',
+        series: [{
+          type: 'graph',
+          layout: 'force',
+          data: nodes,
+          links: links,
+          categories: categories,
+          roam: true,
+          draggable: true,
+          force: {
+            repulsion: 350,
+            gravity: 0.1,
+            edgeLength: [80, 200],
+            friction: 0.6
+          },
+          emphasis: {
+            focus: 'adjacency',
+            lineStyle: { width: 3 },
+            itemStyle: { borderWidth: 4, borderColor: '#fff' },
+            label: { fontSize: 14, fontWeight: 'bold' }
+          },
+          blur: {
+            itemStyle: { opacity: 0.2 },
+            lineStyle: { opacity: 0.1 }
+          }
+        }]
+      }
+
+      chart.setOption(option)
+
+      // 窗口 resize 时自适应
+      const resizeHandler = () => chart.resize()
+      window.addEventListener('resize', resizeHandler)
+      this._kgChartResizeHandler = resizeHandler
+      this._kgChartInstance = chart
+    },
+
     renderNetworkChart() {
       if (!this.agents.length) return
 
@@ -3752,6 +3991,24 @@ export default {
 .btn-event-start:hover {
   transform: translateY(-1px);
   box-shadow: 0 3px 12px rgba(245, 158, 11, 0.4);
+}
+
+.btn-event-reset {
+  flex: 2;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-event-reset:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(139, 92, 246, 0.4);
 }
 
 /* 无事件引导 */
@@ -4304,6 +4561,28 @@ export default {
   box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
 }
 
+.btn-reset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+}
+
+.btn-reset:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 30px rgba(139, 92, 246, 0.4);
+}
+
 .btn-pause {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   color: white;
@@ -4549,6 +4828,7 @@ export default {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .kpi-card {
@@ -4727,21 +5007,19 @@ export default {
 .prediction-alerts-area {
   display: flex;
   gap: 16px;
-  margin: 0 0 8px 0;
-  flex-wrap: wrap;
   flex-shrink: 0;
-  max-height: 180px;
+  max-height: 140px;
   overflow: hidden;
 }
 
 .prediction-panel {
   flex: 1;
   min-width: 280px;
-  max-width: 400px;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.05));
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 10px;
   padding: 12px;
+  overflow: hidden;
 }
 
 .prediction-header {
@@ -4985,11 +5263,11 @@ export default {
 .alerts-panel {
   flex: 1;
   min-width: 280px;
-  max-width: 400px;
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05));
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 10px;
   padding: 12px;
+  overflow: hidden;
 }
 
 .alerts-header {
@@ -5104,26 +5382,27 @@ export default {
 
 /* 图表区域 */
 .charts-grid {
-  flex: 1;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 400px;
+  height: 460px;
+  overflow: hidden;
 }
 
 .chart-row {
   display: flex;
   gap: 16px;
-}
-
-.top-row {
-  flex: 1.4;
+  flex: 1;
   min-height: 0;
 }
 
+.top-row {
+  flex: 1.6;
+}
+
 .bottom-row {
-  height: 180px;
-  flex-shrink: 0;
+  flex: 1;
 }
 
 .chart-card {
@@ -5538,99 +5817,7 @@ export default {
   flex-direction: column;
 }
 
-.usage-content {
-  font-size: 14px;
-  line-height: 1.7;
-  color: #cbd5e1;
-}
-
-.usage-content h1 {
-  font-size: 20px;
-  color: #60a5fa;
-  margin-bottom: 8px;
-}
-
-.usage-content h2 {
-  font-size: 16px;
-  color: #a5b4fc;
-  margin: 20px 0 10px 0;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(100, 181, 246, 0.2);
-}
-
-.usage-content h3 {
-  font-size: 14px;
-  color: #c4b5fd;
-  margin: 16px 0 8px 0;
-}
-
-.usage-content p {
-  margin: 8px 0;
-}
-
-.usage-content ul, .usage-content ol {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-.usage-content li {
-  margin: 4px 0;
-}
-
-.usage-content code {
-  font-family: 'Fira Code', 'Monaco', monospace;
-  font-size: 12px;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #a5f3fc;
-}
-
-.usage-content pre {
-  background: rgba(0, 0, 0, 0.4);
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 12px 0;
-}
-
-.usage-content pre code {
-  padding: 0;
-  background: none;
-}
-
-.usage-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0;
-}
-
-.usage-content th, .usage-content td {
-  padding: 8px 12px;
-  border: 1px solid rgba(100, 181, 246, 0.2);
-  text-align: left;
-}
-
-.usage-content th {
-  background: rgba(100, 181, 246, 0.1);
-  color: #60a5fa;
-}
-
-.usage-content blockquote {
-  border-left: 3px solid #60a5fa;
-  padding-left: 12px;
-  margin: 12px 0;
-  color: #94a3b8;
-}
-
-.usage-content a {
-  color: #60a5fa;
-  text-decoration: none;
-}
-
-.usage-content a:hover {
-  text-decoration: underline;
-}
+/* usage-content 样式已统一到 Markdown 统一样式部分 */
 
 /* ==================== Agent透视弹窗 ==================== */
 .agent-modal-overlay {
@@ -6659,119 +6846,209 @@ export default {
   51%, 100% { opacity: 0; }
 }
 
-/* Markdown 样式 */
-.intelligence-content h1 {
-  font-size: 24px;
+/* ==================== Markdown 统一样式 ==================== */
+/* 适用于 .intelligence-content 和 .usage-content */
+
+.intelligence-content,
+.usage-content {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #e2e8f0;
+}
+
+.intelligence-content h1,
+.usage-content h1 {
+  font-size: 22px;
   font-weight: 700;
-  color: #c4b5fd;
-  margin: 0 0 20px 0;
-  padding-bottom: 12px;
-  border-bottom: 2px solid rgba(167, 139, 250, 0.3);
+  color: #f0abfc;
+  margin: 24px 0 16px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(240, 171, 252, 0.3);
+  background: linear-gradient(90deg, rgba(240, 171, 252, 0.1), transparent);
+  padding-left: 12px;
+  border-radius: 4px 4px 0 0;
 }
 
-.intelligence-content h2 {
-  font-size: 20px;
+.intelligence-content h2,
+.usage-content h2 {
+  font-size: 18px;
   font-weight: 600;
-  color: #a78bfa;
-  margin: 28px 0 16px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
+  margin: 20px 0 12px 0;
+  padding: 8px 12px;
+  background: rgba(196, 181, 253, 0.08);
+  border-left: 3px solid #c4b5fd;
+  border-radius: 0 6px 6px 0;
 }
 
-.intelligence-content h3 {
+.intelligence-content h3,
+.usage-content h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #818cf8;
-  margin: 20px 0 12px 0;
+  color: #a78bfa;
+  margin: 16px 0 10px 0;
+  padding-left: 10px;
 }
 
-.intelligence-content h4 {
+.intelligence-content h4,
+.usage-content h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #60a5fa;
-  margin: 16px 0 8px 0;
+  color: #818cf8;
+  margin: 12px 0 8px 0;
 }
 
-.intelligence-content p {
-  margin: 0 0 16px 0;
-  line-height: 1.8;
+.intelligence-content p,
+.usage-content p {
+  margin: 0 0 14px 0;
+  line-height: 1.75;
+  color: #cbd5e1;
 }
 
-.intelligence-content ul, .intelligence-content ol {
-  margin: 0 0 16px 0;
-  padding-left: 24px;
+.intelligence-content ul,
+.usage-content ul,
+.intelligence-content ol,
+.usage-content ol {
+  margin: 0 0 14px 0;
+  padding-left: 20px;
 }
 
-.intelligence-content li {
-  margin-bottom: 8px;
+.intelligence-content li,
+.usage-content li {
+  margin-bottom: 6px;
   line-height: 1.6;
+  color: #e2e8f0;
 }
 
-.intelligence-content table {
+.intelligence-content li::marker,
+.usage-content li::marker {
+  color: #a78bfa;
+}
+
+.intelligence-content table,
+.usage-content table {
   width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
-}
-
-.intelligence-content th, .intelligence-content td {
-  padding: 10px 14px;
-  border: 1px solid rgba(100, 181, 246, 0.2);
-  text-align: left;
-}
-
-.intelligence-content th {
-  background: rgba(100, 181, 246, 0.1);
-  color: #60a5fa;
-  font-weight: 600;
-}
-
-.intelligence-content tr:nth-child(even) td {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.intelligence-content blockquote {
-  border-left: 4px solid #a78bfa;
-  padding-left: 16px;
-  margin: 16px 0;
-  color: #94a3b8;
-  font-style: italic;
-}
-
-.intelligence-content code {
-  background: rgba(0, 0, 0, 0.4);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
-  color: #86efac;
-}
-
-.intelligence-content pre {
-  background: rgba(0, 0, 0, 0.4);
-  padding: 16px;
+  background: rgba(15, 23, 42, 0.6);
   border-radius: 8px;
-  overflow-x: auto;
+  overflow: hidden;
+}
+
+.intelligence-content th,
+.usage-content th {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.1));
+  color: #f0abfc;
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 2px solid rgba(167, 139, 250, 0.3);
+}
+
+.intelligence-content td,
+.usage-content td {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(100, 181, 246, 0.1);
+  color: #e2e8f0;
+}
+
+.intelligence-content tr:last-child td,
+.usage-content tr:last-child td {
+  border-bottom: none;
+}
+
+.intelligence-content tr:nth-child(even) td,
+.usage-content tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.intelligence-content blockquote,
+.usage-content blockquote {
+  border-left: 4px solid #8b5cf6;
   margin: 16px 0;
-}
-
-.intelligence-content pre code {
-  background: none;
-  padding: 0;
-}
-
-.intelligence-content strong {
-  color: #fcd34d;
-}
-
-.intelligence-content em {
+  padding: 12px 16px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: 0 8px 8px 0;
   color: #a5b4fc;
 }
 
-.intelligence-content hr {
+.intelligence-content blockquote p,
+.usage-content blockquote p {
+  margin: 0;
+  color: #a5b4fc;
+}
+
+.intelligence-content code,
+.usage-content code {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.intelligence-content pre,
+.usage-content pre {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(100, 181, 246, 0.15);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.intelligence-content pre code,
+.usage-content pre code {
+  background: none;
+  padding: 0;
+  color: #86efac;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.intelligence-content strong,
+.usage-content strong {
+  color: #fcd34d;
+  font-weight: 600;
+}
+
+.intelligence-content em,
+.usage-content em {
+  color: #a5b4fc;
+}
+
+.intelligence-content a,
+.usage-content a {
+  color: #60a5fa;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.3);
+  transition: all 0.2s;
+}
+
+.intelligence-content a:hover,
+.usage-content a:hover {
+  color: #93c5fd;
+  border-bottom-color: #93c5fd;
+}
+
+.intelligence-content hr,
+.usage-content hr {
   border: none;
-  border-top: 1px solid rgba(100, 181, 246, 0.2);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.4), transparent);
   margin: 24px 0;
 }
+
+.intelligence-content img,
+.usage-content img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+
+/* 删除旧的重复定义，保留 intelligence-modal-footer 和按钮样式 */
 
 .intelligence-modal-footer {
   display: flex;
@@ -7018,6 +7295,81 @@ export default {
   color: #f87171;
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
+
+/* ==================== 知识图谱可视化 ==================== */
+.kg-modal-graph {
+  max-width: 1000px;
+  width: 85%;
+}
+
+.kg-graph-container {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.kg-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.kg-stats {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.kg-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kg-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.kg-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.kg-legend-dot.person { background: #f472b6; }
+.kg-legend-dot.org { background: #60a5fa; }
+.kg-legend-dot.location { background: #34d399; }
+.kg-legend-dot.event { background: #fbbf24; }
+.kg-legend-dot.other { background: #94a3b8; }
+
+.kg-graph-chart {
+  width: 100%;
+  height: 400px;
+  border-radius: 8px;
+}
+
+/* 实体标签按类型着色 */
+.kg-entity-tag.kg-entity-person,
+.kg-entity-tag.kg-entity-人物 { background: rgba(244, 114, 182, 0.2); border-color: rgba(244, 114, 182, 0.4); color: #f472b6; }
+.kg-entity-tag.kg-entity-organization,
+.kg-entity-tag.kg-entity-组织 { background: rgba(96, 165, 250, 0.2); border-color: rgba(96, 165, 250, 0.4); color: #60a5fa; }
+.kg-entity-tag.kg-entity-location,
+.kg-entity-tag.kg-entity-地点 { background: rgba(52, 211, 153, 0.2); border-color: rgba(52, 211, 153, 0.4); color: #34d399; }
+.kg-entity-tag.kg-entity-event,
+.kg-entity-tag.kg-entity-事件 { background: rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.4); color: #fbbf24; }
+.kg-entity-tag.kg-entity-time,
+.kg-entity-tag.kg-entity-时间 { background: rgba(167, 139, 250, 0.2); border-color: rgba(167, 139, 250, 0.4); color: #a78bfa; }
+.kg-entity-tag.kg-entity-concept,
+.kg-entity-tag.kg-entity-概念 { background: rgba(251, 146, 60, 0.2); border-color: rgba(251, 146, 60, 0.4); color: #fb923c; }
+.kg-entity-tag.kg-entity-other,
+.kg-entity-tag.kg-entity-其他 { background: rgba(148, 163, 184, 0.2); border-color: rgba(148, 163, 184, 0.4); color: #94a3b8; }
 
 .kg-section h4 {
   margin: 0 0 10px 0;
@@ -7806,8 +8158,8 @@ export default {
   flex-direction: column;
   padding: 20px;
   padding-top: 70px;
-  gap: 12px;
-  overflow: hidden;
+  gap: 16px;
+  overflow-y: auto;
   min-width: 0;
   min-height: 600px;
 }
@@ -7818,4 +8170,6 @@ export default {
   display: flex;
   overflow: hidden;
 }
+
+/* 预测预警区：只保留上面的定义，此处不重复 */
 </style>

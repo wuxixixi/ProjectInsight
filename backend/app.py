@@ -58,6 +58,9 @@ pending_knowledge_graph: Optional[dict] = None
 pending_event_content: Optional[str] = None
 pending_event_source: Optional[str] = None
 
+# 事件注入进行中标志（推演时检查，暂停推演）
+injection_in_progress: bool = False
+
 # 预测模型和风险引擎
 prediction_model: Optional[PredictionModel] = None
 
@@ -253,6 +256,13 @@ def _normalize_snapshot_climate(snapshot: dict) -> dict:
     return snapshot
 
 
+def _state_to_dict(state) -> dict:
+    """将 SimulationState 转换为字典，并附加引擎级别数据（如 event_pool）"""
+    d = state.to_dict()
+    d["event_pool"] = list(getattr(engine, "event_pool", [])) if engine else []
+    return d
+
+
 @app.get("/")
 async def root():
     """健康检查"""
@@ -350,14 +360,13 @@ async def start_simulation(params: StartRequest):
     if pending_knowledge_graph and pending_event_content:
         logger.info(f"检测到待注入事件，自动注入到引擎: {pending_event_content[:50]}...")
 
-        # === Phase 1: 设置知识图谱，启用知识驱动演化 ===
+        # === Phase 1: 设置知识图谱，启用知识驱动演化（初始化时不融合）===
         entities = pending_knowledge_graph.get('entities', [])
         relations = pending_knowledge_graph.get('relations', [])
         if entities and hasattr(engine, 'set_knowledge_graph'):
-            engine.set_knowledge_graph(entities, relations)
+            # 初始化时不与现有图谱融合（因为是首次注入）
+            engine.set_knowledge_graph(entities, relations, merge=False)
             logger.info(f"知识驱动演化已启用")
-
-        engine.knowledge_graph = pending_knowledge_graph
 
         # 如果引擎支持设置新闻
         if hasattr(engine, 'set_news'):
@@ -416,7 +425,10 @@ async def get_state():
     if engine is None:
         return JSONResponse(content={"error": "未初始化"}, status_code=400)
 
-    return JSONResponse(content=engine.current_state.to_dict())
+    state_dict = engine.current_state.to_dict()
+    # 附加引擎级别数据
+    state_dict["event_pool"] = getattr(engine, "event_pool", [])
+    return JSONResponse(content=state_dict)
 
 
 @app.get("/api/math-model/explanation")
@@ -515,6 +527,9 @@ async def finish_simulation():
     # 使用正斜杠，避免JSON转义问题
     report_path_safe = report_path.replace("\\", "/") if report_path else None
     report_filename = os.path.basename(report_path) if report_path else None
+
+    # 重置引擎状态，以便下次启动
+    engine = None
 
     return JSONResponse(content={
         "success": True,
@@ -783,100 +798,104 @@ async def airdrop_event(req: AirdropRequest):
         knowledge_graph: 解析后的知识图谱 JSON
         event: 事件记录
     """
-    global engine, pending_knowledge_graph, pending_event_content, pending_event_source
+    global engine, pending_knowledge_graph, pending_event_content, pending_event_source, injection_in_progress
 
-    # ==================== 第一阶段：解析（可选跳过）====================
-    if req.skip_parse:
-        # 快速注入模式：跳过 LLM 解析，使用简单图谱
-        logger.info(f"[快速注入] 跳过知识图谱解析: {req.content[:50]}...")
-        knowledge_graph = {
-            "entities": [{"id": "e1", "name": "事件主体", "type": "事件", "description": req.content[:50]}],
-            "relations": [],
-            "summary": req.content[:100],
-            "keywords": [],
-            "sentiment": "中性",
-            "credibility_hint": "不确定",
-            "skip_parse": True
-        }
-    else:
-        # 完整解析模式：调用 LLM 解析知识图谱
-        logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
-
-        try:
-            from .simulation.graph_parser_agent import get_graph_parser
-            graph_parser = get_graph_parser()
-            knowledge_graph = await graph_parser.parse(req.content)
-
-            entity_count = len(knowledge_graph.get('entities', []))
-            relation_count = len(knowledge_graph.get('relations', []))
-            logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
-
-        except Exception as e:
-            logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
-            # 即使解析失败，也继续流程，使用空图谱
-            knowledge_graph = {
-                "entities": [],
-                "relations": [],
-                "summary": req.content[:100],
-                "parse_error": True,
-                "error_message": str(e)
-            }
-
-    # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
-    logger.info(f"[管线阶段2] 封装结构化事件消息...")
-
-    # 构建结构化事件消息
-    # 用户选择的可信度优先于自动解析的
-    final_credibility = req.credibility if req.credibility != "不确定" else knowledge_graph.get("credibility_hint", "不确定")
-    # 同步到 knowledge_graph 供后续待注入使用
-    knowledge_graph["credibility_hint"] = final_credibility
-    event_msg = {
-        "type": "breaking_news",
-        "content": req.content,  # 原始文本
-        "source": req.source,    # 来源
-        "knowledge_graph": knowledge_graph,  # 解析后的图谱
-        "summary": knowledge_graph.get("summary", ""),
-        "keywords": knowledge_graph.get("keywords", []),
-        "sentiment": knowledge_graph.get("sentiment", "中性"),
-        "credibility_hint": final_credibility,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-
-    # 确定广播范围
-    target_scope = "all"
-    if req.source == "public":
-        target_scope = "public_only"
-    elif req.source == "private":
-        target_scope = "private_only"
-
-    # ==================== 处理推演未开始的情况 ====================
-    if engine is None:
-        logger.info("[管线阶段3] 推演引擎未初始化，存储待注入事件供后续使用")
-        # 存储待注入的事件
-        pending_knowledge_graph = knowledge_graph
-        pending_event_content = req.content
-        pending_event_source = req.source
-
-        return {
-            "success": True,
-            "data": {
-                "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True, "credibility": final_credibility},
-                "knowledge_graph": knowledge_graph,
-                "event_msg": event_msg,
-                "message": "事件已解析并存储，将在推演开始时自动注入"
-            }
-        }
-
-    # ==================== 第三阶段：广播（发送给推演引擎）====================
-    logger.info(f"[管线阶段3] 广播事件到推演引擎, 范围: {target_scope}")
-
-    # 获取情感和可信度
-    sentiment = knowledge_graph.get("sentiment", "中性")
-    # 使用前面计算的 final_credibility
-    credibility = final_credibility
-    entity_count = len(knowledge_graph.get('entities', []))
+    # ==================== 标记注入进行中（暂停推演）====================
+    injection_in_progress = True
+    logger.info(f"[管线] 事件注入开始，推演暂停等待")
 
     try:
+        # ==================== 第一阶段：解析（可选跳过）====================
+        if req.skip_parse:
+            # 快速注入模式：跳过 LLM 解析，使用简单图谱
+            logger.info(f"[快速注入] 跳过知识图谱解析: {req.content[:50]}...")
+            knowledge_graph = {
+                "entities": [{"id": "e1", "name": "事件主体", "type": "事件", "description": req.content[:50]}],
+                "relations": [],
+                "summary": req.content[:100],
+                "keywords": [],
+                "sentiment": "中性",
+                "credibility_hint": "不确定",
+                "skip_parse": True
+            }
+        else:
+            # 完整解析模式：调用 LLM 解析知识图谱
+            logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
+
+            try:
+                from .simulation.graph_parser_agent import get_graph_parser
+                graph_parser = get_graph_parser()
+                knowledge_graph = await graph_parser.parse(req.content)
+
+                entity_count = len(knowledge_graph.get('entities', []))
+                relation_count = len(knowledge_graph.get('relations', []))
+                logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
+
+            except Exception as e:
+                logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
+                # 即使解析失败，也继续流程，使用空图谱
+                knowledge_graph = {
+                    "entities": [],
+                    "relations": [],
+                    "summary": req.content[:100],
+                    "parse_error": True,
+                    "error_message": str(e)
+                }
+
+        # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
+        logger.info(f"[管线阶段2] 封装结构化事件消息...")
+
+        # 构建结构化事件消息
+        # 用户选择的可信度优先于自动解析的
+        final_credibility = req.credibility if req.credibility != "不确定" else knowledge_graph.get("credibility_hint", "不确定")
+        # 同步到 knowledge_graph 供后续待注入使用
+        knowledge_graph["credibility_hint"] = final_credibility
+        event_msg = {
+            "type": "breaking_news",
+            "content": req.content,  # 原始文本
+            "source": req.source,    # 来源
+            "knowledge_graph": knowledge_graph,  # 解析后的图谱
+            "summary": knowledge_graph.get("summary", ""),
+            "keywords": knowledge_graph.get("keywords", []),
+            "sentiment": knowledge_graph.get("sentiment", "中性"),
+            "credibility_hint": final_credibility,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        # 确定广播范围
+        target_scope = "all"
+        if req.source == "public":
+            target_scope = "public_only"
+        elif req.source == "private":
+            target_scope = "private_only"
+
+        # ==================== 处理推演未开始的情况 ====================
+        if engine is None:
+            logger.info("[管线阶段3] 推演引擎未初始化，存储待注入事件供后续使用")
+            # 存储待注入的事件
+            pending_knowledge_graph = knowledge_graph
+            pending_event_content = req.content
+            pending_event_source = req.source
+
+            return {
+                "success": True,
+                "data": {
+                    "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True, "credibility": final_credibility},
+                    "knowledge_graph": knowledge_graph,
+                    "event_msg": event_msg,
+                    "message": "事件已解析并存储，将在推演开始时自动注入"
+                }
+            }
+
+        # ==================== 第三阶段：广播（发送给推演引擎）====================
+        logger.info(f"[管线阶段3] 广播事件到推演引擎, 范围: {target_scope}")
+
+        # 获取情感和可信度
+        sentiment = knowledge_graph.get("sentiment", "中性")
+        # 使用前面计算的 final_credibility
+        credibility = final_credibility
+        entity_count = len(knowledge_graph.get('entities', []))
+
         # 更新引擎的新闻和图谱
         if hasattr(engine, 'set_news'):
             import inspect
@@ -885,15 +904,15 @@ async def airdrop_event(req: AirdropRequest):
             else:
                 engine.set_news(req.content, req.source, parse_graph=False)
 
-        # 更新引擎的知识图谱
-        engine.knowledge_graph = knowledge_graph
-
-        # === Phase 1: 设置知识图谱，启用知识驱动演化 ===
+        # 更新引擎的知识图谱（融合模式）
         entities = knowledge_graph.get('entities', [])
         relations = knowledge_graph.get('relations', [])
         if entities and hasattr(engine, 'set_knowledge_graph'):
-            engine.set_knowledge_graph(entities, relations)
-            logger.info(f"知识驱动演化已启用")
+            engine.set_knowledge_graph(entities, relations, merge=True)
+            logger.info(f"知识图谱已融合，知识驱动演化已启用")
+        else:
+            # 没有实体时仍然更新图谱数据
+            engine.knowledge_graph = knowledge_graph
 
         # 广播事件（包含图谱信息，触发事件冲击）
         event = engine.broadcast_event(
@@ -902,26 +921,32 @@ async def airdrop_event(req: AirdropRequest):
             sentiment=sentiment,
             credibility=credibility
         )
-        event["knowledge_graph"] = knowledge_graph
+        # 返回融合后的知识图谱
+        merged_graph = engine.knowledge_graph
+        event["knowledge_graph"] = merged_graph
         event["event_msg"] = event_msg
 
-        logger.info(f"[管线完成] 事件注入成功，已广播给所有Agent")
+        logger.info(f"[管线完成] 事件注入成功，已广播给所有Agent，图谱包含 {len(merged_graph.get('entities', []))} 个实体")
 
         return {
             "success": True,
             "data": {
                 "event": event,
-                "knowledge_graph": knowledge_graph,
+                "knowledge_graph": merged_graph,
                 "event_msg": event_msg
             }
         }
-        
+
     except Exception as e:
-        logger.error(f"[管线阶段3] 事件广播失败: {e}")
+        logger.error(f"[管线] 事件注入失败: {e}")
         return JSONResponse(
-            content={"success": False, "error": f"事件广播失败: {str(e)}"},
+            content={"success": False, "error": f"事件注入失败: {str(e)}"},
             status_code=500
         )
+    finally:
+        # 无论成功失败，都解除推演暂停
+        injection_in_progress = False
+        logger.info(f"[管线] 事件注入结束，推演可恢复")
 
 
 @app.get("/api/event/knowledge-graph")
@@ -1006,10 +1031,32 @@ async def websocket_simulation(websocket: WebSocket):
         nonlocal max_steps
         while auto_mode and engine and engine.step_count < max_steps:
             try:
+                # 如果事件注入正在进行，等待注入完成
+                global injection_in_progress
+                if injection_in_progress:
+                    logger.debug("事件注入进行中，推演等待...")
+                    await websocket.send_json({
+                        "type": "progress",
+                        "message": "事件注入解析中，推演暂停等待..."
+                    })
+                    # 等待注入完成（最多等待60秒）
+                    for _ in range(60):
+                        if not injection_in_progress:
+                            break
+                        await asyncio.sleep(1)
+                    if injection_in_progress:
+                        logger.warning("事件注入超时，恢复推演")
+                    else:
+                        logger.info("事件注入完成，恢复推演")
+                        await websocket.send_json({
+                            "type": "progress",
+                            "message": "事件注入完成，恢复推演"
+                        })
+
                 state = await engine.async_step()
                 await websocket.send_json({
                     "type": "state",
-                    "data": state.to_dict()
+                    "data": _state_to_dict(state)
                 })
                 await asyncio.sleep(interval / 1000)
             except asyncio.CancelledError:
@@ -1101,7 +1148,7 @@ async def websocket_simulation(websocket: WebSocket):
                 initial_state = engine.initialize()
                 await websocket.send_json({
                     "type": "state",
-                    "data": initial_state.to_dict()
+                    "data": _state_to_dict(initial_state)
                 })
                 logger.info(f"模拟已启动, LLM模式: {use_llm}, 双层网络: {use_dual_network}")
 
@@ -1118,7 +1165,7 @@ async def websocket_simulation(websocket: WebSocket):
                     state = await engine.async_step()
                     await websocket.send_json({
                         "type": "state",
-                        "data": state.to_dict()
+                        "data": _state_to_dict(state)
                     })
                 except Exception as e:
                     logger.error(f"推演错误: {e}")
