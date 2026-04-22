@@ -597,27 +597,112 @@ async def download_report(filename: str):
 
 
 @app.get("/api/report/list")
-async def list_reports():
-    """列出所有报告文件"""
+async def list_reports(
+    type: Optional[str] = None,
+    search: Optional[str] = None,
+    sort: Optional[str] = "modified",
+    order: Optional[str] = "desc"
+):
+    """
+    列出所有报告文件，支持分类、搜索、排序
+
+    Args:
+        type: 报告类型筛选 (simulation/intelligence/all)，默认 all
+        search: 文件名搜索关键词
+        sort: 排序字段 (modified/size/name)，默认 modified
+        order: 排序方向 (desc/asc)，默认 desc
+
+    Returns:
+        reports: 所有报告列表
+        simulation_reports: 推演报告列表
+        intelligence_reports: 智库专报列表
+        counts: 各类型数量统计
+    """
     reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
     reports_dir = os.path.abspath(reports_dir)
 
     if not os.path.exists(reports_dir):
-        return JSONResponse(content={"reports": []})
+        return JSONResponse(content={
+            "reports": [],
+            "simulation_reports": [],
+            "intelligence_reports": [],
+            "counts": {"total": 0, "simulation": 0, "intelligence": 0}
+        })
 
-    reports = []
-    for f in sorted(os.listdir(reports_dir), reverse=True):
-        if f.endswith(".md"):
-            filepath = os.path.join(reports_dir, f)
-            stat = os.stat(filepath)
-            reports.append({
-                "filename": f,
-                "path": filepath,
-                "size": stat.st_size,
-                "modified": stat.st_mtime
-            })
+    all_reports = []
+    simulation_reports = []
+    intelligence_reports = []
 
-    return JSONResponse(content={"reports": reports})
+    for f in os.listdir(reports_dir):
+        if not f.endswith(".md"):
+            continue
+
+        filepath = os.path.join(reports_dir, f)
+        stat = os.stat(filepath)
+
+        # 根据文件名判断类型
+        if f.startswith("intelligence_report_"):
+            report_type = "intelligence"
+        elif f.startswith("report_") or f.startswith("report_dual_"):
+            report_type = "simulation"
+        else:
+            report_type = "other"
+
+        report_item = {
+            "filename": f,
+            "path": filepath,
+            "size": stat.st_size,
+            "modified": stat.st_mtime,
+            "type": report_type
+        }
+
+        all_reports.append(report_item)
+
+        if report_type == "simulation":
+            simulation_reports.append(report_item)
+        elif report_type == "intelligence":
+            intelligence_reports.append(report_item)
+
+    # 搜索过滤
+    if search:
+        search_lower = search.lower()
+        all_reports = [r for r in all_reports if search_lower in r["filename"].lower()]
+        simulation_reports = [r for r in simulation_reports if search_lower in r["filename"].lower()]
+        intelligence_reports = [r for r in intelligence_reports if search_lower in r["filename"].lower()]
+
+    # 类型筛选
+    if type == "simulation":
+        filtered_reports = simulation_reports
+    elif type == "intelligence":
+        filtered_reports = intelligence_reports
+    else:
+        filtered_reports = all_reports
+
+    # 排序
+    reverse = (order == "desc")
+    if sort == "size":
+        filtered_reports.sort(key=lambda r: r["size"], reverse=reverse)
+        simulation_reports.sort(key=lambda r: r["size"], reverse=reverse)
+        intelligence_reports.sort(key=lambda r: r["size"], reverse=reverse)
+    elif sort == "name":
+        filtered_reports.sort(key=lambda r: r["filename"], reverse=reverse)
+        simulation_reports.sort(key=lambda r: r["filename"], reverse=reverse)
+        intelligence_reports.sort(key=lambda r: r["filename"], reverse=reverse)
+    else:  # modified
+        filtered_reports.sort(key=lambda r: r["modified"], reverse=reverse)
+        simulation_reports.sort(key=lambda r: r["modified"], reverse=reverse)
+        intelligence_reports.sort(key=lambda r: r["modified"], reverse=reverse)
+
+    return JSONResponse(content={
+        "reports": filtered_reports,
+        "simulation_reports": simulation_reports,
+        "intelligence_reports": intelligence_reports,
+        "counts": {
+            "total": len(all_reports),
+            "simulation": len(simulation_reports),
+            "intelligence": len(intelligence_reports)
+        }
+    })
 
 
 @app.post("/api/report/generate")

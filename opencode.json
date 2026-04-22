@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "Cherry-腾讯云-TI": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Cherry-腾讯云-TI",
+      "options": {
+        "apiKey": "{env:OPENCODE_API_KEY_腾讯云_TI}",
+        "baseURL": "https://api.lkeap.cloud.tencent.com/coding/v3"
+      },
+      "models": {
+        "glm-5": {
+          "name": "glm-5",
+          "reasoning": true
+        }
+      }
+    }
+  }
+}

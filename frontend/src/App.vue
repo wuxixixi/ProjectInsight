@@ -1207,7 +1207,7 @@
 
     <!-- 历史报告列表弹窗 -->
     <div v-if="showReportList" class="report-modal-overlay" @click.self="showReportList = false">
-      <div class="report-modal">
+      <div class="report-modal report-modal-enhanced">
         <div class="report-modal-header">
           <h3>📚 历史报告</h3>
           <button class="report-close-btn" @click="showReportList = false">✕</button>
@@ -1217,19 +1217,107 @@
             <div class="loading-spinner"></div>
             <p>加载报告列表...</p>
           </div>
-          <div v-else-if="reportList.length > 0" class="report-list">
-            <div v-for="report in reportList" :key="report.filename" class="report-item" @click="viewHistoryReport(report)">
-              <div class="report-item-icon">📄</div>
-              <div class="report-item-info">
-                <div class="report-item-name">{{ report.filename }}</div>
-                <div class="report-item-meta">{{ formatFileSize(report.size) }} · {{ formatDate(report.modified) }}</div>
+          <template v-else>
+            <!-- 搜索和排序工具栏 -->
+            <div class="report-toolbar">
+              <div class="report-search-box">
+                <input
+                  type="text"
+                  v-model="reportSearchKeyword"
+                  @input="onReportSearchInput"
+                  placeholder="搜索报告..."
+                  class="report-search-input"
+                />
+                <span class="report-search-icon">🔍</span>
               </div>
-              <div class="report-item-action">查看</div>
+              <div class="report-sort-btns">
+                <button
+                  :class="['sort-btn', { active: reportSortBy === 'modified' }]"
+                  @click="changeReportSort('modified')"
+                  title="按时间排序">
+                  🕐 {{ reportSortBy === 'modified' ? (reportSortOrder === 'desc' ? '↓' : '↑') : '' }}
+                </button>
+                <button
+                  :class="['sort-btn', { active: reportSortBy === 'size' }]"
+                  @click="changeReportSort('size')"
+                  title="按大小排序">
+                  📊 {{ reportSortBy === 'size' ? (reportSortOrder === 'desc' ? '↓' : '↑') : '' }}
+                </button>
+                <button
+                  :class="['sort-btn', { active: reportSortBy === 'name' }]"
+                  @click="changeReportSort('name')"
+                  title="按名称排序">
+                  🔤 {{ reportSortBy === 'name' ? (reportSortOrder === 'desc' ? '↓' : '↑') : '' }}
+                </button>
+              </div>
             </div>
-          </div>
-          <div v-else class="report-placeholder">
-            <p>暂无历史报告</p>
-          </div>
+
+            <!-- 报告统计 -->
+            <div class="report-stats">
+              共 <strong>{{ reportCounts.total }}</strong> 份报告
+              （推演 <strong>{{ reportCounts.simulation }}</strong> 份，
+              智库专报 <strong>{{ reportCounts.intelligence }}</strong> 份）
+            </div>
+
+            <!-- 双栏布局 -->
+            <div class="report-columns">
+              <!-- 左栏：推演报告 -->
+              <div class="report-column">
+                <div class="column-header">
+                  <span class="column-icon">📄</span>
+                  <span class="column-title">推演报告</span>
+                  <span class="column-count">{{ simulationReports.length }}</span>
+                </div>
+                <div class="column-body">
+                  <div v-if="simulationReports.length > 0" class="report-list">
+                    <div
+                      v-for="report in simulationReports"
+                      :key="report.filename"
+                      class="report-item"
+                      @click="viewHistoryReport(report)">
+                      <div class="report-item-icon">📄</div>
+                      <div class="report-item-info">
+                        <div class="report-item-name">{{ report.filename }}</div>
+                        <div class="report-item-meta">{{ formatFileSize(report.size) }} · {{ formatDate(report.modified) }}</div>
+                      </div>
+                      <div class="report-item-action">查看</div>
+                    </div>
+                  </div>
+                  <div v-else class="report-placeholder">
+                    <p>暂无推演报告</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 右栏：智库专报 -->
+              <div class="report-column">
+                <div class="column-header">
+                  <span class="column-icon">🧠</span>
+                  <span class="column-title">智库专报</span>
+                  <span class="column-count">{{ intelligenceReports.length }}</span>
+                </div>
+                <div class="column-body">
+                  <div v-if="intelligenceReports.length > 0" class="report-list">
+                    <div
+                      v-for="report in intelligenceReports"
+                      :key="report.filename"
+                      class="report-item report-item-intelligence"
+                      @click="viewHistoryReport(report)">
+                      <div class="report-item-icon">🧠</div>
+                      <div class="report-item-info">
+                        <div class="report-item-name">{{ report.filename }}</div>
+                        <div class="report-item-meta">{{ formatFileSize(report.size) }} · {{ formatDate(report.modified) }}</div>
+                      </div>
+                      <div class="report-item-action">查看</div>
+                    </div>
+                  </div>
+                  <div v-else class="report-placeholder">
+                    <p>暂无智库专报</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -1661,6 +1749,14 @@ export default {
       // 历史报告列表
       showReportList: false,
       reportList: [],
+      reportListLoading: false,
+      reportTypeFilter: 'all',  // all / simulation / intelligence
+      reportSearchKeyword: '',
+      reportSortBy: 'modified',  // modified / size / name
+      reportSortOrder: 'desc',   // desc / asc
+      reportCounts: { total: 0, simulation: 0, intelligence: 0 },
+      simulationReports: [],
+      intelligenceReports: [],
 
       // 知识图谱解析
       showKnowledgeGraph: false,
@@ -1690,8 +1786,6 @@ export default {
       // 事件日志（透明化展示）
       eventLogs: [],  // 存储所有注入事件的日志
       hasStopped: false,  // 是否已停止推演（用于显示"重新推演"按钮）
-
-      reportListLoading: false,
 
       // 智库专报
       showIntelligenceModal: false,
@@ -2513,16 +2607,59 @@ export default {
       this.showReportList = true
       this.reportListLoading = true
       this.reportList = []
+      this.simulationReports = []
+      this.intelligenceReports = []
       try {
-        const response = await fetch(API_BASE + '/api/report/list')
+        // 构建查询参数
+        const params = new URLSearchParams()
+        if (this.reportSearchKeyword) {
+          params.append('search', this.reportSearchKeyword)
+        }
+        params.append('sort', this.reportSortBy)
+        params.append('order', this.reportSortOrder)
+
+        const response = await fetch(API_BASE + '/api/report/list?' + params.toString())
         const data = await response.json()
         this.reportList = data.reports || []
+        this.simulationReports = data.simulation_reports || []
+        this.intelligenceReports = data.intelligence_reports || []
+        this.reportCounts = data.counts || { total: 0, simulation: 0, intelligence: 0 }
       } catch (error) {
         console.error('获取报告列表失败:', error)
         this.reportList = []
+        this.simulationReports = []
+        this.intelligenceReports = []
+        this.reportCounts = { total: 0, simulation: 0, intelligence: 0 }
       } finally {
         this.reportListLoading = false
       }
+    },
+
+    // 搜索框防抖处理（手动实现）
+    onReportSearchInput() {
+      if (this._searchTimer) {
+        clearTimeout(this._searchTimer)
+      }
+      this._searchTimer = setTimeout(() => {
+        this.fetchReportList()
+      }, 300)
+    },
+
+    // 切换排序方式
+    changeReportSort(sortBy) {
+      if (this.reportSortBy === sortBy) {
+        this.reportSortOrder = this.reportSortOrder === 'desc' ? 'asc' : 'desc'
+      } else {
+        this.reportSortBy = sortBy
+        this.reportSortOrder = 'desc'
+      }
+      this.fetchReportList()
+    },
+
+    // 切换类型筛选
+    changeReportTypeFilter(type) {
+      this.reportTypeFilter = type
+      this.fetchReportList()
     },
 
     async viewHistoryReport(report) {
@@ -6509,6 +6646,157 @@ export default {
   box-shadow: 0 0 60px rgba(100, 181, 246, 0.2);
 }
 
+/* 增强版历史报告弹窗 */
+.report-modal-enhanced {
+  width: 900px;
+  max-height: 80vh;
+}
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.report-search-box {
+  flex: 1;
+  position: relative;
+}
+
+.report-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.report-search-input:focus {
+  border-color: rgba(100, 181, 246, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.report-search-input::placeholder {
+  color: #6b7280;
+}
+
+.report-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.report-sort-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.sort-btn {
+  padding: 6px 10px;
+  background: rgba(100, 181, 246, 0.1);
+  border: 1px solid rgba(100, 181, 246, 0.2);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 36px;
+}
+
+.sort-btn:hover {
+  background: rgba(100, 181, 246, 0.2);
+  color: #e2e8f0;
+}
+
+.sort-btn.active {
+  background: rgba(100, 181, 246, 0.25);
+  border-color: rgba(100, 181, 246, 0.4);
+  color: #60a5fa;
+}
+
+.report-stats {
+  padding: 8px 12px;
+  background: rgba(100, 181, 246, 0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.report-stats strong {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.report-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.report-column {
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(100, 181, 246, 0.1);
+  overflow: hidden;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(100, 181, 246, 0.1);
+  border-bottom: 1px solid rgba(100, 181, 246, 0.1);
+}
+
+.column-icon {
+  font-size: 16px;
+}
+
+.column-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+  flex: 1;
+}
+
+.column-count {
+  padding: 2px 8px;
+  background: rgba(100, 181, 246, 0.2);
+  border-radius: 10px;
+  font-size: 11px;
+  color: #60a5fa;
+}
+
+.column-body {
+  flex: 1;
+  padding: 12px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.column-body .report-list {
+  max-height: none;
+}
+
+.column-body .report-placeholder {
+  height: 150px;
+}
+
 .report-modal-header {
   display: flex;
   justify-content: space-between;
@@ -6659,6 +6947,15 @@ export default {
 .report-item:hover {
   background: rgba(100, 181, 246, 0.1);
   border-color: rgba(100, 181, 246, 0.3);
+}
+
+.report-item-intelligence {
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.report-item-intelligence:hover {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
 }
 
 .report-item-icon {
