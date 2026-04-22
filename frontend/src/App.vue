@@ -502,28 +502,28 @@
           </div>
         </div>
         <!-- v3.0 新增 KPI -->
-        <div class="kpi-card danger" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+        <div class="kpi-card danger clickable" @click="showInfoPanelWithHighlight('rumor_trust')">
           <div class="kpi-icon">📉</div>
           <div class="kpi-content">
             <span class="kpi-label">谣言信任度</span>
             <span class="kpi-value">{{ (avgRumorTrust * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card success" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+        <div class="kpi-card success clickable" @click="showInfoPanelWithHighlight('truth_trust')">
           <div class="kpi-icon">📈</div>
           <div class="kpi-content">
             <span class="kpi-label">真相信任度</span>
             <span class="kpi-value">{{ (avgTruthTrust * 100).toFixed(1) }}<small>%</small></span>
           </div>
         </div>
-        <div class="kpi-card info" v-if="totalExposures > 0">
+        <div class="kpi-card info clickable" @click="showInfoPanelWithHighlight('total_exposures')">
           <div class="kpi-icon">👁️</div>
           <div class="kpi-content">
             <span class="kpi-label">总曝光量</span>
             <span class="kpi-value">{{ totalExposures }}</span>
           </div>
         </div>
-        <div class="kpi-card" :class="truthInterventionActive ? 'success' : 'purple'" v-if="currentStep > 0">
+        <div class="kpi-card clickable" :class="truthInterventionActive ? 'success' : 'purple'" @click="showInfoPanelWithHighlight('truth_intervention')">
           <div class="kpi-icon">🛡️</div>
           <div class="kpi-content">
             <span class="kpi-label">辟谣干预</span>
@@ -747,33 +747,33 @@
               <p class="info-item-desc">群体观点分歧程度（0~1）。高值表示社会撕裂，双方互不信任。</p>
             </div>
             <!-- v3.0 新增指标解读 -->
-            <div class="info-item" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'rumor_trust' }">
               <div class="info-item-header">
                 <span class="info-item-label">谣言信任度</span>
                 <span class="info-item-value danger">{{ (avgRumorTrust * 100).toFixed(1) }}%</span>
               </div>
-              <p class="info-item-desc">群体对负面信息的平均信任程度。v3.0 新增：与"误信率"不同，反映信念强度而非立场比例。</p>
+              <p class="info-item-desc">群体对负面信息的平均信任程度。与"误信率"不同，反映信念强度而非立场比例。</p>
             </div>
-            <div class="info-item" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'truth_trust' }">
               <div class="info-item-header">
                 <span class="info-item-label">真相信任度</span>
                 <span class="info-item-value success">{{ (avgTruthTrust * 100).toFixed(1) }}%</span>
               </div>
-              <p class="info-item-desc">群体对正面信息的平均信任程度。v3.0 新增：权威回应后应逐渐上升。</p>
+              <p class="info-item-desc">群体对正面信息的平均信任程度。权威回应后应逐渐上升。</p>
             </div>
-            <div class="info-item" v-if="totalExposures > 0">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'total_exposures' }">
               <div class="info-item-header">
                 <span class="info-item-label">总曝光量</span>
                 <span class="info-item-value info">{{ totalExposures }}</span>
               </div>
-              <p class="info-item-desc">累计信息曝光次数。v3.0 新增：反映信息传播广度，高值表示信息触达更多人群。</p>
+              <p class="info-item-desc">累计信息曝光次数。反映信息传播广度，高值表示信息触达更多人群。</p>
             </div>
-            <div class="info-item" v-if="currentStep > 0">
+            <div class="info-item" :class="{ highlighted: highlightedInfoItem === 'truth_intervention' }">
               <div class="info-item-header">
                 <span class="info-item-label">辟谣干预</span>
                 <span class="info-item-value" :class="truthInterventionActive ? 'success' : 'purple'">{{ truthInterventionActive ? '已启动' : '未启动' }}</span>
               </div>
-              <p class="info-item-desc">权威辟谣信息发布状态。v3.0 新增：启动后 TruthEnv 将推送正面信息，影响群体信念。</p>
+              <p class="info-item-desc">权威辟谣信息发布状态。启动后 TruthEnv 将推送正面信息，影响群体信念。</p>
             </div>
           </div>
 

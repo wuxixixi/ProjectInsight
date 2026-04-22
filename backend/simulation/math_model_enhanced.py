@@ -132,7 +132,7 @@ class EnhancedMathModel:
             belief_strength, opinions, new_opinions, dissonance_adjustment
         )
 
-        metrics['polarization_index'] = float(np.std(new_opinions) * 2)
+        metrics['polarization_index'] = float(min(1.0, np.std(new_opinions)))
         metrics['avg_opinion'] = float(np.mean(new_opinions))
 
         return new_opinions, new_belief_strength, is_silent, metrics

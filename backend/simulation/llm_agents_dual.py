@@ -862,7 +862,7 @@ class LLMAgentPopulationDual:
                 if np.any(believe_mask) else 0.0
             ),
             "avg_opinion": float(np.mean(opinions)),
-            "polarization_index": float(np.std(opinions) * 2),
+            "polarization_index": float(min(1.0, np.std(opinions))),
             "silence_rate": float(np.mean([a.is_silent for a in self.agents])),
             # 兼容旧键名
             "negative_belief_rate": reject_rate,

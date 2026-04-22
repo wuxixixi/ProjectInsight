@@ -987,7 +987,7 @@ class SimulationEngine:
                     if np.any(believe_mask) else 0.0
                 ),
                 "avg_opinion": float(np.mean(opinions)),
-                "polarization_index": float(np.std(opinions) * 2),
+                "polarization_index": float(min(1.0, np.std(opinions))),
                 "silence_rate": float(np.mean(pop.is_silent))
             }
             agents = pop.to_agent_list()
@@ -1070,6 +1070,7 @@ class SimulationEngine:
             avg_rumor_trust=v3_stats.get("avg_rumor_trust", 0.0),
             avg_truth_trust=v3_stats.get("avg_truth_trust", 0.0),
             need_distribution=v3_stats.get("need_distribution"),
+            behavior_distribution=v3_stats.get("behavior_distribution"),
             total_exposures=v3_stats.get("total_exposures", 0),
             truth_intervention_active=v3_stats.get("truth_intervention_active", False)
         )
