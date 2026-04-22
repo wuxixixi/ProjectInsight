@@ -256,6 +256,45 @@ def _normalize_snapshot_climate(snapshot: dict) -> dict:
     return snapshot
 
 
+def _get_v3_agent_fields(agent_id: int) -> dict:
+    """
+    获取指定 Agent 的 v3.0 字段（rumor_trust, truth_trust, dominant_need, predicted_behavior 等）
+    """
+    if engine is None:
+        return {}
+
+    v3_fields = {}
+
+    # 优先从 v3 获取（最准确）
+    if hasattr(engine, 'v3') and engine.v3:
+        agent_state = engine.v3.get_agent_v3_fields(agent_id)
+        if agent_state:
+            v3_fields.update(agent_state)
+
+    # 从 engine 的 current_state 中获取 agent 列表（补充）
+    if hasattr(engine, 'current_state') and engine.current_state:
+        agents = engine.current_state.agents if hasattr(engine.current_state, 'agents') else []
+        for agent in agents:
+            agent_dict = agent.model_dump() if hasattr(agent, 'model_dump') else agent
+            if agent_dict.get('id') == agent_id:
+                # 只在 v3_fields 没有值时才覆盖
+                if not v3_fields.get('rumor_trust') and agent_dict.get('rumor_trust'):
+                    v3_fields['rumor_trust'] = agent_dict.get('rumor_trust', 0.0)
+                if not v3_fields.get('truth_trust') and agent_dict.get('truth_trust'):
+                    v3_fields['truth_trust'] = agent_dict.get('truth_trust', 0.0)
+                if not v3_fields.get('dominant_need') and agent_dict.get('dominant_need'):
+                    v3_fields['dominant_need'] = agent_dict.get('dominant_need', '')
+                if not v3_fields.get('predicted_behavior') and agent_dict.get('predicted_behavior'):
+                    v3_fields['predicted_behavior'] = agent_dict.get('predicted_behavior', '')
+                if 'behavior_confidence' not in v3_fields:
+                    v3_fields['behavior_confidence'] = agent_dict.get('behavior_confidence', 0.0)
+                if 'cognitive_closed_need' not in v3_fields:
+                    v3_fields['cognitive_closed_need'] = agent_dict.get('cognitive_closed_need', 0.5)
+                break
+
+    return v3_fields
+
+
 def _state_to_dict(state) -> dict:
     """将 SimulationState 转换为字典，并附加引擎级别数据（如 event_pool）"""
     d = state.to_dict()
@@ -476,13 +515,18 @@ async def inspect_agent(agent_id: int):
     snapshot = get_agent_snapshot_global(agent_id) or get_agent_snapshot_global_dual(agent_id)
 
     if snapshot:
-        return JSONResponse(content=_normalize_snapshot_climate(snapshot))
+        result = _normalize_snapshot_climate(snapshot)
+        # 附加 v3.0 字段
+        result.update(_get_v3_agent_fields(agent_id))
+        return JSONResponse(content=result)
 
     # 如果全局存储没有，尝试从引擎获取（支持双层网络）
     if engine.use_llm and hasattr(engine, 'llm_population') and engine.llm_population:
         snapshot = engine.llm_population.get_agent_snapshot(agent_id)
         if snapshot:
-            return JSONResponse(content=_normalize_snapshot_climate(snapshot))
+            result = _normalize_snapshot_climate(snapshot)
+            result.update(_get_v3_agent_fields(agent_id))
+            return JSONResponse(content=result)
 
     # 获取基础Agent信息（未参与决策）
     if engine.use_llm and engine.llm_population:
@@ -507,7 +551,9 @@ async def inspect_agent(agent_id: int):
             "fear_of_isolation": float(agent.fear_of_isolation),
             "conviction": float(agent.conviction),
             "is_silent": bool(agent.is_silent),
-            "perceived_climate": _build_perceived_climate_summary(agent_id)
+            "perceived_climate": _build_perceived_climate_summary(agent_id),
+            # v3.0 字段
+            **_get_v3_agent_fields(agent_id)
         })
 
     return JSONResponse(

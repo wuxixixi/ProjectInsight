@@ -43,7 +43,7 @@ class V3AgentState:
     dominant_need: str = "safety"
     
     # TPB 预测
-    predicted_behavior: str = "observe"
+    predicted_behavior: str = "观望"
     behavior_confidence: float = 0.5
     
     # 记忆统计
@@ -197,6 +197,7 @@ class EngineV3Integration:
             # 创建 NeedsHierarchy
             if self.enable_psychology:
                 self.needs_hierarchy[i] = NeedsHierarchy.from_agent_traits(
+                    agent_id=i,
                     fear_of_isolation=float(fear_of_isolations[i]),
                     susceptibility=float(susceptibilities[i]),
                     influence=float(influences[i])
@@ -277,7 +278,7 @@ class EngineV3Integration:
             ))
         
         # 3. 心理学预测行为
-        predicted_behavior = "observe"
+        predicted_behavior = "观望"
         behavior_confidence = 0.5
         
         if self.enable_psychology and agent_id in self.tpb_models:
@@ -395,7 +396,26 @@ class EngineV3Integration:
         
         if tpb:
             fields["tpb_weights"] = tpb.to_dict()
-        
+            # 使用 belief 数据计算行为预测，参数动态化
+            opinion_diff = belief.truth_trust - belief.rumor_trust
+            info_cred = min(1.0, 0.3 + abs(opinion_diff) * 0.7)
+            content_rel = min(1.0, 0.4 + abs(opinion_diff) * 0.6)
+            cog_dissonance = max(0, 0.8 - abs(opinion_diff)) * 0.5
+            social_press = min(1.0, 0.3 + abs(belief.belief_strength - 0.5) * 0.7)
+            conformity = 0.3 + (1.0 - belief.belief_strength) * 0.4
+            media_lit = 0.3 + belief.belief_strength * 0.4
+            result = tpb.compute_full(
+                info_credibility=info_cred,
+                content_relevance=content_rel,
+                cognitive_dissonance=cog_dissonance,
+                social_pressure=social_press,
+                conformity_tendency=conformity,
+                media_literacy=media_lit,
+                current_opinion=opinion_diff
+            )
+            fields["predicted_behavior"] = result.predicted_behavior.value
+            fields["behavior_confidence"] = result.confidence
+
         return fields
     
     def get_statistics(self) -> Dict[str, Any]:
@@ -411,12 +431,37 @@ class EngineV3Integration:
         for needs in self.needs_hierarchy.values():
             level = needs.dominant_level.value
             need_distribution[level] = need_distribution.get(level, 0) + 1
-        
+
+        # 行为预测分布
+        behavior_distribution = {}
+        for agent_id, belief in self.belief_states.items():
+            tpb = self.tpb_models.get(agent_id)
+            if tpb:
+                opinion_diff = belief.truth_trust - belief.rumor_trust
+                info_cred = min(1.0, 0.3 + abs(opinion_diff) * 0.7)
+                content_rel = min(1.0, 0.4 + abs(opinion_diff) * 0.6)
+                cog_dissonance = max(0, 0.8 - abs(opinion_diff)) * 0.5
+                social_press = min(1.0, 0.3 + abs(belief.belief_strength - 0.5) * 0.7)
+                conformity = 0.3 + (1.0 - belief.belief_strength) * 0.4
+                media_lit = 0.3 + belief.belief_strength * 0.4
+                result = tpb.compute_full(
+                    info_credibility=info_cred,
+                    content_relevance=content_rel,
+                    cognitive_dissonance=cog_dissonance,
+                    social_pressure=social_press,
+                    conformity_tendency=conformity,
+                    media_literacy=media_lit,
+                    current_opinion=opinion_diff
+                )
+                bkey = result.predicted_behavior.value
+                behavior_distribution[bkey] = behavior_distribution.get(bkey, 0) + 1
+
         return {
             "avg_rumor_trust": avg_rumor_trust,
             "avg_truth_trust": avg_truth_trust,
             "avg_belief_strength": np.mean([b.belief_strength for b in self.belief_states.values()]),
             "need_distribution": need_distribution,
+            "behavior_distribution": behavior_distribution,
             "total_exposures": self.context.total_exposures,
             "truth_intervention_active": self.context.truth_intervention_active
         }

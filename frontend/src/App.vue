@@ -685,21 +685,16 @@
             </div>
             <div class="chart-body" ref="trendChart"></div>
           </div>
-        </div>
-
-        <!-- v3.0 新增图表面板 -->
-        <div class="chart-row v3-charts" v-if="Object.keys(needDistribution).length > 0 || Object.keys(behaviorDistribution).length > 0">
-          <div class="chart-card need-dist-chart">
-            <div class="chart-header">
-              <h3>🧠 需求层次分布</h3>
+          <!-- v3.0 新增图表面板（紧凑布局） -->
+          <div class="chart-card v3-panel" v-if="Object.keys(needDistribution).length > 0 || Object.keys(behaviorDistribution).length > 0">
+            <div class="chart-header clickable" @click="showV3Charts = !showV3Charts">
+              <h3>🧠 心理分析</h3>
+              <span class="toggle-icon">{{ showV3Charts ? '▼' : '▶' }}</span>
             </div>
-            <div class="chart-body" ref="needDistChart"></div>
-          </div>
-          <div class="chart-card behavior-dist-chart">
-            <div class="chart-header">
-              <h3>🎯 行为预测分布</h3>
+            <div class="v3-charts-body" v-show="showV3Charts">
+              <div class="v3-chart-item" ref="needDistChart" v-if="Object.keys(needDistribution).length > 0"></div>
+              <div class="v3-chart-item" ref="behaviorDistChart" v-if="Object.keys(behaviorDistribution).length > 0"></div>
             </div>
-            <div class="chart-body" ref="behaviorDistChart"></div>
           </div>
         </div>
       </div>
@@ -750,6 +745,56 @@
                 <span class="info-item-value warning">{{ polarizationIndex.toFixed(3) }}</span>
               </div>
               <p class="info-item-desc">群体观点分歧程度（0~1）。高值表示社会撕裂，双方互不信任。</p>
+            </div>
+            <!-- v3.0 新增指标解读 -->
+            <div class="info-item" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+              <div class="info-item-header">
+                <span class="info-item-label">谣言信任度</span>
+                <span class="info-item-value danger">{{ (avgRumorTrust * 100).toFixed(1) }}%</span>
+              </div>
+              <p class="info-item-desc">群体对负面信息的平均信任程度。v3.0 新增：与"误信率"不同，反映信念强度而非立场比例。</p>
+            </div>
+            <div class="info-item" v-if="avgRumorTrust !== 0 || avgTruthTrust !== 0">
+              <div class="info-item-header">
+                <span class="info-item-label">真相信任度</span>
+                <span class="info-item-value success">{{ (avgTruthTrust * 100).toFixed(1) }}%</span>
+              </div>
+              <p class="info-item-desc">群体对正面信息的平均信任程度。v3.0 新增：权威回应后应逐渐上升。</p>
+            </div>
+            <div class="info-item" v-if="totalExposures > 0">
+              <div class="info-item-header">
+                <span class="info-item-label">总曝光量</span>
+                <span class="info-item-value info">{{ totalExposures }}</span>
+              </div>
+              <p class="info-item-desc">累计信息曝光次数。v3.0 新增：反映信息传播广度，高值表示信息触达更多人群。</p>
+            </div>
+            <div class="info-item" v-if="currentStep > 0">
+              <div class="info-item-header">
+                <span class="info-item-label">辟谣干预</span>
+                <span class="info-item-value" :class="truthInterventionActive ? 'success' : 'purple'">{{ truthInterventionActive ? '已启动' : '未启动' }}</span>
+              </div>
+              <p class="info-item-desc">权威辟谣信息发布状态。v3.0 新增：启动后 TruthEnv 将推送正面信息，影响群体信念。</p>
+            </div>
+          </div>
+
+          <!-- v3.0 心理学模型说明 -->
+          <div class="info-section" v-if="Object.keys(needDistribution).length > 0 || Object.keys(behaviorDistribution).length > 0">
+            <h4 class="info-section-title">🧠 心理学模型 (v3.0)</h4>
+            <div class="mechanism-list">
+              <div class="mechanism-item">
+                <span class="mechanism-icon">马斯洛</span>
+                <div class="mechanism-content">
+                  <strong>需求层次理论</strong>
+                  <p>五层需求（生理→安全→社交→尊重→认知）决定信息接受度。主导需求=最低满足度层次。</p>
+                </div>
+              </div>
+              <div class="mechanism-item">
+                <span class="mechanism-icon">TPB</span>
+                <div class="mechanism-content">
+                  <strong>计划行为理论</strong>
+                  <p>行为意向 = 态度×w1 + 主观规范×w2 + 知觉行为控制×w3。预测分享/评论/沉默/核查/拒绝等行为。</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1068,6 +1113,40 @@
                 <div class="info-item">
                   <span class="label">沉默状态</span>
                   <span :class="['value', 'status-badge', agentSnapshot.is_silent ? 'silent' : 'active']">{{ agentSnapshot.is_silent ? '🤫 沉默' : '🔊 发声' }}</span>
+                </div>
+                <!-- v3.0 新增字段 -->
+                <div class="info-item" v-if="agentSnapshot.rumor_trust !== undefined">
+                  <span class="label">谣言信任度</span>
+                  <span :class="['value', agentSnapshot.rumor_trust > 0.5 ? 'warning' : '']">{{ (agentSnapshot.rumor_trust * 100).toFixed(1) }}%</span>
+                </div>
+                <div class="info-item" v-if="agentSnapshot.truth_trust !== undefined">
+                  <span class="label">真相信任度</span>
+                  <span :class="['value', agentSnapshot.truth_trust > 0.5 ? 'success' : '']">{{ (agentSnapshot.truth_trust * 100).toFixed(1) }}%</span>
+                </div>
+                <div class="info-item" v-if="agentSnapshot.dominant_need">
+                  <span class="label">主导需求</span>
+                  <span class="value highlight">{{ needLabel(agentSnapshot.dominant_need) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- v3.0 新增：行为预测区块 -->
+          <div v-if="agentSnapshot.predicted_behavior" class="info-block behavior-block">
+            <div class="block-title"><span class="block-icon">🎯</span> 行为预测 (TPB)</div>
+            <div class="block-content">
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">预测行为</span>
+                  <span :class="['value', 'status-badge', behaviorClass(agentSnapshot.predicted_behavior)]">{{ behaviorLabel(agentSnapshot.predicted_behavior) }}</span>
+                </div>
+                <div class="info-item" v-if="agentSnapshot.behavior_confidence !== undefined">
+                  <span class="label">行为意向强度</span>
+                  <span class="value">{{ (agentSnapshot.behavior_confidence * 100).toFixed(0) }}%</span>
+                </div>
+                <div class="info-item" v-if="agentSnapshot.cognitive_closed_need">
+                  <span class="label">认知闭合需求</span>
+                  <span class="value">{{ (agentSnapshot.cognitive_closed_need * 100).toFixed(0) }}%</span>
                 </div>
               </div>
             </div>
@@ -1748,6 +1827,7 @@ export default {
       behaviorDistribution: {},
       totalExposures: 0,
       truthInterventionActive: false,
+      showV3Charts: true,  // v3 图表默认展开
 
       // 动画数值
       animatedStep: 0,
@@ -1900,6 +1980,55 @@ export default {
       if (opinion > 0) return '正确认知'
       if (opinion < 0) return '误信'
       return '不确定'
+    },
+    needLabel() {
+      const labels = {
+        '生理': '🏠 生理需求',
+        '安全': '🛡️ 安全需求',
+        '社交': '❤️ 社交需求',
+        '尊重': '⭐ 尊重需求',
+        '认知': '📚 认知需求',
+        physiological: '🏠 生理需求',
+        safety: '🛡️ 安全需求',
+        love: '❤️ 社交需求',
+        esteem: '⭐ 尊重需求',
+        cognitive: '📚 认知需求'
+      }
+      return (need) => labels[need] || need
+    },
+    behaviorLabel() {
+      const labels = {
+        '分享': '📢 分享传播',
+        '评论': '💬 评论讨论',
+        '观望': '👁️ 旁观',
+        '沉默': '🤫 沉默',
+        '核查': '🔍 核查验证',
+        '拒绝': '✋ 拒绝',
+        SHARE: '📢 分享传播',
+        COMMENT: '💬 评论讨论',
+        OBSERVE: '👁️ 旁观',
+        SILENCE: '🤫 沉默',
+        VERIFY: '🔍 核查验证',
+        REJECT: '✋ 拒绝'
+      }
+      return (b) => labels[b] || b
+    },
+    behaviorClass() {
+      const classes = {
+        '分享': 'negative',
+        '评论': 'negative',
+        '观望': 'neutral',
+        '沉默': 'silent',
+        '核查': 'positive',
+        '拒绝': 'positive',
+        SHARE: 'negative',
+        COMMENT: 'negative',
+        OBSERVE: 'neutral',
+        SILENCE: 'silent',
+        VERIFY: 'positive',
+        REJECT: 'positive'
+      }
+      return (b) => classes[b] || 'neutral'
     },
     renderedIntelligence() {
       if (!this.intelligenceContent) return ''
@@ -3251,7 +3380,28 @@ export default {
           textStyle: { color: '#e2e8f0' },
           formatter: (params) => {
             if (params.dataType === 'node') {
-              return `Agent #${params.data.id}<br/>观点: ${params.data.name}`
+              const agent = this.agents.find(a => a.id.toString() === params.data.id)
+              if (agent) {
+                const influencerTag = agent.is_influencer ? ' [大V]' : ''
+                const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
+                const tag = this.useDualNetwork && this.activeNetworkTab === 'public' ? influencerTag : communityTag
+                const silenceTag = agent.is_silent ? ' [沉默]' : ''
+                // v3.0 新增字段
+                const rumorTrust = agent.rumor_trust !== undefined ? `<div style="color: #f87171;">谣言信任: ${(agent.rumor_trust * 100).toFixed(1)}%</div>` : ''
+                const truthTrust = agent.truth_trust !== undefined ? `<div style="color: #4ade80;">真相信任: ${(agent.truth_trust * 100).toFixed(1)}%</div>` : ''
+                const dominantNeed = agent.dominant_need ? `<div style="color: #a78bfa;">主导需求: ${this.needLabel(agent.dominant_need)}</div>` : ''
+                const predictedBehavior = agent.predicted_behavior ? `<div style="color: #facc15;">预测行为: ${this.behaviorLabel(agent.predicted_behavior)}</div>` : ''
+                // 发布渠道映射（仅双层网络模式有意义）
+                const channelMap = { 'public': '📢 公域', 'private': '🔒 私域', 'both': '📤 双渠道', 'none': '🔇 未发布' }
+                const publishChannel = agent.publish_channel && agent.publish_channel !== 'none'
+                  ? `<div style="color: #94a3b8;">发布渠道: ${channelMap[agent.publish_channel] || agent.publish_channel}</div>`
+                  : ''
+                return `<div style="padding: 8px;">
+                  <div style="font-weight: bold;">Agent ${agent.id}${tag}${silenceTag}</div>
+                  <div>观点: ${agent.opinion.toFixed(3)}</div>
+                  ${rumorTrust}${truthTrust}${dominantNeed}${predictedBehavior}${publishChannel}
+                </div>`
+              }
             }
             return ''
           }
@@ -3753,10 +3903,20 @@ export default {
                 const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
                 const tag = this.activeNetworkTab === 'public' ? influencerTag : communityTag
                 const silenceTag = agent.is_silent ? ' [沉默]' : ''
+                // v3.0 新增字段
+                const rumorTrust = agent.rumor_trust !== undefined ? `<div style="color: #f87171;">谣言信任: ${(agent.rumor_trust * 100).toFixed(1)}%</div>` : ''
+                const truthTrust = agent.truth_trust !== undefined ? `<div style="color: #4ade80;">真相信任: ${(agent.truth_trust * 100).toFixed(1)}%</div>` : ''
+                const dominantNeed = agent.dominant_need ? `<div style="color: #a78bfa;">主导需求: ${this.needLabel(agent.dominant_need)}</div>` : ''
+                const predictedBehavior = agent.predicted_behavior ? `<div style="color: #facc15;">预测行为: ${this.behaviorLabel(agent.predicted_behavior)}</div>` : ''
+                // 发布渠道（仅双层网络模式有意义）
+                const channelMap = { 'public': '📢 公域', 'private': '🔒 私域', 'both': '📤 双渠道', 'none': '🔇 未发布' }
+                const publishChannel = agent.publish_channel && agent.publish_channel !== 'none'
+                  ? `<div style="color: #94a3b8;">发布渠道: ${channelMap[agent.publish_channel] || agent.publish_channel}</div>`
+                  : ''
                 return `<div style="padding: 8px;">
                   <div style="font-weight: bold;">Agent ${agent.id}${tag}${silenceTag}</div>
                   <div>观点: ${agent.opinion.toFixed(3)}</div>
-                  <div>发布渠道: ${agent.publish_channel || 'none'}</div>
+                  ${rumorTrust}${truthTrust}${dominantNeed}${predictedBehavior}${publishChannel}
                   <div style="color: #64b5f6; margin-top: 4px;">点击查看详情</div>
                 </div>`
               }
@@ -3961,6 +4121,11 @@ export default {
       if (!this.needDistChartInstance) return
 
       const needLabels = {
+        '生理': '生理需求',
+        '安全': '安全需求',
+        '社交': '社交需求',
+        '尊重': '尊重需求',
+        '认知': '认知需求',
         physiological: '生理需求',
         safety: '安全需求',
         love: '社交需求',
@@ -3968,6 +4133,11 @@ export default {
         cognitive: '认知需求'
       }
       const needColors = {
+        '生理': '#ef4444',
+        '安全': '#f97316',
+        '社交': '#3b82f6',
+        '尊重': '#a855f7',
+        '认知': '#22c55e',
         physiological: '#ef4444',
         safety: '#f97316',
         love: '#3b82f6',
@@ -4015,14 +4185,26 @@ export default {
       if (!this.behaviorDistChartInstance) return
 
       const behaviorLabels = {
+        '分享': '📢 分享',
+        '评论': '💬 评论',
+        '观望': '👁️ 观望',
+        '沉默': '🤫 沉默',
+        '核查': '🔍 核查',
+        '拒绝': '✋ 拒绝',
         SHARE: '📢 分享',
         COMMENT: '💬 评论',
-        OBSERVE: '👁️ 观察',
+        OBSERVE: '👁️ 观望',
         SILENCE: '🤫 沉默',
         VERIFY: '🔍 核查',
         REJECT: '✋ 拒绝'
       }
       const behaviorColors = {
+        '分享': '#ef4444',
+        '评论': '#f97316',
+        '观望': '#60a5fa',
+        '沉默': '#9ca3af',
+        '核查': '#22c55e',
+        '拒绝': '#8b5cf6',
         SHARE: '#ef4444',
         COMMENT: '#f97316',
         OBSERVE: '#60a5fa',
@@ -5760,6 +5942,35 @@ export default {
 
 .trend-chart {
   flex: 1;
+}
+
+/* v3.0 心理分析面板 */
+.v3-panel {
+  flex: 0 0 320px;
+  min-width: 280px;
+}
+
+.v3-panel .chart-header.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.v3-panel .toggle-icon {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.v3-charts-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  height: 100%;
+}
+
+.v3-chart-item {
+  flex: 1;
+  min-height: 0;
 }
 
 .chart-header {

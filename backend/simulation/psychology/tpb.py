@@ -28,12 +28,12 @@ logger = logging.getLogger(__name__)
 
 class BehaviorType(str, Enum):
     """行为类型"""
-    SHARE = "share"          # 转发分享
-    COMMENT = "comment"      # 评论互动
-    OBSERVE = "observe"      # 观望
-    SILENCE = "silence"      # 沉默
-    VERIFY = "verify"        # 求证/核查
-    REJECT = "reject"        # 拒绝传播
+    SHARE = "分享"          # 转发分享
+    COMMENT = "评论"        # 评论互动
+    OBSERVE = "观望"        # 观望
+    SILENCE = "沉默"        # 沉默
+    VERIFY = "核查"         # 求证/核查
+    REJECT = "拒绝"         # 拒绝传播
 
 
 class TPBResult(BaseModel):

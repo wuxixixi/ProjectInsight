@@ -102,11 +102,12 @@ class TestNeedsHierarchy:
         """测试从 Agent 特征推断"""
         # 高易感性、高孤立恐惧 → 安全/社交需求未满足
         hierarchy = NeedsHierarchy.from_agent_traits(
+            agent_id=0,
             fear_of_isolation=0.8,
             susceptibility=0.7,
             influence=0.3
         )
-        
+
         assert hierarchy.safety < 0.7  # 安全需求未满足
         assert hierarchy.love < 0.7    # 社交需求未满足
     

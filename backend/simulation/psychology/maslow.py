@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 
 class NeedLevel(str, Enum):
     """马斯洛需求层次"""
-    PHYSIOLOGICAL = "physiological"  # 生理需求（底层）
-    SAFETY = "safety"               # 安全需求
-    LOVE = "love"                   # 社交需求（归属与爱）
-    ESTEEM = "esteem"               # 尊重需求
-    COGNITIVE = "cognitive"         # 认知需求（顶层）
+    PHYSIOLOGICAL = "生理"  # 生理需求（底层）
+    SAFETY = "安全"               # 安全需求
+    LOVE = "社交"                   # 社交需求（归属与爱）
+    ESTEEM = "尊重"               # 尊重需求
+    COGNITIVE = "认知"         # 认知需求（顶层）
 
 
 class NeedState(BaseModel):
@@ -183,35 +183,53 @@ class NeedsHierarchy(BaseModel):
     @classmethod
     def from_agent_traits(
         cls,
+        agent_id: int,
         fear_of_isolation: float,
         susceptibility: float,
         influence: float
     ) -> "NeedsHierarchy":
         """
         从 Agent 特征推断需求层次
-        
+
         Args:
+            agent_id: Agent ID（用于随机种子）
             fear_of_isolation: 孤立恐惧（映射到社交需求）
             susceptibility: 易感性（映射到安全需求）
             influence: 影响力（映射到尊重需求）
-        
+
         Returns:
             需求层次模型
         """
-        # 反向映射
-        safety = 1 - susceptibility * 0.5  # 高易感性 → 安全需求未满足
-        love = 1 - fear_of_isolation * 0.5  # 高孤立恐惧 → 社交需求未满足
-        esteem = influence * 0.5 + 0.3  # 高影响力 → 尊重需求满足
-        
-        # 创建模型
+        import random
+        import time
+
+        # 每个个体有独特的随机种子（agent_id + 时间戳微秒）
+        base_seed = int(time.time() * 1000) % 100000
+        seed = (agent_id * 10007 + base_seed) % (2**31)
+        rng = random.Random(seed)
+
+        # 个体差异化扰动
+        noise = rng.uniform(-0.15, 0.15)
+        cognitive_noise = rng.uniform(-0.25, 0.3)
+
+        # 反向映射：高恐惧/易感性 = 需求未满足 = 低满足度
+        safety = max(0.15, min(0.9, 0.55 - susceptibility * 0.35 + noise))
+        love = max(0.15, min(0.9, 0.45 - fear_of_isolation * 0.3 + noise))
+        esteem = max(0.15, min(0.9, 0.35 + influence * 0.45 + noise))
+        # 认知需求：批判性思维，中等偏低基础值（人群趋向感性）
+        cognitive = max(0.15, min(0.9, 0.40 + cognitive_noise))
+
+        # 生理需求基本满足（现代人都吃饱了）
+        physiological = max(0.7, min(0.95, 0.82 + noise * 0.5))
+
         hierarchy = cls(
-            physiological=0.85,  # 假设生理需求基本满足
+            physiological=physiological,
             safety=safety,
             love=love,
             esteem=esteem,
-            cognitive=(safety + love + esteem) / 3
+            cognitive=cognitive
         )
-        
+
         hierarchy.compute_dominant_level()
         return hierarchy
     
