@@ -14,6 +14,11 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import logging
 
+from ..constants import (
+    OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE,
+    POLARIZATION_THRESHOLD_NEGATIVE, POLARIZATION_THRESHOLD_POSITIVE
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -493,8 +498,9 @@ class EnhancedMathModel:
         n = len(opinions)
         if n < 2:
             return 0.0
-        left = np.sum(opinions < -0.3)
-        right = np.sum(opinions > 0.3)
+        # 使用统一极化阈值（issue #962: 与 constants.py 保持一致）
+        left = np.sum(opinions < POLARIZATION_THRESHOLD_NEGATIVE)
+        right = np.sum(opinions > POLARIZATION_THRESHOLD_POSITIVE)
         center = n - left - right
         # 双峰指数：极端派占比减去中间派占比，归一化到 [0, 1]
         bimodal = (left + right - center) / n

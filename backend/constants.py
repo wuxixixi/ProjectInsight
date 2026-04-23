@@ -7,3 +7,8 @@
 # 观点分类阈值（统一使用，确保跨模块一致）
 OPINION_THRESHOLD_NEGATIVE = -0.1  # 低于此值为误信负面信息
 OPINION_THRESHOLD_POSITIVE = 0.1   # 高于此值为正确认知
+
+# 极化指数阈值（用于识别极端观点，比普通分类阈值更严格）
+# issue #962: 统一管理，与 OPINION_THRESHOLD 区分语义
+POLARIZATION_THRESHOLD_NEGATIVE = -0.3  # 极端负面立场（信念激进）
+POLARIZATION_THRESHOLD_POSITIVE = 0.3   # 极端正面立场（信念激进）

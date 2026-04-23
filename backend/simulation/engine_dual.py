@@ -19,6 +19,7 @@ from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionCon
 from .graph_parser_agent import GraphParserAgent, get_graph_parser
 from ..models.schemas import SimulationState
 from ..llm.client import LLMClient, LLMConfig
+from ..constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,8 @@ class SimulationEngineDual:
         backfire_strength: float = 0.3,
         silence_threshold: float = 0.3,
         polarization_factor: float = 0.3,
-        echo_chamber_factor: float = 0.2
+        echo_chamber_factor: float = 0.2,
+        seed: Optional[int] = None
     ):
         self.population_size = population_size
         self.cocoon_strength = cocoon_strength
@@ -64,6 +66,10 @@ class SimulationEngineDual:
         self.initial_rumor_spread = initial_rumor_spread  # 保留兼容
         self.use_llm = use_llm
         self.llm_config = llm_config or LLMConfig()
+
+        # 可重现性（issue #974: 实例级 RNG）
+        self.seed = seed if seed is not None else 42
+        self._rng = np.random.default_rng(self.seed)
 
         # 双层网络参数
         self.num_communities = num_communities

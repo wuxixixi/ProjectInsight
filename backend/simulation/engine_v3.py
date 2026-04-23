@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..simulation.agent import BeliefState, AgentMemory, AgentProfile, PersonAgent
+from ..simulation.agent.belief_state import ExposureSource, ExposureEvent
 from ..simulation.env import AlgorithmEnv, SocialEnv, TruthEnv, EnvRouter
 from ..simulation.message import P2PMessenger, P2GBroadcaster, GroupChat, Message
 from ..simulation.psychology import NeedsHierarchy, TheoryOfPlannedBehavior, BehaviorType
@@ -120,6 +121,9 @@ class EngineV3Integration:
         self.enable_psychology = enable_psychology
         self.enable_message = enable_message
         self.enable_replay = enable_replay
+
+        # 实例级 RNG（issue #955: 避免每次调用创建新 RandomState）
+        self._rng = np.random.default_rng()
         
         # Environment Layer
         self.algorithm_env = AlgorithmEnv()
@@ -259,9 +263,6 @@ class EngineV3Integration:
         
         # 2. 记录信息暴露
         if algorithm_content:
-            from ..simulation.agent.belief_state import ExposureSource, ExposureEvent
-            # alignment: 内容与观点的吻合程度。算法推荐倾向推荐与用户观点一致的内容，
-            # 因此 alignment = 观点方向 * 茧房强度，体现信息茧房的"回音"效应
             belief.add_exposure(ExposureEvent(
                 step=self.context.step,
                 source=ExposureSource.ALGORITHM,
@@ -270,8 +271,6 @@ class EngineV3Integration:
             ))
 
         if truth_content:
-            from ..simulation.agent.belief_state import ExposureSource, ExposureEvent
-            # alignment: 辟谣内容与真相的对齐程度，1.0 表示官方辟谣内容与事实完全一致
             belief.add_exposure(ExposureEvent(
                 step=self.context.step,
                 source=ExposureSource.TRUTH,
@@ -296,9 +295,8 @@ class EngineV3Integration:
                 receptivity = 1.0
             
             # 计算 TPB
-            rng = np.random.RandomState(agent_id + self.context.step)
             result = tpb.compute_full(
-                info_credibility=float(rng.uniform(0.4, 0.8)),
+                info_credibility=float(self._rng.uniform(0.4, 0.8)),
                 content_relevance=0.5 + abs(new_opinion) * 0.3,
                 cognitive_dissonance=max(0, abs(new_opinion - old_opinion) - 0.1),
                 social_pressure=sum(peer_opinions) / len(peer_opinions) if peer_opinions else 0,
