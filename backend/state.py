@@ -127,6 +127,8 @@ class GlobalState:
         with self._lock:
             return {
                 "has_engine": self._engine is not None,
+                "engine_step": self._engine.step_count if self._engine else None,
+                "engine_use_llm": self._engine.use_llm if self._engine else None,
                 "has_pending_kg": self._pending_knowledge_graph is not None,
                 "has_pending_event": self._pending_event_content is not None,
                 "injection_in_progress": self._injection_in_progress,

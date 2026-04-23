@@ -8,5 +8,5 @@ pydantic>=2.5.3
 python-multipart>=0.0.7  # CVE-2024-24762: 0.0.7+ 修复了 multipart 表单解析漏洞
 websockets>=12.0
 scipy>=1.12.0
-aiohttp>=3.9.1  # 异步 HTTP 客户端，用于 LLM API 调用
+aiohttp>=3.9.2  # 异步 HTTP 客户端，用于 LLM API 调用，3.9.2修复CVE-2024-23331
 python-dotenv>=1.0.0  # 环境变量管理

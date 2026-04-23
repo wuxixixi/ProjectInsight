@@ -98,7 +98,7 @@ def _infer_ollama_model_size_b(model_name: str) -> int:
         if suffix.endswith("b"):
             return int(suffix[:-1])
     except ValueError:
-        return 0
+        pass
     return 0
 
 

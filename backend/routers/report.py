@@ -210,9 +210,9 @@ async def list_reports(
     })
 
 
-def _check_engine_ready(error_prefix: str = "") -> Optional[JSONResponse]:
+def _check_engine_ready(error_prefix: str = "推演") -> Optional[JSONResponse]:
     """检查推演引擎是否就绪（issue #621: 消除重复代码）"""
-    prefix = error_prefix or "推演"
+    prefix = error_prefix
     if state.engine is None:
         return JSONResponse(
             content={"success": False, "error": f"{prefix}引擎未初始化，请先运行推演"},

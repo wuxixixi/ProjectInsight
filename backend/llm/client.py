@@ -329,11 +329,16 @@ class LLMClient:
 
         # 过滤异常并记录日志
         success_results = []
+        fail_count = 0
         for i, r in enumerate(results):
             if isinstance(r, Exception):
+                fail_count += 1
                 logger.warning(f"batch_chat: 请求 {i}/{total} 失败: {r}")
             else:
                 success_results.append(r)
+
+        if fail_count > 0:
+            logger.warning(f"batch_chat: {fail_count}/{total} 请求失败")
 
         return success_results
 
