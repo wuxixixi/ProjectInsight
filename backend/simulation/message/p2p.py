@@ -25,7 +25,18 @@ class P2PMessenger:
     - 消息队列
     """
 
-    def __init__(self, seed: int = 42):
+    def __init__(
+        self,
+        seed: int = 42,
+        # 传播概率参数 (issue #321)
+        send_credibility_weight: float = 0.5,
+        send_base_probability: float = 0.3,
+        compute_strength_weight: float = 0.5,
+        compute_strength_base: float = 0.5,
+        compute_credibility_weight: float = 0.3,
+        compute_similarity_weight: float = 0.4,
+        compute_alignment_weight: float = 0.3
+    ):
         # 消息队列: receiver_id -> [Message]
         self._inbox: Dict[int, List[Message]] = {}
 
@@ -34,6 +45,15 @@ class P2PMessenger:
 
         # 实例级随机生成器（确保可重现性）
         self._rng = random.Random(seed)
+
+        # 传播概率参数
+        self._send_cred_weight = send_credibility_weight
+        self._send_base_prob = send_base_probability
+        self._compute_strength_weight = compute_strength_weight
+        self._compute_strength_base = compute_strength_base
+        self._compute_cred_weight = compute_credibility_weight
+        self._compute_sim_weight = compute_similarity_weight
+        self._compute_align_weight = compute_alignment_weight
     
     async def send(
         self,
@@ -67,7 +87,8 @@ class P2PMessenger:
         )
         
         # 计算传播概率
-        message.propagation_prob = min(1.0, sender_credibility * 0.5 + 0.3)
+        message.propagation_prob = min(1.0,
+            sender_credibility * self._send_cred_weight + self._send_base_prob)
         
         # 投递到收件箱
         if receiver_id not in self._inbox:
@@ -130,13 +151,15 @@ class P2PMessenger:
             传播概率 [0, 1]
         """
         # 发送者可信度
-        credibility = sender_strength * 0.5 + 0.5
-        
+        credibility = sender_strength * self._compute_strength_weight + self._compute_strength_base
+
         # 观点相似度
         similarity = 1 - abs(sender_opinion - receiver_opinion) / 2
-        
+
         # 综合概率
-        p = credibility * 0.3 + similarity * 0.4 + content_alignment * 0.3
+        p = (credibility * self._compute_cred_weight +
+             similarity * self._compute_sim_weight +
+             content_alignment * self._compute_align_weight)
         
         return max(0.0, min(1.0, p))
     

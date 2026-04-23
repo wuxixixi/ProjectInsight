@@ -61,7 +61,8 @@ class GroupChat:
         opinion_clash_threshold: float = 0.2,
         validation_weight_agreement: float = 0.6,
         validation_weight_neutrality: float = 0.4,
-        default_propagation_prob: float = 0.7
+        default_propagation_prob: float = 0.7,
+        seed: int = 42
     ):
         """
         初始化群组讨论管理器
@@ -71,6 +72,7 @@ class GroupChat:
             validation_weight_agreement: 社会验证中一致性权重
             validation_weight_neutrality: 社会验证中中立性权重
             default_propagation_prob: 默认消息传播概率
+            seed: 随机种子
         """
         self.opinion_clash_threshold = opinion_clash_threshold
         self.validation_weight_agreement = validation_weight_agreement
@@ -82,6 +84,9 @@ class GroupChat:
 
         # 消息日志
         self._log: List[Message] = []
+
+        # 实例级随机生成器
+        self._rng = random.Random(seed)
     
     def create_group(
         self,
@@ -187,7 +192,7 @@ class GroupChat:
         # 根据传播概率过滤
         received = []
         for msg in messages[:max_count]:
-            if random.random() < msg.propagation_prob:
+            if self._rng.random() < msg.propagation_prob:
                 msg.status = MessageStatus.DELIVERED
                 received.append(msg)
         

@@ -18,19 +18,30 @@ logger = logging.getLogger(__name__)
 class P2GBroadcaster:
     """
     P2G 广播器
-    
+
     管理意见领袖向群体的广播:
     - 一次广播影响多个邻居
     - 覆盖范围由影响力决定
     - 影响力随距离衰减
     """
-    
-    def __init__(self):
+
+    def __init__(
+        self,
+        seed: int = 42,
+        # 传播概率参数 (issue #321)
+        influence_coefficient: float = 0.7
+    ):
         # 广播日志
         self._log: List[Message] = []
-        
+
         # 邻接表（由 SocialEnv 提供）
         self._adjacency: Dict[int, List[int]] = {}
+
+        # 实例级随机生成器
+        self._rng = random.Random(seed)
+
+        # 传播概率参数
+        self._influence_coeff = influence_coefficient
     
     def set_adjacency(self, adjacency: Dict[int, List[int]]):
         """设置网络邻接表"""
@@ -65,8 +76,8 @@ class P2GBroadcaster:
         max_receivers = max(1, int(len(neighbors) * actual_reach))
         
         # 随机选择接收者
-        receivers = random.sample(neighbors, min(max_receivers, len(neighbors))) if neighbors else []
-        
+        receivers = self._rng.sample(neighbors, min(max_receivers, len(neighbors))) if neighbors else []
+
         message = Message(
             message_type=MessageType.P2G,
             sender_id=sender_id,
@@ -74,7 +85,7 @@ class P2GBroadcaster:
             content=content,
             opinion=opinion,
             credibility=influence,
-            propagation_prob=influence * 0.7,
+            propagation_prob=influence * self._influence_coeff,
             status=MessageStatus.SENT
         )
         
@@ -111,7 +122,7 @@ class P2GBroadcaster:
         base_prob = message.propagation_prob
         
         # 影响力衰减（简化：直接使用概率）
-        received = random.random() < base_prob
+        received = self._rng.random() < base_prob
         
         if received:
             message.status = MessageStatus.DELIVERED
