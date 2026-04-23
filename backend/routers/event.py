@@ -3,7 +3,7 @@
 """
 import inspect
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -119,7 +119,7 @@ async def airdrop_event(req: AirdropRequest):
             "keywords": knowledge_graph.get("keywords", []),
             "sentiment": knowledge_graph.get("sentiment", "中性"),
             "credibility_hint": final_credibility,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         }
 
         # 确定广播范围

@@ -16,17 +16,23 @@ router = APIRouter(prefix="/api", tags=["prediction"])
 
 
 def _get_current_state_dict() -> Optional[dict]:
-    """从引擎获取当前状态字典（兼容新旧键名）"""
+    """从引擎获取当前状态字典（兼容新旧键名，issue #744: 添加 deep_negative_rate）"""
     engine = state.engine
     if engine is None or engine.current_state is None:
         return None
+    current = engine.current_state
     return {
-        "negative_belief_rate": engine.current_state.rumor_spread_rate,
-        "rumor_spread_rate": engine.current_state.rumor_spread_rate,
-        "correct_belief_rate": engine.current_state.truth_acceptance_rate,
-        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate,
-        "polarization_index": engine.current_state.polarization_index,
-        "silence_rate": engine.current_state.silence_rate
+        # 核心指标
+        "negative_belief_rate": current.negative_belief_rate,
+        "rumor_spread_rate": current.negative_belief_rate,  # 别名
+        "truth_acceptance_rate": current.positive_belief_rate,
+        "positive_belief_rate": current.positive_belief_rate,
+        "polarization_index": current.polarization_index,
+        "silence_rate": current.silence_rate,
+        "avg_opinion": current.avg_opinion,
+        # issue #744: 添加深度误信/正确认知率
+        "deep_negative_rate": current.deep_negative_rate,
+        "deep_positive_rate": current.deep_positive_rate,
     }
 
 
@@ -156,11 +162,17 @@ async def get_prediction_trajectory(steps: int = 10):
 
     state.prediction_model.update(state.engine.history)
 
-    # 获取当前状态
+    # 获取当前状态（issue #745: 使用副本避免修改共享字典）
     current_state = _get_current_state_dict()
-    current_state.pop("silence_rate", None)
+    if current_state is None:
+        return JSONResponse(
+            content={"success": False, "error": "当前推演状态不可用"},
+            status_code=400
+        )
+    state_copy = dict(current_state)
+    state_copy.pop("silence_rate", None)
 
-    trajectory = state.prediction_model.get_trajectory(current_state, steps=steps)
+    trajectory = state.prediction_model.get_trajectory(state_copy, steps=steps)
 
     return {
         "success": True,

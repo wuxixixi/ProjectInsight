@@ -224,25 +224,29 @@ def _get_v3_agent_fields(agent_id: int) -> dict:
             v3_fields.update(agent_state)
 
     # 从 engine 的 current_state 中获取 agent 列表（补充）
+    # issue #738: 构建索引避免 O(n) 线性搜索
     if hasattr(engine, 'current_state') and engine.current_state:
         agents = engine.current_state.agents if hasattr(engine.current_state, 'agents') else []
+        target = None
         for agent in agents:
             agent_dict = agent.model_dump() if hasattr(agent, 'model_dump') else agent
             if agent_dict.get('id') == agent_id:
-                # 只在 v3_fields 没有值时才覆盖
-                if not v3_fields.get('rumor_trust') and agent_dict.get('rumor_trust'):
-                    v3_fields['rumor_trust'] = agent_dict.get('rumor_trust', 0.0)
-                if not v3_fields.get('truth_trust') and agent_dict.get('truth_trust'):
-                    v3_fields['truth_trust'] = agent_dict.get('truth_trust', 0.0)
-                if not v3_fields.get('dominant_need') and agent_dict.get('dominant_need'):
-                    v3_fields['dominant_need'] = agent_dict.get('dominant_need', '')
-                if not v3_fields.get('predicted_behavior') and agent_dict.get('predicted_behavior'):
-                    v3_fields['predicted_behavior'] = agent_dict.get('predicted_behavior', '')
-                if 'behavior_confidence' not in v3_fields:
-                    v3_fields['behavior_confidence'] = agent_dict.get('behavior_confidence', 0.0)
-                if 'cognitive_closed_need' not in v3_fields:
-                    v3_fields['cognitive_closed_need'] = agent_dict.get('cognitive_closed_need', 0.5)
+                target = agent_dict
                 break
+        if target:
+            # 只在 v3_fields 没有值时才覆盖
+            if not v3_fields.get('rumor_trust') and target.get('rumor_trust'):
+                v3_fields['rumor_trust'] = target.get('rumor_trust', 0.0)
+            if not v3_fields.get('truth_trust') and target.get('truth_trust'):
+                v3_fields['truth_trust'] = target.get('truth_trust', 0.0)
+            if not v3_fields.get('dominant_need') and target.get('dominant_need'):
+                v3_fields['dominant_need'] = target.get('dominant_need', '')
+            if not v3_fields.get('predicted_behavior') and target.get('predicted_behavior'):
+                v3_fields['predicted_behavior'] = target.get('predicted_behavior', '')
+            if 'behavior_confidence' not in v3_fields:
+                v3_fields['behavior_confidence'] = target.get('behavior_confidence', 0.0)
+            if 'cognitive_closed_need' not in v3_fields:
+                v3_fields['cognitive_closed_need'] = target.get('cognitive_closed_need', 0.5)
 
     return v3_fields
 
@@ -250,5 +254,10 @@ def _get_v3_agent_fields(agent_id: int) -> dict:
 def _state_to_dict(state_obj) -> dict:
     """将 SimulationState 转换为字典，并附加引擎级别数据（如 event_pool）"""
     d = state_obj.to_dict()
-    d["event_pool"] = list(getattr(state.engine, "event_pool", [])) if state.engine else []
+    # issue #739: 安全检查 state.engine，参数名改为避免混淆
+    engine = state.engine
+    if engine is not None:
+        d["event_pool"] = list(getattr(engine, "event_pool", []))
+    else:
+        d["event_pool"] = []
     return d

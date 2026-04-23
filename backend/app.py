@@ -182,12 +182,23 @@ async def websocket_simulation(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            msg = json.loads(data)
-            action = msg.get("action")
+            # issue #736: 添加 JSON 解析和类型校验
+            try:
+                msg = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+                continue
+            if not isinstance(msg, dict) or not isinstance(msg.get("action"), str):
+                await websocket.send_json({"type": "error", "message": "Message must be a JSON object with 'action' string"})
+                continue
+            action = msg["action"]
+            params = msg.get("params", {})
+            if not isinstance(params, dict):
+                await websocket.send_json({"type": "error", "message": "'params' must be a JSON object"})
+                continue
 
             if action == "start":
                 # 启动新模拟
-                params = msg.get("params", {})
                 use_llm = params.get("use_llm", True)
                 population_size = params.get("population_size", 200)
                 use_dual_network = params.get("use_dual_network", True)
