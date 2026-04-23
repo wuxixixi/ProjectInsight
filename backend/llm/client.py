@@ -413,11 +413,14 @@ class LLMClient:
 
 # 全局客户端实例
 _llm_client: Optional[LLMClient] = None
+_llm_client_lock = __import__('threading').Lock()
 
 
 def get_llm_client(config: Optional[LLMConfig] = None) -> LLMClient:
-    """获取全局 LLM 客户端实例"""
+    """获取全局 LLM 客户端实例（线程安全）"""
     global _llm_client
     if _llm_client is None:
-        _llm_client = LLMClient(config)
+        with _llm_client_lock:
+            if _llm_client is None:
+                _llm_client = LLMClient(config)
     return _llm_client

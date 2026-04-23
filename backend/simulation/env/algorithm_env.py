@@ -53,7 +53,8 @@ class AlgorithmEnv(EnvBase):
         self,
         cocoon_strength: float = 0.5,
         diversity_threshold: float = 0.3,
-        content_pool: Optional[Dict[str, List[str]]] = None
+        content_pool: Optional[Dict[str, List[str]]] = None,
+        seed: int = 42
     ):
         super().__init__()
 
@@ -65,6 +66,9 @@ class AlgorithmEnv(EnvBase):
 
         # 推荐内容库（支持外部注入）
         self._content_pool = content_pool or DEFAULT_CONTENT_POOL
+
+        # 实例级随机生成器（确保可重现性）
+        self._rng = random.Random(seed)
     
     @property
     def name(self) -> str:
@@ -176,7 +180,7 @@ class AlgorithmEnv(EnvBase):
             推荐内容
         """
         # 茧房效应：高强度时推荐与观点一致的内容
-        if random.random() < self._cocoon_strength:
+        if self._rng.random() < self._cocoon_strength:
             # 推荐与当前观点一致的内容
             if opinion < -0.2:
                 pool = self._content_pool["negative"]
@@ -186,12 +190,12 @@ class AlgorithmEnv(EnvBase):
                 pool = self._content_pool["neutral"]
         else:
             # 低概率推荐多元内容
-            pool = self._content_pool["neutral"] + random.choice([
+            pool = self._content_pool["neutral"] + self._rng.choice([
                 self._content_pool["negative"],
                 self._content_pool["positive"]
             ])
         
-        return random.choice(pool)
+        return self._rng.choice(pool)
     
     def _record_exposure(self, agent_id: int, content: str, alignment: float):
         """记录信息暴露"""

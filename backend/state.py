@@ -112,7 +112,13 @@ class GlobalState:
 
     @contextmanager
     def write_lock(self):
-        """获取写锁的上下文管理器，用于批量原子操作"""
+        """
+        获取写锁的上下文管理器，用于批量原子操作
+
+        注意：此方法仅保证操作期间独占访问，不提供事务回滚。
+        如果代码块内抛出异常，锁会正确释放，但已执行的状态修改不会回滚。
+        如需事务性保证，请在进入前调用 get_snapshot() 保存状态。
+        """
         with self._lock:
             yield self
 

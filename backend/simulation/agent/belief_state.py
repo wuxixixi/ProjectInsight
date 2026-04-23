@@ -86,7 +86,15 @@ class BeliefState(BaseModel):
         default_factory=list,
         description="信息暴露历史"
     )
-    
+
+    # 暴露历史最大长度（可配置）
+    max_exposure_history: int = Field(
+        20,
+        ge=1,
+        le=100,
+        description="暴露历史最大保留条数"
+    )
+
     # 元数据
     last_updated: Optional[datetime] = Field(
         default_factory=datetime.now,
@@ -122,14 +130,15 @@ class BeliefState(BaseModel):
     
     @classmethod
     def from_legacy_opinion(
-        cls, 
-        opinion: float, 
+        cls,
+        opinion: float,
         strength: float = 0.5,
-        cognitive_closed_need: float = 0.5
+        cognitive_closed_need: float = 0.5,
+        max_exposure_history: int = 20
     ) -> "BeliefState":
         """
         从旧版观点值构造 BeliefState
-        
+
         转换规则:
         - opinion > 0: truth_trust = opinion, rumor_trust = 0
         - opinion < 0: truth_trust = 0, rumor_trust = -opinion
@@ -140,14 +149,16 @@ class BeliefState(BaseModel):
                 truth_trust=opinion,
                 rumor_trust=0.0,
                 belief_strength=strength,
-                cognitive_closed_need=cognitive_closed_need
+                cognitive_closed_need=cognitive_closed_need,
+                max_exposure_history=max_exposure_history
             )
         else:
             return cls(
                 truth_trust=0.0,
                 rumor_trust=-opinion,
                 belief_strength=strength,
-                cognitive_closed_need=cognitive_closed_need
+                cognitive_closed_need=cognitive_closed_need,
+                max_exposure_history=max_exposure_history
             )
     
     def update_from_opinion(self, new_opinion: float, max_change: float = None):
@@ -180,9 +191,9 @@ class BeliefState(BaseModel):
     def add_exposure(self, event: ExposureEvent):
         """添加信息暴露事件"""
         self.exposure_history.append(event)
-        # 保持历史长度限制 (默认保留最近 20 条)
-        if len(self.exposure_history) > 20:
-            self.exposure_history = self.exposure_history[-20:]
+        # 保持历史长度限制
+        if len(self.exposure_history) > self.max_exposure_history:
+            self.exposure_history = self.exposure_history[-self.max_exposure_history:]
     
     def get_recent_exposures(self, n: int = 5) -> List[ExposureEvent]:
         """获取最近 N 条暴露记录"""

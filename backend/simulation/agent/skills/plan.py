@@ -18,13 +18,29 @@ logger = logging.getLogger(__name__)
 class PlanSkill(SkillBase):
     """
     规划技能
-    
+
     负责:
     - 决定是否沉默
     - 选择行动类型
     - 生成输出内容
     """
-    
+
+    def __init__(
+        self,
+        action_wait_threshold: float = 0.05,
+        action_moderate_threshold: float = 0.15
+    ):
+        """
+        初始化规划技能
+
+        Args:
+            action_wait_threshold: 观望阈值，信念变化小于此值时选择观望
+            action_moderate_threshold: 中等变化阈值，超过此值为剧烈变化
+        """
+        super().__init__()
+        self.action_wait_threshold = action_wait_threshold
+        self.action_moderate_threshold = action_moderate_threshold
+
     def _get_default_metadata(self) -> SkillMetadata:
         return SkillMetadata(
             name="plan",
@@ -96,9 +112,9 @@ class PlanSkill(SkillBase):
         belief_delta = abs(cognition.get("belief_delta", 0.0))
         
         # 基于观点变化程度选择行动
-        if belief_delta < 0.05:
+        if belief_delta < self.action_wait_threshold:
             return "观望"
-        elif belief_delta < 0.15:
+        elif belief_delta < self.action_moderate_threshold:
             # 有变化但不剧烈
             influence = context.belief_state.get("influence", 0.5)
             if influence > 0.6:
