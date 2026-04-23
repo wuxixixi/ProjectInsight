@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 
 class Intervention:
     """官方干预（辟谣）事件"""
-    
+
+    _next_id: int = 0
+
     def __init__(
         self,
         step: int,
@@ -28,6 +30,8 @@ class Intervention:
         reach: float = 1.0,
         timing: str = "delayed"
     ):
+        Intervention._next_id += 1
+        self.id = Intervention._next_id
         self.step = step
         self.content = content
         self.credibility = credibility
@@ -38,6 +42,7 @@ class Intervention:
     
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "id": self.id,
             "step": self.step,
             "content": self.content,
             "credibility": self.credibility,
@@ -75,8 +80,8 @@ class TruthEnv(EnvBase):
         # 已发布的干预
         self._published: List[Intervention] = []
         
-        # 辟谣效果追踪: agent_id -> [received_intervention_ids]
-        self._exposure_tracking: Dict[int, List[int]] = {}
+        # 辟谣效果追踪: agent_id -> set of intervention ids (issue #340)
+        self._exposure_tracking: Dict[int, set] = {}
         
         # 当前步数
         self._current_step = 0
@@ -103,10 +108,10 @@ class TruthEnv(EnvBase):
             # 使用确定性随机（基于 agent_id 和 step）确保可重现性
             rng = np.random.RandomState(agent_id + self._current_step * 1000)
             if rng.random() < intervention.reach:
-                # 记录暴露
+                # 记录暴露（使用稳定的业务ID）
                 if agent_id not in self._exposure_tracking:
-                    self._exposure_tracking[agent_id] = []
-                self._exposure_tracking[agent_id].append(id(intervention))
+                    self._exposure_tracking[agent_id] = set()
+                self._exposure_tracking[agent_id].add(intervention.id)
                 intervention.exposure_count += 1
 
                 return intervention.content
@@ -135,7 +140,7 @@ class TruthEnv(EnvBase):
             "total_interventions": len(self._interventions),
             "published_interventions": len(self._published),
             "pending_interventions": len(self._interventions) - len(self._published),
-            "total_exposure": sum(i.exposure_count for i in self._published),
+            "total_exposure": sum(len(exposures) for exposures in self._exposure_tracking.values()),
             "agents_reached": len(self._exposure_tracking)
         }
     

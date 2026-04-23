@@ -109,7 +109,11 @@ class LLMAgent:
         influence: float,
         susceptibility: float,
         is_influencer: bool = False,
-        community_id: int = 0
+        community_id: int = 0,
+        # 观点变化约束参数 (issue #357)
+        max_opinion_change: float = 0.3,
+        silent_opinion_change: float = 0.1,
+        belief_strength_weight: float = 0.5
     ):
         self.id = agent_id
         self.opinion = opinion
@@ -118,6 +122,11 @@ class LLMAgent:
         self.susceptibility = susceptibility
         self.exposed_to_negative = opinion < 0
         self.exposed_to_positive = False
+
+        # 观点变化约束参数
+        self._max_opinion_change = max_opinion_change
+        self._silent_opinion_change = silent_opinion_change
+        self._belief_strength_weight = belief_strength_weight
 
         # 人设背景
         self.persona = get_persona(agent_id, opinion, susceptibility, influence)
@@ -375,8 +384,8 @@ class LLMAgent:
             knowledge_graph: 知识图谱数据（可选）
         """
         # 计算观点变化限制
-        max_change = 0.3 * (1 - self.belief_strength * 0.5)
-        max_change_silent = 0.1 * (1 - self.belief_strength * 0.5)
+        max_change = self._max_opinion_change * (1 - self.belief_strength * self._belief_strength_weight)
+        max_change_silent = self._silent_opinion_change * (1 - self.belief_strength * self._belief_strength_weight)
 
         # 构建知识图谱上下文
         if knowledge_graph:
@@ -529,7 +538,7 @@ class LLMAgent:
             new_opinion = np.clip(new_opinion, -1, 1)
 
             # 观点变化约束
-            max_change = 0.1 if is_silent else 0.3 * (1 - self.belief_strength * 0.5)
+            max_change = self._silent_opinion_change if is_silent else self._max_opinion_change * (1 - self.belief_strength * self._belief_strength_weight)
             change = new_opinion - self.opinion
             if abs(change) > max_change:
                 new_opinion = self.opinion + np.sign(change) * max_change
@@ -795,7 +804,7 @@ class LLMAgentPopulationDual:
             agent.exposed_to_positive = True
             if agent.opinion < 0:
                 # 动态计算：考虑信念强度和易感性
-                impact = effectiveness * (1 - agent.belief_strength * 0.5) * (0.5 + agent.susceptibility * 0.5)
+                impact = effectiveness * (1 - agent.belief_strength * agent._belief_strength_weight) * (0.5 + agent.susceptibility * 0.5)
                 agent.opinion = min(agent.opinion + impact, 1.0)
 
     def apply_debunking(self, effectiveness: float = 0.2):
