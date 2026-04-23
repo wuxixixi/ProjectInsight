@@ -16,6 +16,7 @@ NeedsHierarchy - 马斯洛需求层次模型
 from pydantic import BaseModel, Field
 from typing import Dict, List, Any, Optional
 from enum import Enum
+import random
 import logging
 
 logger = logging.getLogger(__name__)
@@ -40,27 +41,56 @@ class NeedState(BaseModel):
 class NeedsHierarchy(BaseModel):
     """
     马斯洛需求层次模型
-    
+
     核心假设:
     - 需求满足度影响信息选择性注意
     - 低层次需求未满足 → 更易接受威胁性信息
     - 高层次需求满足 → 更具批判性思维
-    
+
     应用于舆情:
     - 安全需求高的群体对负面信息更敏感
     - 社交需求高的群体更易受从众压力影响
     - 认知需求高的群体更理性分析
     """
-    
+
     # 五层需求状态
     physiological: float = Field(0.8, ge=0.0, le=1.0, description="生理需求满足度")
     safety: float = Field(0.6, ge=0.0, le=1.0, description="安全需求满足度")
     love: float = Field(0.5, ge=0.0, le=1.0, description="社交需求满足度")
     esteem: float = Field(0.5, ge=0.0, le=1.0, description="尊重需求满足度")
     cognitive: float = Field(0.5, ge=0.0, le=1.0, description="认知需求满足度")
-    
+
     # 当前主导需求（最低满足度的未满足层次）
     dominant_level: NeedLevel = Field(NeedLevel.SAFETY, description="主导需求层次")
+
+    # 观点变化因子（issue #616: 参数化硬编码值）
+    # 低层次主导→易受影响, 中间层→社交敏感, 高层次→理性
+    opinion_change_factors: Dict[str, float] = Field(
+        default_factory=lambda: {
+            "physiological_safety": 1.3,
+            "love": 1.4,
+            "esteem": 1.1,
+            "cognitive": 0.9,
+        },
+        description="各需求层次的观点变化因子"
+    )
+
+    # 需求-内容匹配矩阵（issue #615: 参数化）
+    match_matrix: Dict[str, Dict[str, float]] = Field(
+        default_factory=lambda: {
+            "生理": {"threat": 1.5, "social": 1.0, "status": 0.8, "knowledge": 0.7},
+            "安全": {"threat": 1.4, "social": 1.1, "status": 0.9, "knowledge": 0.8},
+            "社交": {"threat": 1.0, "social": 1.4, "status": 1.1, "knowledge": 0.9},
+            "尊重": {"threat": 0.8, "social": 1.2, "status": 1.4, "knowledge": 1.0},
+            "认知": {"threat": 0.7, "social": 0.9, "status": 1.0, "knowledge": 1.4},
+        },
+        description="需求-内容匹配矩阵"
+    )
+
+    # 噪声参数（issue #617: 参数化噪声范围）
+    noise_range: float = Field(0.15, description="基础噪声幅度")
+    cognitive_noise_low: float = Field(-0.25, description="认知噪声下限")
+    cognitive_noise_high: float = Field(0.3, description="认知噪声上限")
     
     def compute_dominant_level(self) -> NeedLevel:
         """
@@ -102,28 +132,17 @@ class NeedsHierarchy(BaseModel):
             接受度系数 [0.5, 1.5]
         """
         self.compute_dominant_level()
-        
-        # 需求-内容匹配矩阵
-        # 行: 主导需求层次, 列: 内容类型
-        match_matrix = {
-            NeedLevel.PHYSIOLOGICAL: {
-                "threat": 1.5, "social": 1.0, "status": 0.8, "knowledge": 0.7
-            },
-            NeedLevel.SAFETY: {
-                "threat": 1.4, "social": 1.1, "status": 0.9, "knowledge": 0.8
-            },
-            NeedLevel.LOVE: {
-                "threat": 1.0, "social": 1.4, "status": 1.1, "knowledge": 0.9
-            },
-            NeedLevel.ESTEEM: {
-                "threat": 0.8, "social": 1.2, "status": 1.4, "knowledge": 1.0
-            },
-            NeedLevel.COGNITIVE: {
-                "threat": 0.7, "social": 0.9, "status": 1.0, "knowledge": 1.4
-            },
+
+        # 需求-内容匹配矩阵（使用实例字段，issue #615）
+        local_matrix = {
+            NeedLevel.PHYSIOLOGICAL: self.match_matrix.get("生理", {}),
+            NeedLevel.SAFETY: self.match_matrix.get("安全", {}),
+            NeedLevel.LOVE: self.match_matrix.get("社交", {}),
+            NeedLevel.ESTEEM: self.match_matrix.get("尊重", {}),
+            NeedLevel.COGNITIVE: self.match_matrix.get("认知", {}),
         }
-        
-        base_receptivity = match_matrix.get(self.dominant_level, {}).get(content_type, 1.0)
+
+        base_receptivity = local_matrix.get(self.dominant_level, {}).get(content_type, 1.0)
         
         # 考虑整体需求满足度
         avg_satisfaction = (
@@ -155,19 +174,17 @@ class NeedsHierarchy(BaseModel):
         ]
         
         dominant_index = level_order.index(self.dominant_level)
-        
-        # 低层次主导 → 变化因子较高（易受影响）
-        # 高层次主导 → 变化因子适中（理性分析）
-        # 中间层次 → 变化因子最高（社交压力敏感）
-        
+
+        # issue #616: 使用参数化因子替代硬编码值
+        factors = self.opinion_change_factors
         if dominant_index <= 1:  # 生理/安全
-            return 1.3  # 易受影响
+            return factors.get("physiological_safety", 1.3)
         elif dominant_index == 2:  # 社交
-            return 1.4  # 最易受社交影响
+            return factors.get("love", 1.4)
         elif dominant_index == 3:  # 尊重
-            return 1.1
+            return factors.get("esteem", 1.1)
         else:  # 认知
-            return 0.9  # 更理性，变化幅度小
+            return factors.get("cognitive", 0.9)
     
     def get_description(self) -> str:
         """获取人设描述"""
@@ -187,7 +204,8 @@ class NeedsHierarchy(BaseModel):
         fear_of_isolation: float,
         susceptibility: float,
         influence: float,
-        mapping_config: Optional[Dict[str, float]] = None
+        mapping_config: Optional[Dict[str, float]] = None,
+        seed: Optional[int] = None
     ) -> "NeedsHierarchy":
         """
         从 Agent 特征推断需求层次
@@ -204,6 +222,7 @@ class NeedsHierarchy(BaseModel):
                     "esteem_base": 0.35, "esteem_influence": 0.45,
                     "cognitive_base": 0.40, "physiological_base": 0.82
                 }
+            seed: 随机种子（issue #613: 可重现性），None则使用agent_id派生
 
         Returns:
             需求层次模型
@@ -213,9 +232,6 @@ class NeedsHierarchy(BaseModel):
             系数缺乏直接实证支撑，仅作为理论到模型的桥梁假设。
             可通过 mapping_config 参数覆盖默认系数以适配不同场景。
         """
-        import random
-        import time
-
         # 默认映射系数（可被 mapping_config 覆盖）
         cfg = {
             "safety_base": 0.55, "safety_susceptibility": -0.35,
@@ -226,14 +242,17 @@ class NeedsHierarchy(BaseModel):
         if mapping_config:
             cfg.update(mapping_config)
 
-        # 每个个体有独特的随机种子（agent_id + 时间戳微秒）
-        base_seed = int(time.time() * 1000) % 100000
-        seed = (agent_id * 10007 + base_seed) % (2**31)
-        rng = random.Random(seed)
+        # issue #613: 使用确定性种子替代time.time()
+        base_seed = seed if seed is not None else 42
+        derived_seed = (agent_id * 10007 + base_seed) % (2**31)
+        rng = random.Random(derived_seed)
 
-        # 个体差异化扰动
-        noise = rng.uniform(-0.15, 0.15)
-        cognitive_noise = rng.uniform(-0.25, 0.3)
+        # 个体差异化扰动（issue #617: 使用可配置噪声范围）
+        noise_range = cfg.get("noise_range", 0.15)
+        cognitive_noise_low = cfg.get("cognitive_noise_low", -0.25)
+        cognitive_noise_high = cfg.get("cognitive_noise_high", 0.3)
+        noise = rng.uniform(-noise_range, noise_range)
+        cognitive_noise = rng.uniform(cognitive_noise_low, cognitive_noise_high)
 
         # 反向映射：高恐惧/易感性 = 需求未满足 = 低满足度
         safety = max(0.15, min(0.9, cfg["safety_base"] + susceptibility * cfg["safety_susceptibility"] + noise))

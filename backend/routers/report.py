@@ -1,7 +1,9 @@
 """
 报告相关路由
 """
+import json
 import os
+import time
 import logging
 import platform
 import subprocess
@@ -208,39 +210,42 @@ async def list_reports(
     })
 
 
-@router.post("/generate")
+def _check_engine_ready(error_prefix: str = "") -> Optional[JSONResponse]:
+    """检查推演引擎是否就绪（issue #621: 消除重复代码）"""
+    prefix = error_prefix or "推演"
+    if state.engine is None:
+        return JSONResponse(
+            content={"success": False, "error": f"{prefix}引擎未初始化，请先运行推演"},
+            status_code=400
+        )
+    if not state.engine.use_llm:
+        return JSONResponse(
+            content={"success": False, "error": "智库专报仅支持LLM驱动模式"},
+            status_code=400
+        )
+    if not state.engine.history:
+        return JSONResponse(
+            content={"success": False, "error": "推演尚未运行，请先执行推演"},
+            status_code=400
+        )
+    if not state.engine.llm_population:
+        return JSONResponse(
+            content={"success": False, "error": "Agent群体未初始化"},
+            status_code=400
+        )
+    return None
+
+
+
 async def generate_intelligence_report_endpoint():
     """
     生成智库专报 (异步，耗时较长)
 
     调用 AnalystAgent 基于 LLM 生成专业的舆情分析报告
     """
-    import json
-    import time
-
-    if state.engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化，请先运行推演"},
-            status_code=400
-        )
-
-    if not state.engine.use_llm:
-        return JSONResponse(
-            content={"success": False, "error": "智库专报仅支持LLM驱动模式"},
-            status_code=400
-        )
-
-    if not state.engine.history:
-        return JSONResponse(
-            content={"success": False, "error": "推演尚未运行，请先执行推演"},
-            status_code=400
-        )
-
-    if not state.engine.llm_population:
-        return JSONResponse(
-            content={"success": False, "error": "Agent群体未初始化"},
-            status_code=400
-        )
+    err = _check_engine_ready()
+    if err:
+        return err
 
     try:
         # 生成智库专报
@@ -267,7 +272,7 @@ async def generate_intelligence_report_endpoint():
             "path": report_path.replace("\\", "/")
         })
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"智库专报生成失败: {e}")
         return JSONResponse(
             content={"success": False, "error": f"报告生成失败: {str(e)}"},
@@ -282,31 +287,9 @@ async def stream_intelligence_report():
 
     使用 Server-Sent Events 实时推送报告内容
     """
-    import json
-
-    if state.engine is None:
-        return JSONResponse(
-            content={"error": "推演引擎未初始化，请先运行推演"},
-            status_code=400
-        )
-
-    if not state.engine.use_llm:
-        return JSONResponse(
-            content={"error": "智库专报仅支持LLM驱动模式"},
-            status_code=400
-        )
-
-    if not state.engine.history:
-        return JSONResponse(
-            content={"error": "推演尚未运行，请先执行推演"},
-            status_code=400
-        )
-
-    if not state.engine.llm_population:
-        return JSONResponse(
-            content={"error": "Agent群体未初始化"},
-            status_code=400
-        )
+    err = _check_engine_ready()
+    if err:
+        return err
 
     async def event_generator():
         """SSE 事件生成器"""
@@ -328,7 +311,7 @@ async def stream_intelligence_report():
             # 发送结束信号
             yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"流式报告生成失败: {e}")
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 

@@ -49,30 +49,37 @@ class TPBResult(BaseModel):
 class TheoryOfPlannedBehavior(BaseModel):
     """
     计划行为理论模型
-    
+
     核心公式:
     行为意向 = w1*态度 + w2*主观规范 + w3*知觉行为控制
-    
+
     权重可调:
     - 默认: 态度 0.4, 主观规范 0.3, 知觉控制 0.3
     - 高从众 Agent: 主观规范权重提高
     - 高影响 Agent: 态度权重提高
-    
+
     应用于舆情:
     1. 态度 = 信息可信度 × 内容相关性 - 认知失调成本
     2. 主观规范 = 社交压力 × 从众倾向
     3. 知觉行为控制 = 媒介素养 × 信息处理能力
     """
-    
+
     # 权重配置
     attitude_weight: float = Field(0.4, ge=0.0, le=1.0)
     norm_weight: float = Field(0.3, ge=0.0, le=1.0)
     control_weight: float = Field(0.3, ge=0.0, le=1.0)
-    
+
     # 阈值配置
     share_threshold: float = Field(0.5, description="转发阈值")
     silence_threshold: float = Field(-0.5, description="沉默阈值")
     verify_threshold: float = Field(0.1, description="求证阈值")
+
+    # 行为判定阈值（issue #618: 参数化硬编码值）
+    attitude_share_threshold: float = Field(0.3, description="转发态度阈值")
+    control_share_threshold: float = Field(0.5, description="转发知觉控制阈值")
+    opinion_comment_threshold: float = Field(0.3, description="评论观点阈值")
+    control_verify_threshold: float = Field(0.6, description="求证知觉控制阈值")
+    norm_silence_threshold: float = Field(-0.3, description="沉默主观规范阈值")
     
     def compute_intention(
         self,
@@ -129,23 +136,23 @@ class TheoryOfPlannedBehavior(BaseModel):
         Returns:
             TPBResult 包含预测行为和置信度
         """
-        # 行为判定逻辑
+        # 行为判定逻辑（issue #618: 使用参数化阈值）
         if intention > self.share_threshold:
-            if attitude > 0.3 and perceived_control > 0.5:
+            if attitude > self.attitude_share_threshold and perceived_control > self.control_share_threshold:
                 predicted = BehaviorType.SHARE
-            elif abs(current_opinion) > 0.3:
+            elif abs(current_opinion) > self.opinion_comment_threshold:
                 predicted = BehaviorType.COMMENT
             else:
                 predicted = BehaviorType.OBSERVE
-        
+
         elif intention > self.verify_threshold:
-            if perceived_control > 0.6:
+            if perceived_control > self.control_verify_threshold:
                 predicted = BehaviorType.VERIFY
             else:
                 predicted = BehaviorType.OBSERVE
-        
+
         elif intention > self.silence_threshold:
-            if subjective_norm < -0.3:
+            if subjective_norm < self.norm_silence_threshold:
                 predicted = BehaviorType.SILENCE
             else:
                 predicted = BehaviorType.OBSERVE
