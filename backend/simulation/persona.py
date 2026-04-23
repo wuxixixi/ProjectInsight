@@ -53,7 +53,7 @@ def get_persona(
     Returns:
         人设字典 {type, desc}
     """
-    rng = np.random.RandomState(agent_id)
+    rng = np.random.default_rng(agent_id)
     influence = influence or 0.5
 
     # 计算属性向量

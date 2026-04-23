@@ -106,7 +106,7 @@ class SimulationEngine:
 
         # 随机种子和生成器 (issue #307)
         self.seed = seed if seed is not None else 42
-        self._rng = np.random.RandomState(self.seed)
+        self._rng = np.random.default_rng(self.seed)
         self.llm_config = llm_config or LLMConfig()
 
         # 增强版数学模型参数

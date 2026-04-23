@@ -19,6 +19,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/report", tags=["report"])
 
 
+def _get_reports_dir() -> str:
+    """获取报告目录的绝对路径"""
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+
+
+def _sort_reports(reports: list, sort: str, order: str) -> list:
+    """按指定字段和方向排序报告列表"""
+    reverse = (order == "desc")
+    if sort == "size":
+        return sorted(reports, key=lambda r: r["size"], reverse=reverse)
+    elif sort == "name":
+        return sorted(reports, key=lambda r: r["filename"], reverse=reverse)
+    else:  # modified
+        return sorted(reports, key=lambda r: r["modified"], reverse=reverse)
+
+
 @router.post("/open")
 async def open_report(data: dict):
     """使用系统默认应用打开报告文件"""
@@ -28,7 +44,7 @@ async def open_report(data: dict):
         return JSONResponse(content={"success": False, "error": f"报告文件不存在: {report_path}"}, status_code=404)
 
     # 安全检查：只允许打开 reports 目录下的文件，防止路径遍历
-    reports_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+    reports_dir = _get_reports_dir()
     abs_path = os.path.abspath(report_path)
     if not abs_path.startswith(reports_dir):
         return JSONResponse(content={"success": False, "error": "路径不合法"}, status_code=403)
@@ -55,7 +71,7 @@ async def open_report(data: dict):
 @router.get("/content")
 async def get_report_content(filename: str):
     """获取报告内容"""
-    reports_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+    reports_dir = _get_reports_dir()
     report_path = os.path.abspath(os.path.join(reports_dir, filename))
 
     # 安全检查：防止路径遍历
@@ -76,7 +92,7 @@ async def get_report_content(filename: str):
 @router.get("/download")
 async def download_report(filename: str):
     """下载报告文件"""
-    reports_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+    reports_dir = _get_reports_dir()
     report_path = os.path.abspath(os.path.join(reports_dir, filename))
 
     # 安全检查：防止路径遍历
@@ -115,8 +131,7 @@ async def list_reports(
         intelligence_reports: 智库专报列表
         counts: 各类型数量统计
     """
-    reports_dir = os.path.join(os.path.dirname(__file__), "..", "..", "reports")
-    reports_dir = os.path.abspath(reports_dir)
+    reports_dir = _get_reports_dir()
 
     if not os.path.exists(reports_dir):
         return JSONResponse(content={
@@ -176,19 +191,9 @@ async def list_reports(
         filtered_reports = all_reports
 
     # 排序
-    reverse = (order == "desc")
-    if sort == "size":
-        filtered_reports.sort(key=lambda r: r["size"], reverse=reverse)
-        simulation_reports.sort(key=lambda r: r["size"], reverse=reverse)
-        intelligence_reports.sort(key=lambda r: r["size"], reverse=reverse)
-    elif sort == "name":
-        filtered_reports.sort(key=lambda r: r["filename"], reverse=reverse)
-        simulation_reports.sort(key=lambda r: r["filename"], reverse=reverse)
-        intelligence_reports.sort(key=lambda r: r["filename"], reverse=reverse)
-    else:  # modified
-        filtered_reports.sort(key=lambda r: r["modified"], reverse=reverse)
-        simulation_reports.sort(key=lambda r: r["modified"], reverse=reverse)
-        intelligence_reports.sort(key=lambda r: r["modified"], reverse=reverse)
+    filtered_reports = _sort_reports(filtered_reports, sort, order)
+    simulation_reports = _sort_reports(simulation_reports, sort, order)
+    intelligence_reports = _sort_reports(intelligence_reports, sort, order)
 
     return JSONResponse(content={
         "reports": filtered_reports,
