@@ -94,23 +94,24 @@ class AlgorithmEnv(EnvBase):
     async def get_diversity_index(self, agent_id: int) -> float:
         """
         获取用户信息多样性指数
-        
+
         Args:
             agent_id: Agent ID
-        
+
         Returns:
             多样性指数 [0, 1]，越高越多样
         """
         history = self._exposure_history.get(agent_id, [])
         if len(history) < 2:
             return 1.0
-        
-        # 计算观点标准差
-        opinions = [h.get("content_alignment", 0) for h in history]
+
+        # 计算观点标准差（观点 ∈ [-1, 1]，最大方差 = 1）
+        opinions = [h.get("opinion", h.get("content_alignment", 0)) for h in history]
         avg = sum(opinions) / len(opinions)
         variance = sum((o - avg) ** 2 for o in opinions) / len(opinions)
-        diversity = min(1.0, variance * 5)  # 缩放到 [0, 1]
-        
+        # 观点范围 [-1, 1] 理论最大方差为 1，直接使用方差作为多样性指数
+        diversity = min(1.0, variance)
+
         return diversity
     
     @tool(readonly=True, kind="statistics")

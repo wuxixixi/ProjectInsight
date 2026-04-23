@@ -120,7 +120,7 @@ class LLMAgent:
         self.exposed_to_positive = False
 
         # 人设背景
-        self.persona = get_persona(agent_id, opinion, susceptibility)
+        self.persona = get_persona(agent_id, opinion, susceptibility, influence)
 
         # 决策历史
         self.decision_history: List[Dict] = []
