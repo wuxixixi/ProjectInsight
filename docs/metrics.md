@@ -16,7 +16,7 @@
 
 **计算公式**:
 ```
-negative_belief_rate = count(opinion < -0.2) / total_population
+negative_belief_rate = count(opinion < OPINION_THRESHOLD_NEGATIVE) / total_population
 ```
 
 **解读**:
@@ -36,7 +36,7 @@ negative_belief_rate = count(opinion < -0.2) / total_population
 
 **计算公式**:
 ```
-positive_belief_rate = count(opinion > 0.2) / total_population
+positive_belief_rate = count(opinion > OPINION_THRESHOLD_POSITIVE) / total_population
 ```
 
 **解读**:
@@ -337,9 +337,9 @@ Agent 的情绪状态，可能值：
 
 | 颜色 | 观点范围 | 含义 |
 |------|----------|------|
-| 红色 | opinion < -0.2 | 误信负面信念 |
-| 橙色 | -0.2 ≤ opinion ≤ 0.2 | 中立 |
-| 绿色 | opinion > 0.2 | 正确认知 |
+| 红色 | opinion < OPINION_THRESHOLD_NEGATIVE (-0.1) | 误信负面信念 |
+| 橙色 | OPINION_THRESHOLD_NEGATIVE (-0.1) ≤ opinion ≤ OPINION_THRESHOLD_POSITIVE (0.1) | 中立 |
+| 绿色 | opinion > OPINION_THRESHOLD_POSITIVE (0.1) | 正确认知 |
 
 ---
 
