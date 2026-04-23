@@ -17,13 +17,14 @@ def reset_global_state():
     from backend import state
 
     clear_agent_snapshots()
-    state.engine = None
-    state.prediction_model = None
-    state.pending_knowledge_graph = None
-    state.pending_event_content = None
-    state.pending_event_source = None
-    state.injection_in_progress = False
+    state.reset_state()
+
+    # 重置 LLM 客户端全局实例
+    import backend.llm.client
+    backend.llm.client._llm_client = None
+
     yield
+
     clear_agent_snapshots()
-    state.engine = None
-    state.prediction_model = None
+    state.reset_state()
+    backend.llm.client._llm_client = None

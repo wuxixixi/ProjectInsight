@@ -16,13 +16,7 @@ def client():
     return TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def reset_engine():
-    """每个测试前重置引擎"""
-    import backend.state
-    backend.state.engine = None
-    yield
-    backend.state.engine = None
+# 注意：全局状态重置由 tests/conftest.py 的 reset_global_state fixture 统一处理
 
 
 class TestWebSocketConnection:

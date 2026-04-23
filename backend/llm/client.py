@@ -390,7 +390,8 @@ class LLMClient:
                                     content = delta.get('content', '')
                                     if content:
                                         yield content
-                            except json.JSONDecodeError:
+                            except json.JSONDecodeError as e:
+                                logger.debug(f"SSE 数据解析失败: {data[:100]}... 错误: {e}")
                                 continue
 
             except asyncio.TimeoutError:
