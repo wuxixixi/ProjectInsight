@@ -15,16 +15,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["prediction"])
 
 
-def _get_current_state_dict() -> dict:
+def _get_current_state_dict() -> Optional[dict]:
     """从引擎获取当前状态字典（兼容新旧键名）"""
     engine = state.engine
+    if engine is None or engine.current_state is None:
+        return None
     return {
-        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
-        "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
+        "negative_belief_rate": engine.current_state.rumor_spread_rate,
+        "rumor_spread_rate": engine.current_state.rumor_spread_rate,
+        "correct_belief_rate": engine.current_state.truth_acceptance_rate,
+        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate,
+        "polarization_index": engine.current_state.polarization_index,
+        "silence_rate": engine.current_state.silence_rate
     }
 
 
@@ -60,6 +62,11 @@ async def get_prediction():
 
     # 获取当前状态
     current_state = _get_current_state_dict()
+    if current_state is None:
+        return JSONResponse(
+            content={"success": False, "error": "当前推演状态不可用"},
+            status_code=400
+        )
 
     # 执行预测
     prediction = state.prediction_model.predict(current_state)
@@ -100,6 +107,11 @@ async def get_risk_alerts():
 
     # 获取当前状态
     current_state = _get_current_state_dict()
+    if current_state is None:
+        return JSONResponse(
+            content={"success": False, "error": "当前推演状态不可用"},
+            status_code=400
+        )
 
     # 执行风险检查
     alerts = risk_engine.check(current_state, state.engine.history)

@@ -3,6 +3,7 @@
 将长篇新闻文本解析为结构化的实体关系图谱
 实现"解析-注入-推演"三段式管线的第一阶段
 """
+import asyncio
 import json
 import logging
 from typing import Dict, List, Any, Optional

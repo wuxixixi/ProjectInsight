@@ -29,7 +29,10 @@ class P2GBroadcaster:
         self,
         seed: int = 42,
         # 传播概率参数 (issue #321)
-        influence_coefficient: float = 0.7
+        influence_coefficient: float = 0.7,
+        # 影响力衰减参数 (issue #361)
+        decay_rate: float = 0.15,
+        max_distance: int = 3
     ):
         # 广播日志
         self._log: List[Message] = []
@@ -42,6 +45,10 @@ class P2GBroadcaster:
 
         # 传播概率参数
         self._influence_coeff = influence_coefficient
+
+        # 衰减参数
+        self._decay_rate = decay_rate
+        self._max_distance = max_distance
     
     def set_adjacency(self, adjacency: Dict[int, List[int]]):
         """设置网络邻接表"""
@@ -101,34 +108,44 @@ class P2GBroadcaster:
     async def receive_broadcast(
         self,
         message: Message,
-        receiver_id: int
+        receiver_id: int,
+        distance: int = 1
     ) -> bool:
         """
         接收广播消息
-        
+
         考虑传播概率和影响力衰减
-        
+
         Args:
             message: 广播消息
             receiver_id: 接收者 ID
-        
+            distance: 网络距离（跳数），默认为1表示直接邻居
+
         Returns:
             是否成功接收
         """
         if receiver_id not in message.receiver_ids:
             return False
-        
+
         # 基础传播概率
         base_prob = message.propagation_prob
-        
-        # 影响力衰减（简化：直接使用概率）
-        received = self._rng.random() < base_prob
-        
+
+        # 影响力随距离衰减 (issue #361)
+        # 使用指数衰减: decay_factor = exp(-decay_rate * (distance - 1))
+        if distance > 1:
+            import math
+            decay_factor = math.exp(-self._decay_rate * (distance - 1))
+            effective_prob = base_prob * decay_factor
+        else:
+            effective_prob = base_prob
+
+        received = self._rng.random() < effective_prob
+
         if received:
             message.status = MessageStatus.DELIVERED
         else:
             message.status = MessageStatus.FAILED
-        
+
         return received
     
     def get_broadcast_stats(self) -> Dict:

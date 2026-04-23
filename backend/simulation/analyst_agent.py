@@ -3,7 +3,7 @@
 AnalystAgent - 国家高端智库舆情分析专家
 """
 import asyncio
-import random
+import numpy as np
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import logging
@@ -212,11 +212,13 @@ class DataSampler:
                     "reasoning": snapshot.get('reasoning', '')
                 })
 
-        # 随机抽样
+        # 随机抽样（使用实例级 RNG 确保可重现性）
+        rng = np.random.default_rng(seed=42)
         def safe_sample(lst, count):
             if len(lst) <= count:
                 return lst
-            return random.sample(lst, count)
+            indices = rng.choice(len(lst), size=count, replace=False)
+            return [lst[i] for i in indices]
 
         return {
             "converted": safe_sample(converted_agents, n),
