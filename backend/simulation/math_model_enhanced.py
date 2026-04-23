@@ -27,7 +27,8 @@ class EnhancedMathParams:
     # 新增参数
     debunk_credibility: float = 0.7      # 辟谣来源可信度 [0, 1]
     authority_factor: float = 0.5        # 权威影响力系数 [0, 1]
-    backfire_strength: float = 0.3       # 逆火效应强度 [0, 1]
+    backfire_strength: float = 0.1       # 逆火效应强度 [0, 1]（实证研究建议 0.05-0.1）
+    backfire_threshold: float = 0.7      # 逆火效应触发阈值 [0, 1]（信念强度超过此值才可能逆火）
     silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
     polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
     echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
@@ -361,7 +362,7 @@ class EnhancedMathModel:
         individual_effect = effectiveness * (1 - belief_strength * 0.5) * (0.5 + susceptibility * 0.5)
 
         # 逆火效应检测
-        backfire_threshold = 0.7
+        backfire_threshold = self.params.backfire_threshold
         strong_belief_mask = mask & (belief_strength > backfire_threshold)
         weak_belief_mask = mask & ~strong_belief_mask
 

@@ -10,35 +10,12 @@ import json
 
 from ..llm.client import LLMClient, LLMConfig
 from .dual_network import DualLayerNetwork, MessageRouter
+from .persona import (
+    PERSONA_TEMPLATES, get_persona, AGENT_DECISION_SNAPSHOTS,
+    get_agent_snapshot, set_agent_snapshot, clear_agent_snapshots
+)
 
 logger = logging.getLogger(__name__)
-
-# 全局决策快照存储 (agent_id -> 上下文快照)
-AGENT_DECISION_SNAPSHOTS: Dict[int, Dict[str, Any]] = {}
-
-
-# 人设模板
-PERSONA_TEMPLATES = [
-    {"type": "低媒介素养", "desc": "对网络信息缺乏辨别能力，容易被情绪化内容影响"},
-    {"type": "理性分析型", "desc": "习惯多方求证，对信息持审慎态度"},
-    {"type": "易恐慌型", "desc": "对负面信息敏感，容易产生焦虑情绪"},
-    {"type": "从众型", "desc": "容易受周围人影响，倾向于跟随主流观点"},
-    {"type": "怀疑论者", "desc": "对官方信息持怀疑态度，不容易被说服"},
-    {"type": "意见领袖", "desc": "有较强影响力，观点容易影响他人"},
-    {"type": "信息茧房受害者", "desc": "长期接触单一观点信息，固守既有立场"},
-]
-
-
-def get_persona(agent_id: int, opinion: float, susceptibility: float) -> Dict:
-    """根据属性生成人设"""
-    rng = np.random.RandomState(agent_id)
-    if susceptibility > 0.5:
-        pool = [PERSONA_TEMPLATES[0], PERSONA_TEMPLATES[2], PERSONA_TEMPLATES[3]]
-    elif opinion < -0.3:
-        pool = [PERSONA_TEMPLATES[4], PERSONA_TEMPLATES[6]]
-    else:
-        pool = PERSONA_TEMPLATES
-    return rng.choice(pool)
 
 
 # ==================== 双模态 Prompt 模板 ====================
@@ -968,4 +945,4 @@ class LLMAgentPopulationDual:
 
 def get_agent_snapshot_global(agent_id: int) -> Optional[Dict]:
     """从全局存储获取 Agent 决策快照"""
-    return AGENT_DECISION_SNAPSHOTS.get(agent_id)
+    return get_agent_snapshot(agent_id)

@@ -532,105 +532,18 @@ class AnalystAgent:
         """
         生成智库专报
 
+        复用 generate_report_stream 的逻辑，收集所有片段后返回完整文本。
+
         Args:
             context: DataSampler.build_context() 返回的上下文
 
         Returns:
             Markdown 格式的报告文本
         """
-        if not self.llm_client:
-            raise RuntimeError("请使用 async with 上下文管理器")
-
-        # 格式化样本
-        converted_samples = self._format_agent_samples(
-            context['agents']['converted'],
-            "被辟谣转化"
-        )
-        stubborn_samples = self._format_agent_samples(
-            context['agents']['stubborn'],
-            "顽固坚持误信"
-        )
-        # 格式化极端变化样本（新增）
-        extreme_samples = self._format_extreme_samples(
-            context.get('extreme_changes', [])
-        )
-
-        # 提取参数
-        params = context['macro']['parameters']
-        initial = context['macro']['initial_state']
-        final = context['macro']['final_state']
-
-        # 提取并格式化事件信息
-        news_content = context['macro'].get('news_content', '未提供新闻事件内容')
-        events_summary = context['macro'].get('events_summary', news_content)  # 所有事件摘要
-        news_source = context['macro'].get('news_source', 'public')
-        news_source_label = "公共媒体（公域信息）" if news_source == "public" else "私密渠道（私域信息）"
-        knowledge_graph = context['macro'].get('knowledge_graph', {})
-        kg_formatted = self._format_knowledge_graph(knowledge_graph)
-
-        # 权威回应状态
-        response_released = context['macro'].get('response_released', False)
-        response_status = "已发布" if response_released else "未发布"
-
-        # 构建 Prompt
-        user_prompt = ANALYST_REPORT_TEMPLATE.format(
-            use_llm_mode="LLM驱动" if params['use_llm'] else "数学模型",
-            population_size=params['population_size'],
-            cocoon_strength=params['cocoon_strength'],
-            debunk_delay=params['debunk_delay'],
-            initial_rumor_spread=params['initial_rumor_spread'],
-            network_type=params['network_type'],
-            total_steps=params['total_steps'],
-            final_rumor_rate=final['rumor_spread_rate'],
-            initial_rumor_rate=initial['rumor_spread_rate'],
-            final_truth_rate=final['truth_acceptance_rate'],
-            initial_truth_rate=initial['truth_acceptance_rate'],
-            final_avg_opinion=final['avg_opinion'],
-            initial_avg_opinion=initial['avg_opinion'],
-            final_polarization=final['polarization_index'],
-            initial_polarization=initial['polarization_index'],
-            converted_samples=converted_samples,
-            stubborn_samples=stubborn_samples,
-            extreme_samples=extreme_samples,
-            news_content=events_summary,  # 使用所有事件摘要
-            news_source_label=news_source_label,
-            event_summary=kg_formatted['summary'],
-            event_keywords=kg_formatted['keywords'],
-            event_sentiment=kg_formatted['sentiment'],
-            event_credibility=kg_formatted['credibility'],
-            event_entities=kg_formatted['entities'],
-            event_relations=kg_formatted['relations'],
-            response_status=response_status
-        )
-
-        messages = [
-            {"role": "system", "content": ANALYST_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt}
-        ]
-
-        try:
-            # 调用 LLM，使用配置的温度参数加速生成
-            response = await self.llm_client.chat(
-                messages,
-                temperature=self.llm_config.temperature
-            )
-
-            content = response["choices"][0]["message"]["content"]
-
-            # 添加报告头部
-            header = f"""# 信息茧房推演智库专报
-
-> 生成时间: {context['generated_at']}
-> 分析工具: AI分析师智能体
-
----
-
-"""
-            return header + content
-
-        except Exception as e:
-            logger.error(f"分析师 Agent 报告生成失败: {e}")
-            raise
+        chunks = []
+        async for chunk in self.generate_report_stream(context):
+            chunks.append(chunk)
+        return "".join(chunks)
 
     async def generate_report_stream(self, context: Dict[str, Any]):
         """
