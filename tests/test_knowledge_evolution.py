@@ -307,8 +307,8 @@ class TestPersonaWeightsEffect:
         )
         
         # 意见领袖应该更容易受权威影响
-        # 注意：具体数值取决于配置，这里只验证有差异
-        assert inf_leader != inf_radical or True  # 可能因随机性相等
+        # 注意：具体数值取决于配置，验证返回值有效
+        assert isinstance(inf_leader, float) and isinstance(inf_radical, float)
     
     def test_rumor_susceptibility_difference(self):
         """测试谣言易感性差异"""
@@ -338,8 +338,8 @@ class TestPersonaWeightsEffect:
             cocoon_strength=0.5
         )
         
-        # 两种人设应该有不同的反应
-        assert inf_follower != inf_skeptic or True  # 可能因随机性相等
+        # 两种人设应该有不同的反应，验证返回值有效
+        assert isinstance(inf_follower, float) and isinstance(inf_skeptic, float)
 
 
 if __name__ == "__main__":

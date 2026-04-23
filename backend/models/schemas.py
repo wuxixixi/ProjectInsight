@@ -152,15 +152,16 @@ class SimulationParams(BaseModel):
                 data['init_distribution'] = dist
         return data
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # 同步兼容字段的默认值
+    @model_validator(mode='after')
+    def _sync_legacy_fields(self):
+        """同步兼容字段的默认值（替代 object.__setattr__ 反模式）"""
         if self.debunk_delay is None:
-            object.__setattr__(self, 'debunk_delay', self.response_delay)
+            self.debunk_delay = self.response_delay
         if self.initial_rumor_spread is None:
-            object.__setattr__(self, 'initial_rumor_spread', self.initial_negative_spread)
+            self.initial_rumor_spread = self.initial_negative_spread
         if self.debunk_credibility is None:
-            object.__setattr__(self, 'debunk_credibility', self.response_credibility)
+            self.debunk_credibility = self.response_credibility
+        return self
 
 
 class SimulationState(BaseModel):
