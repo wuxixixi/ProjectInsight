@@ -3,7 +3,7 @@
 模拟具有不同观点和社交网络的个体
 """
 import numpy as np
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import networkx as nx
 
 
@@ -79,6 +79,9 @@ class AgentPopulation:
         # 构建社交网络
         self.network = self._build_network(network_type)
 
+        # 缓存
+        self._agent_list_cache: Optional[List[Dict]] = None
+
     # --- 兼容别名：供外部接口和旧代码使用 ---
     @property
     def exposed_to_rumor(self) -> np.ndarray:
@@ -126,8 +129,15 @@ class AgentPopulation:
         """获取所有边"""
         return list(self.network.edges())
 
+    def invalidate_cache(self):
+        """清除缓存，在数据修改后调用"""
+        self._agent_list_cache = None
+
     def to_agent_list(self) -> List[Dict]:
-        """转换为可序列化的智能体列表"""
+        """转换为可序列化的智能体列表（带缓存）"""
+        if self._agent_list_cache is not None:
+            return self._agent_list_cache
+
         agents = []
         for i in range(self.size):
             agents.append({
@@ -142,6 +152,7 @@ class AgentPopulation:
                 "exposed_to_negative": bool(self.exposed_to_negative[i]),
                 "exposed_to_positive": bool(self.exposed_to_positive[i])
             })
+        self._agent_list_cache = agents
         return agents
 
     def get_opinion_histogram(self, bins: int = 20) -> Dict[str, List]:

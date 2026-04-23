@@ -14,13 +14,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import logging
-import sys
-import os
 
-# 添加父目录到路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from config.persona_config import get_persona_weights, PersonaWeights
+from ..config.persona_config import get_persona_weights, PersonaWeights
 
 logger = logging.getLogger(__name__)
 

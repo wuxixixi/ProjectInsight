@@ -36,10 +36,24 @@ app = FastAPI(
     version="3.0.0"
 )
 
-# 允许前端跨域访问
+# CORS 配置：支持环境变量配置允许的源
+# 生产环境应设置 CORS_ALLOWED_ORIGINS 环境变量，如 "https://example.com,https://api.example.com"
+# 开发环境默认允许 localhost
+_cors_origins_str = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if _cors_origins_str:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins_str.split(",") if origin.strip()]
+else:
+    # 开发环境默认值
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -364,6 +364,7 @@ class SimulationEngine:
                 agent.opinion = opinions[i]
         else:
             pop.opinions = opinions
+            pop.invalidate_cache()
 
         # 计算统计
         avg_shift = np.mean(np.abs(impact_values[affected_mask])) if np.any(affected_mask) else 0

@@ -12,31 +12,58 @@
           truth_acceptance_rate → positive_belief_rate（正确认知率）
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+import os
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
 
 
+def _get_env_int(key: str, default: int) -> int:
+    """从环境变量获取整数值"""
+    try:
+        return int(os.getenv(key, str(default)))
+    except ValueError:
+        return default
+
+
+def _get_env_float(key: str, default: float) -> float:
+    """从环境变量获取浮点值"""
+    try:
+        return float(os.getenv(key, str(default)))
+    except ValueError:
+        return default
+
+
+def _get_env_bool(key: str, default: bool) -> bool:
+    """从环境变量获取布尔值"""
+    val = os.getenv(key, "").lower()
+    if val in ("true", "1", "yes"):
+        return True
+    elif val in ("false", "0", "no"):
+        return False
+    return default
+
+
 @dataclass
 class PredictionConfig:
-    """预测模型配置"""
+    """预测模型配置（支持环境变量覆盖）"""
     # 蒙特卡洛模拟次数
-    n_simulations: int = 100
+    n_simulations: int = field(default_factory=lambda: _get_env_int("PREDICTION_N_SIMULATIONS", 100))
 
     # 预测步数（预测未来N步）
-    forecast_steps: int = 10
+    forecast_steps: int = field(default_factory=lambda: _get_env_int("PREDICTION_FORECAST_STEPS", 10))
 
     # 置信水平
-    confidence_level: float = 0.95
+    confidence_level: float = field(default_factory=lambda: _get_env_float("PREDICTION_CONFIDENCE_LEVEL", 0.95))
 
     # 是否启用自适应参数
-    adaptive: bool = True
+    adaptive: bool = field(default_factory=lambda: _get_env_bool("PREDICTION_ADAPTIVE", True))
 
     # 历史数据最小长度（少于此时不做预测）
-    min_history_length: int = 3
+    min_history_length: int = field(default_factory=lambda: _get_env_int("PREDICTION_MIN_HISTORY", 3))
 
 
 @dataclass
