@@ -255,3 +255,247 @@ input[type="range"]::-webkit-slider-thumb {
   width: 100%;
   height: 100%;
 }
+
+/* ==================== 响应式适配 (Issue #179) ==================== */
+
+/* 平板设备 (768px - 1024px) */
+@media screen and (max-width: 1024px) {
+  .control-panel {
+    width: 280px;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .kpi-cards {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .kpi-card {
+    padding: 12px;
+  }
+
+  .kpi-value {
+    font-size: 20px;
+  }
+
+  .charts-area {
+    gap: 12px;
+  }
+}
+
+/* 大手机设备 (480px - 768px) */
+@media screen and (max-width: 768px) {
+  #app {
+    flex-direction: column;
+  }
+
+  .control-panel {
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid rgba(100, 100, 150, 0.3);
+    padding: 12px;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .main-content {
+    height: 50vh;
+  }
+
+  .kpi-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .kpi-card {
+    padding: 8px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+  }
+
+  .kpi-value {
+    font-size: 18px;
+  }
+
+  .workflow-guide {
+    display: none;
+  }
+
+  .charts-area {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .control-section {
+    padding: 8px;
+  }
+
+  .section-label {
+    font-size: 12px;
+  }
+
+  .mode-toggle {
+    flex-wrap: wrap;
+  }
+
+  .mode-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  input[type="range"] {
+    height: 4px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+  }
+
+  .panel-footer-grouped {
+    flex-wrap: wrap;
+  }
+
+  .footer-group {
+    min-width: 45%;
+  }
+}
+
+/* 小手机设备 (< 480px) */
+@media screen and (max-width: 480px) {
+  .control-panel {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .panel-header h1 {
+    font-size: 16px;
+  }
+
+  .subtitle {
+    font-size: 11px;
+  }
+
+  .header-links {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .kpi-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .kpi-card {
+    padding: 6px;
+  }
+
+  .kpi-icon {
+    font-size: 16px;
+  }
+
+  .kpi-label {
+    font-size: 10px;
+  }
+
+  .kpi-value {
+    font-size: 16px;
+  }
+
+  .kpi-value small {
+    font-size: 9px;
+  }
+
+  .btn-start, .btn-reset, .btn-pause, .btn-stop {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .event-inject-section {
+    padding: 8px;
+  }
+
+  .footer-group {
+    min-width: 100%;
+  }
+
+  .param-item {
+    padding: 4px 0;
+  }
+
+  .param-label {
+    font-size: 12px;
+  }
+
+  .param-value {
+    font-size: 12px;
+  }
+
+  .param-desc, .param-hint {
+    font-size: 10px;
+  }
+}
+
+/* 触摸屏优化 */
+@media (hover: none) and (pointer: coarse) {
+  input[type="range"] {
+    height: 12px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .mode-btn {
+    padding: 12px 16px;
+  }
+
+  .btn-group {
+    padding: 12px;
+  }
+}
+
+/* 深色模式支持 (如果系统偏好) */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: linear-gradient(135deg, #0d0d1a 0%, #0f1629 100%);
+  }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+  .control-panel {
+    border-right-width: 2px;
+  }
+
+  .kpi-card {
+    border-width: 2px;
+  }
+
+  button {
+    border-width: 2px;
+  }
+}
+
+/* 减少动画 (无障碍) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
