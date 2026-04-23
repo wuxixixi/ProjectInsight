@@ -29,6 +29,33 @@ class RiskLevel(Enum):
 
 
 @dataclass
+class RiskThresholds:
+    """风险阈值配置（支持按场景定制）"""
+    # 误信率阈值
+    negative_critical: float = 0.75
+    negative_high: float = 0.55
+    # 极化指数阈值
+    polarization_critical: float = 0.8
+    polarization_high: float = 0.6
+    # 沉默率阈值
+    silence_high: float = 0.5
+    silence_medium: float = 0.3
+    # 真相接受率阈值
+    truth_low: float = 0.1
+    debunk_ineffective: float = 0.2
+    # 风险评分权重
+    weight_negative: float = 0.25
+    weight_deep_negative: float = 0.25
+    weight_polarization: float = 0.25
+    weight_silence: float = 0.15
+    weight_truth_deficit: float = 0.1
+    # 综合风险等级阈值
+    score_critical: float = 0.6
+    score_high: float = 0.4
+    score_medium: float = 0.25
+
+
+@dataclass
 class Alert:
     """预警信息"""
     level: RiskLevel
@@ -65,35 +92,36 @@ class RiskRule:
 
 class RiskAlertEngine:
     """风险预警引擎"""
-    
-    def __init__(self):
+
+    def __init__(self, thresholds: Optional[RiskThresholds] = None):
+        self.thresholds = thresholds or RiskThresholds()
         self.rules: List[RiskRule] = []
         self.alert_history: List[Alert] = []
         self._setup_default_rules()
     
     def _setup_default_rules(self):
         """设置默认风险规则"""
-        
-        # === 负面信念传播风险（阈值0标准下调整）===
-        # 阈值改为0后，negative_belief_rate 基于方向判定，数值会更高
+        t = self.thresholds  # 简化引用
+
+        # === 负面信念传播风险 ===
         self.rules.append(RiskRule(
             name="negative_critical",
             metric="negative_belief_rate",
-            condition=lambda x: x > 0.75,
+            condition=lambda x: x > t.negative_critical,
             level=RiskLevel.CRITICAL,
-            message_template="🚨 误信率已达 {value:.0%}，超过危险阈值75%！",
+            message_template=f"🚨 误信率已达 {{value:.0%}}，超过危险阈值{t.negative_critical:.0%}！",
             suggestion="建议立即发布权威回应，加强权威媒体正面引导",
-            threshold=0.75
+            threshold=t.negative_critical
         ))
 
         self.rules.append(RiskRule(
             name="negative_high",
             metric="negative_belief_rate",
-            condition=lambda x: 0.55 < x <= 0.75,
+            condition=lambda x: t.negative_high < x <= t.negative_critical,
             level=RiskLevel.HIGH,
-            message_template="⚠️ 误信率较高，已达 {value:.0%}",
+            message_template=f"⚠️ 误信率较高，已达 {{value:.0%}}",
             suggestion="建议尽快准备权威回应材料，选择合适时机发布",
-            threshold=0.55
+            threshold=t.negative_high
         ))
 
         self.rules.append(RiskRule(
@@ -105,58 +133,58 @@ class RiskAlertEngine:
             suggestion="密切监控舆情动态，做好干预准备",
             threshold=0.0
         ))
-        
+
         # === 极化风险 ===
         self.rules.append(RiskRule(
             name="polarization_critical",
             metric="polarization_index",
-            condition=lambda x: x > 0.8,
+            condition=lambda x: x > t.polarization_critical,
             level=RiskLevel.CRITICAL,
             message_template="🔥 社会极化严重！极化指数达 {value:.2f}，群体对立加剧",
             suggestion="建议平衡报道各方观点，避免激化矛盾",
-            threshold=0.8
+            threshold=t.polarization_critical
         ))
-        
+
         self.rules.append(RiskRule(
             name="polarization_high",
             metric="polarization_index",
-            condition=lambda x: 0.6 < x <= 0.8,
+            condition=lambda x: t.polarization_high < x <= t.polarization_critical,
             level=RiskLevel.HIGH,
             message_template="⚡ 社会分化明显，极化指数 {value:.2f}",
             suggestion="关注极端观点群体，引导理性讨论",
-            threshold=0.6
+            threshold=t.polarization_high
         ))
-        
+
         # === 沉默螺旋风险 ===
         self.rules.append(RiskRule(
             name="silence_high",
             metric="silence_rate",
-            condition=lambda x: x > 0.5,
+            condition=lambda x: x > t.silence_high,
             level=RiskLevel.HIGH,
             message_template="🤫 沉默的螺旋效应明显，{value:.0%} 用户选择沉默",
             suggestion="营造宽松讨论环境，鼓励多元观点表达",
-            threshold=0.5
+            threshold=t.silence_high
         ))
-        
+
         self.rules.append(RiskRule(
             name="silence_medium",
             metric="silence_rate",
-            condition=lambda x: 0.3 < x <= 0.5,
+            condition=lambda x: t.silence_medium < x <= t.silence_high,
             level=RiskLevel.MEDIUM,
             message_template="😶 沉默率偏高，达 {value:.0%}",
             suggestion="关注少数派观点，避免观点单一化",
-            threshold=0.3
+            threshold=t.silence_medium
         ))
-        
+
         # === 真相接受风险 ===
         self.rules.append(RiskRule(
             name="truth_low",
             metric="truth_acceptance_rate",
-            condition=lambda x: x < 0.1,
+            condition=lambda x: x < t.truth_low,
             level=RiskLevel.HIGH,
             message_template="📉 真相接受率过低，仅 {value:.0%}",
             suggestion="辟谣效果不佳，需调整辟谣策略或增强可信度",
-            threshold=0.1
+            threshold=t.truth_low
         ))
         
         # === 辟谣效果风险（辟谣后） ===
@@ -291,26 +319,24 @@ class RiskAlertEngine:
         polarization = current_state.get("polarization_index", 0)
         silence_rate = current_state.get("silence_rate", 0)
         truth_rate = current_state.get("truth_acceptance_rate", 0)
-        # 新增：深度误信率
         deep_negative_rate = current_state.get("deep_negative_rate", 0)
 
-        # 综合风险评分（阈值0标准下调整）
-        # negative_rate基于方向判定数值更高，降低其权重
-        # deep_negative_rate反映真正坚定的误信者，增加其权重
+        # 使用配置权重计算综合风险评分
+        t = self.thresholds
         risk_score = (
-            negative_rate * 0.25 +  # 方向性误信率（数值普遍较高）
-            deep_negative_rate * 0.25 +  # 深度误信率（新增）
-            polarization * 0.25 +
-            silence_rate * 0.15 +
-            (1 - truth_rate) * 0.1
+            negative_rate * t.weight_negative +
+            deep_negative_rate * t.weight_deep_negative +
+            polarization * t.weight_polarization +
+            silence_rate * t.weight_silence +
+            (1 - truth_rate) * t.weight_truth_deficit
         )
 
-        # 风险等级阈值调整
-        if risk_score > 0.6:
+        # 使用配置阈值判定风险等级
+        if risk_score > t.score_critical:
             overall_level = RiskLevel.CRITICAL
-        elif risk_score > 0.4:
+        elif risk_score > t.score_high:
             overall_level = RiskLevel.HIGH
-        elif risk_score > 0.25:
+        elif risk_score > t.score_medium:
             overall_level = RiskLevel.MEDIUM
         else:
             overall_level = RiskLevel.LOW

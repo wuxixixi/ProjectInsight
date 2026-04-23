@@ -260,15 +260,18 @@ class EngineV3Integration:
         # 2. 记录信息暴露
         if algorithm_content:
             from ..simulation.agent.belief_state import ExposureSource, ExposureEvent
+            # alignment: 内容与观点的吻合程度。算法推荐倾向推荐与用户观点一致的内容，
+            # 因此 alignment = 观点方向 * 茧房强度，体现信息茧房的"回音"效应
             belief.add_exposure(ExposureEvent(
                 step=self.context.step,
                 source=ExposureSource.ALGORITHM,
                 content=algorithm_content,
-                alignment=new_opinion * 0.5  # 茧房效应
+                alignment=new_opinion * 0.5
             ))
-        
+
         if truth_content:
             from ..simulation.agent.belief_state import ExposureSource, ExposureEvent
+            # alignment: 辟谣内容与真相的对齐程度，1.0 表示官方辟谣内容与事实完全一致
             belief.add_exposure(ExposureEvent(
                 step=self.context.step,
                 source=ExposureSource.TRUTH,
