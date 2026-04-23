@@ -31,6 +31,11 @@ def reset_global_state():
     from backend.simulation.risk_alert import reset_risk_engine
     reset_risk_engine()
 
+    # issue #1076: 重置 PersonAgent 类变量
+    from backend.simulation.agent.person_agent import PersonAgent
+    PersonAgent.opinion_max_change_factor = 0.3
+    PersonAgent.social_influence_coeff = 0.3
+
     yield
 
     clear_agent_snapshots()
@@ -38,3 +43,5 @@ def reset_global_state():
     backend.llm.client._llm_client = None
     reset_graph_parser()
     reset_risk_engine()
+    PersonAgent.opinion_max_change_factor = 0.3
+    PersonAgent.social_influence_coeff = 0.3

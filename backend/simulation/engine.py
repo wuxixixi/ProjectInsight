@@ -670,7 +670,7 @@ class SimulationEngine:
                     self.opinion_range_truth_low, self.opinion_range_truth_high)
             else:
                 r = self.opinion_range_neutral_radius
-                agent.opinion = np.random.uniform(-r, r)
+                agent.opinion = self._rng.uniform(-r, r)
 
     async def async_step(self) -> SimulationState:
         """

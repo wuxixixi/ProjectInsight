@@ -37,11 +37,11 @@ class DataSampler:
         initial_state = engine.history[0]
         final_state = engine.history[-1]
 
-        # 计算趋势
-        rumor_trend = [h['rumor_spread_rate'] for h in engine.history]
-        truth_trend = [h['truth_acceptance_rate'] for h in engine.history]
-        opinion_trend = [h['avg_opinion'] for h in engine.history]
-        polarization_trend = [h['polarization_index'] for h in engine.history]
+        # 计算趋势（issue #1048: 使用get()提供fallback）
+        rumor_trend = [h.get('negative_belief_rate', h.get('rumor_spread_rate', 0)) for h in engine.history]
+        truth_trend = [h.get('positive_belief_rate', h.get('truth_acceptance_rate', 0)) for h in engine.history]
+        opinion_trend = [h.get('avg_opinion', 0) for h in engine.history]
+        polarization_trend = [h.get('polarization_index', 0) for h in engine.history]
 
         # 兼容单层/双层引擎的网络类型字段
         network_type = getattr(engine, "network_type", None)
@@ -518,6 +518,8 @@ class AnalystAgent:
         # 关系列表
         relations = knowledge_graph.get('relations', [])
         if relations:
+            # issue #1049: 构建实体ID到名称的映射，避免O(n)线性扫描
+            entity_map = {e.get('id'): e.get('name', e.get('id')) for e in entities}
             relation_lines = []
             for r in relations[:self.max_display_relations]:
                 source = r.get('source', '')
@@ -525,9 +527,9 @@ class AnalystAgent:
                 action = r.get('action', '关联')
                 rtype = r.get('type', '')
                 desc = r.get('description', '')
-                # 找到源和目标实体名称
-                source_name = next((e['name'] for e in entities if e.get('id') == source), source)
-                target_name = next((e['name'] for e in entities if e.get('id') == target), target)
+                # 使用映射查找名称
+                source_name = entity_map.get(source, source)
+                target_name = entity_map.get(target, target)
                 relation_lines.append(f"- {source_name} → {action} → {target_name}（{rtype}）{desc}")
             relations_str = "\n".join(relation_lines)
         else:

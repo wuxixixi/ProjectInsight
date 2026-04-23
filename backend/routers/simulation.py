@@ -1,7 +1,6 @@
 """
 推演相关路由
 """
-import inspect
 import logging
 
 from fastapi import APIRouter
@@ -121,10 +120,7 @@ async def start_simulation(params: StartRequest):
 
         # 如果引擎支持设置新闻
         if hasattr(state.engine, 'set_news'):
-            if inspect.iscoroutinefunction(state.engine.set_news):
-                await state.engine.set_news(state.pending_event_content, state.pending_event_source or "public", parse_graph=False)
-            else:
-                state.engine.set_news(state.pending_event_content, state.pending_event_source or "public", parse_graph=False)
+            state.engine.set_news(state.pending_event_content, state.pending_event_source or "public", parse_graph=False)
 
         # 广播事件（触发事件冲击）
         target_scope = "all"

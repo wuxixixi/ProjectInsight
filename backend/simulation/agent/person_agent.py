@@ -318,7 +318,7 @@ class PersonAgent(AgentBase):
         """回退决策（数学模型）"""
         current = self.get_opinion()
         peer_opinions = observation.get("peer_opinions", [])
-        
+
         # 简单的社交影响模型
         if peer_opinions:
             avg_peer = sum(peer_opinions) / len(peer_opinions)
@@ -328,12 +328,16 @@ class PersonAgent(AgentBase):
             new_opinion = current + delta
         else:
             new_opinion = current
-        
+            delta = 0
+
+        # issue #1060: 基于孤立恐惧计算沉默概率
+        is_silent = self.profile.fear_of_isolation > 0.6 and abs(delta) > 0.1
+
         return {
             "new_opinion": new_opinion,
-            "is_silent": False,
+            "is_silent": is_silent,
             "reasoning": "LLM 回退到数学模型",
-            "action": "观望"
+            "action": "沉默" if is_silent else "观望"
         }
     
     async def act(self, decision: Dict[str, Any]) -> Dict[str, Any]:
@@ -377,8 +381,9 @@ class PersonAgent(AgentBase):
     
     def close(self):
         """关闭资源"""
+        self.memory.close()
         if self._owns_llm_client and self._llm_client is not None:
-            self.memory.close()
+            self._llm_client = None
 
 
 def create_person_agent(

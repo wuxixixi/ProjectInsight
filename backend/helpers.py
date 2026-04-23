@@ -31,7 +31,7 @@ class StartRequest(BaseModel):
 
     # LLM并发参数（留空则自动计算）
     max_concurrent: Optional[int] = None  # None 表示根据 population_size 自动计算
-    connection_pool_size: int = 600
+    connection_pool_size: int = 100  # issue #1071: 与LLMConfig默认值一致，避免文件描述符耗尽
     timeout: int = 60
     max_retries: int = 5
 

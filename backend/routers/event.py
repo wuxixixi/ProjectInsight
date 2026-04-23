@@ -1,7 +1,6 @@
 """
 事件注入路由
 """
-import inspect
 import logging
 from datetime import datetime, timezone
 
@@ -158,10 +157,7 @@ async def airdrop_event(req: AirdropRequest):
 
         # 更新引擎的新闻和图谱
         if hasattr(state.engine, 'set_news'):
-            if inspect.iscoroutinefunction(state.engine.set_news):
-                await state.engine.set_news(req.content, req.source, parse_graph=False)
-            else:
-                state.engine.set_news(req.content, req.source, parse_graph=False)
+            state.engine.set_news(req.content, req.source, parse_graph=False)
 
         # 更新引擎的知识图谱（融合模式）
         entities = knowledge_graph.get('entities', [])

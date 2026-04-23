@@ -8,10 +8,15 @@ BeliefState - 结构化信念状态模型
 - cognitive_closed_need: 认知闭合需求 [0, 1]
 - exposure_history: 信息暴露历史
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from enum import Enum
+
+
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC datetime for use as default_factory"""
+    return datetime.now(timezone.utc)
 
 
 class ExposureSource(str, Enum):
@@ -24,7 +29,11 @@ class ExposureSource(str, Enum):
 
 class ExposureEvent(BaseModel):
     """信息暴露事件 - 记录 Agent 接收到的信息"""
-    timestamp: datetime = Field(default_factory=datetime.now)
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )
+
+    timestamp: datetime = Field(default_factory=_utcnow)
     step: int = 0
     source: ExposureSource
     content: str
@@ -32,11 +41,6 @@ class ExposureEvent(BaseModel):
     trust_delta: float = Field(0.0, description="观点变化量")
     sender_id: Optional[int] = None
     credibility: float = Field(0.5, ge=0.0, le=1.0, description="信息可信度")
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
 
 
 class BeliefState(BaseModel):
@@ -105,20 +109,19 @@ class BeliefState(BaseModel):
 
     # 元数据
     last_updated: Optional[datetime] = Field(
-        default_factory=datetime.now,
+        default_factory=_utcnow,
         description="最后更新时间"
     )
-    
+
     # 推理轨迹 (LLM 模式下记录)
     reasoning_trace: Optional[str] = Field(
         None,
         description="最近的推理过程"
     )
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat() if v else None}
+    )
     
     def to_opinion(self) -> float:
         """
