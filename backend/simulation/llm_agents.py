@@ -112,13 +112,15 @@ class LLMAgent:
         opinion: float,
         belief_strength: float,
         influence: float,
-        susceptibility: float
+        susceptibility: float,
+        belief_reduction_on_authority: float = 0.1
     ):
         self.id = agent_id
         self.opinion = opinion
         self.belief_strength = belief_strength
         self.influence = influence
         self.susceptibility = susceptibility
+        self.belief_reduction_on_authority = belief_reduction_on_authority
         self.exposed_to_negative = opinion < 0
         self.exposed_to_positive = False
 
@@ -479,8 +481,7 @@ class LLMAgent:
                         change = new_opinion - self.opinion
 
                     # 权威回应/反转后，降低信念强度（因为行动与原观点不一致）
-                    belief_reduction = 0.1
-                    self.belief_strength = max(0.1, self.belief_strength - belief_reduction)
+                    self.belief_strength = max(0.1, self.belief_strength - self.belief_reduction_on_authority)
                 else:
                     # 普通情况：严格限制观点变化幅度
                     if abs_change > max_change:
@@ -602,7 +603,8 @@ class LLMAgentPopulation:
         initial_negative_spread: float = 0.3,
         initial_rumor_spread: float = None,  # 兼容旧参数名
         network_type: str = "small_world",
-        llm_config: Optional[LLMConfig] = None
+        llm_config: Optional[LLMConfig] = None,
+        belief_reduction_on_authority: float = 0.1
     ):
         # 兼容旧参数名
         if initial_rumor_spread is not None:
@@ -635,7 +637,8 @@ class LLMAgentPopulation:
                 opinion=opinions[i],
                 belief_strength=belief_strengths[i],
                 influence=influences[i],
-                susceptibility=susceptibilities[i]
+                susceptibility=susceptibilities[i],
+                belief_reduction_on_authority=belief_reduction_on_authority
             )
             for i in range(size)
         ]
