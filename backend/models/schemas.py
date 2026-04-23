@@ -8,7 +8,7 @@
 
 向后兼容：旧字段名通过 model_validator 自动映射到新字段名
 """
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Optional
 from enum import Enum
 import numpy as np
@@ -23,10 +23,10 @@ class SimulationMode(Enum):
 class Agent(BaseModel):
     """个体智能体"""
     id: int
-    opinion: float           # 对新闻内容的接受程度 [-1, 1], -1=完全拒绝, 1=完全相信
-    belief_strength: float   # 信念强度 [0, 1]
-    influence: float         # 影响力
-    susceptibility: float    # 易感性
+    opinion: float = Field(ge=-1.0, le=1.0, description="对新闻内容的接受程度 [-1, 1]")
+    belief_strength: float = Field(ge=0.0, le=1.0, description="信念强度 [0, 1]")
+    influence: float = Field(ge=0.0, le=1.0, description="影响力")
+    susceptibility: float = Field(ge=0.0, le=1.0, description="易感性")
     # 接触状态（新字段名优先，旧字段名兼容）
     exposed_to_negative: bool = False   # 是否接触过负面信息
     exposed_to_positive: bool = False   # 是否接触过正面信息

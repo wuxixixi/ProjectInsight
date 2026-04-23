@@ -175,9 +175,10 @@ class DataSampler:
                 # 顽固：持续拒绝（op持续负）且信念坚定
                 is_stubborn = old_op < 0 and new_op < 0 and agent.belief_strength > 0.5
             else:
-                # 不确定：保守估计，保持原有逻辑
-                is_converted = old_op < 0 and new_op >= 0
-                is_stubborn = old_op < 0 and new_op < 0 and agent.belief_strength > 0.5
+                # 不确定：无法明确判定误信/正确认知方向，
+                # 使用观点变化幅度替代方向性判断（issue #861）
+                is_converted = False
+                is_stubborn = False
 
             # 转化样本
             if is_converted:
@@ -398,7 +399,9 @@ class AnalystAgent:
         self,
         llm_config: Optional[LLMConfig] = None,
         temperature: float = 0.5,
-        max_tokens: int = 2000
+        max_tokens: int = 2000,
+        max_display_entities: int = 10,
+        max_display_relations: int = 15
     ):
         if llm_config is None:
             llm_config = LLMConfig()
@@ -407,6 +410,8 @@ class AnalystAgent:
             llm_config.temperature = temperature
         self.llm_config = llm_config
         self.llm_client: Optional[LLMClient] = None
+        self.max_display_entities = max_display_entities
+        self.max_display_relations = max_display_relations
 
     async def __aenter__(self):
         self.llm_client = LLMClient(self.llm_config)
@@ -494,11 +499,13 @@ class AnalystAgent:
         # 可信度
         credibility = knowledge_graph.get('credibility_hint', '未知')
 
-        # 实体列表
+        # 实体列表（按重要度排序后截取，issue #862）
         entities = knowledge_graph.get('entities', [])
         if entities:
+            # 按重要度降序排列，确保重要实体不被截断
+            sorted_entities = sorted(entities, key=lambda e: e.get('importance', 3), reverse=True)
             entity_lines = []
-            for e in entities[:10]:  # 最多显示10个
+            for e in sorted_entities[:self.max_display_entities]:
                 name = e.get('name', '未知')
                 etype = e.get('type', '未知')
                 desc = e.get('description', '')
@@ -512,7 +519,7 @@ class AnalystAgent:
         relations = knowledge_graph.get('relations', [])
         if relations:
             relation_lines = []
-            for r in relations[:15]:  # 最多显示15个
+            for r in relations[:self.max_display_relations]:
                 source = r.get('source', '')
                 target = r.get('target', '')
                 action = r.get('action', '关联')

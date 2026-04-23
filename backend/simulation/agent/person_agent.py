@@ -9,6 +9,7 @@ PersonAgent - LLM 驱动的智能体实现
 import asyncio
 import json
 import logging
+import random
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
@@ -86,23 +87,25 @@ class PersonAgent(AgentBase):
     - Skill Pipeline (懒加载)
     """
     
+    # 观点变化约束因子（issue #837: 参数化硬编码值）
+    opinion_max_change_factor: float = 0.3
+
     def __init__(
         self,
         profile: AgentProfile,
         initial_belief: Optional[BeliefState] = None,
-        llm_config: Optional[LLMConfig] = None
+        llm_config: Optional[LLMConfig] = None,
+        shared_llm_client: Optional[LLMClient] = None
     ):
         super().__init__(profile, initial_belief)
-        
-        # LLM 客户端
+
+        # LLM 客户端（优先使用共享实例，避免资源浪费，issue #839）
         self.llm_config = llm_config or LLMConfig()
-        self._llm_client: Optional[LLMClient] = None
-        
-        # 技能管道
-        self._skills_loaded = False
+        self._llm_client = shared_llm_client
+        self._owns_llm_client = shared_llm_client is None
     
     async def _get_llm_client(self) -> LLMClient:
-        """获取 LLM 客户端（懒加载）"""
+        """获取 LLM 客户端（懒加载，仅在未共享时创建新实例）"""
         if self._llm_client is None:
             self._llm_client = LLMClient(self.llm_config)
         return self._llm_client
@@ -110,10 +113,7 @@ class PersonAgent(AgentBase):
     async def step(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """LLM 驱动的推演步骤"""
         self.step_count = context.get("step", self.step_count + 1)
-        
-        # 加载技能（懒加载）
-        await self._ensure_skills_loaded()
-        
+
         # 执行技能管道
         observation = await self.observe(context)
         decision = await self.decide(observation)
@@ -123,11 +123,6 @@ class PersonAgent(AgentBase):
         self.memory.flush_cognition(self.step_count)
         
         return result
-    
-    async def _ensure_skills_loaded(self):
-        """确保技能已加载（懒加载）"""
-        if not self._skills_loaded:
-            self._skills_loaded = True
     
     async def observe(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """感知环境"""
@@ -245,9 +240,9 @@ class PersonAgent(AgentBase):
         recent_memory = self._format_recent_memory()
         
         # 最大变化
-        max_change = 0.3 * (1 - self.belief_state.belief_strength)
+        max_change = self.opinion_max_change_factor * (1 - self.belief_state.belief_strength)
         max_change_silent = max_change * 0.5
-        
+
         return PERSON_AGENT_PROMPT.format(
             opinion=self.get_opinion(),
             rumor_trust=self.belief_state.rumor_trust,
@@ -306,7 +301,7 @@ class PersonAgent(AgentBase):
             decision["new_opinion"] = max(-1.0, min(1.0, decision["new_opinion"]))
 
             # 应用变化限制
-            max_change = 0.3 * (1 - self.belief_state.belief_strength)
+            max_change = self.opinion_max_change_factor * (1 - self.belief_state.belief_strength)
             delta = decision["new_opinion"] - self.get_opinion()
             if abs(delta) > max_change:
                 decision["new_opinion"] = self.get_opinion() + (max_change if delta > 0 else -max_change)
@@ -325,8 +320,8 @@ class PersonAgent(AgentBase):
         # 简单的社交影响模型
         if peer_opinions:
             avg_peer = sum(peer_opinions) / len(peer_opinions)
-            delta = (avg_peer - current) * self.profile.susceptibility * 0.3
-            max_change = 0.3 * (1 - self.belief_state.belief_strength)
+            delta = (avg_peer - current) * self.profile.susceptibility * self.opinion_max_change_factor
+            max_change = self.opinion_max_change_factor * (1 - self.belief_state.belief_strength)
             delta = max(-max_change, min(max_change, delta))
             new_opinion = current + delta
         else:
@@ -380,7 +375,8 @@ class PersonAgent(AgentBase):
     
     def close(self):
         """关闭资源"""
-        self.memory.close()
+        if self._owns_llm_client and self._llm_client is not None:
+            self.memory.close()
 
 
 def create_person_agent(
@@ -391,15 +387,17 @@ def create_person_agent(
     influence: float,
     fear_of_isolation: float,
     persona_type: str = None,
-    llm_config: LLMConfig = None
+    llm_config: LLMConfig = None,
+    shared_llm_client: Optional[LLMClient] = None,
+    seed: Optional[int] = None
 ) -> PersonAgent:
     """
     工厂函数: 创建 PersonAgent
-    
+
     兼容旧版参数接口
     """
-    # 选择人设
-    import random
+    # 选择人设（issue #836: 使用确定性 RNG）
+    rng = random.Random(seed if seed is not None else agent_id * 10007)
     if persona_type is None:
         if susceptibility > 0.5:
             pool = [PERSONA_TEMPLATES[0], PERSONA_TEMPLATES[2], PERSONA_TEMPLATES[3]]
@@ -407,7 +405,7 @@ def create_person_agent(
             pool = [PERSONA_TEMPLATES[4], PERSONA_TEMPLATES[6]]
         else:
             pool = PERSONA_TEMPLATES
-        template = random.choice(pool)
+        template = rng.choice(pool)
         persona_type = template["type"]
         persona_desc = template["desc"]
     else:
@@ -424,7 +422,7 @@ def create_person_agent(
         susceptibility=susceptibility,
         influence=influence,
         fear_of_isolation=fear_of_isolation,
-        cognitive_closed_need=random.uniform(0.3, 0.7)
+        cognitive_closed_need=rng.uniform(0.3, 0.7)
     )
     
     # 创建初始信念
@@ -436,5 +434,6 @@ def create_person_agent(
     return PersonAgent(
         profile=profile,
         initial_belief=initial_belief,
-        llm_config=llm_config
+        llm_config=llm_config,
+        shared_llm_client=shared_llm_client
     )
