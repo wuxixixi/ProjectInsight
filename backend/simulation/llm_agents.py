@@ -32,14 +32,14 @@ PERSONA_TEMPLATES = [
 
 def get_persona(agent_id: int, opinion: float, susceptibility: float) -> Dict:
     """根据属性生成人设"""
-    np.random.seed(agent_id)  # 确保同一agent每次生成相同人设
+    rng = np.random.RandomState(agent_id)
     if susceptibility > 0.5:
         pool = [PERSONA_TEMPLATES[0], PERSONA_TEMPLATES[2], PERSONA_TEMPLATES[3]]
     elif opinion < -0.3:
         pool = [PERSONA_TEMPLATES[4], PERSONA_TEMPLATES[6]]
     else:
         pool = PERSONA_TEMPLATES
-    return np.random.choice(pool)
+    return rng.choice(pool)
 
 
 # Agent 决策 Prompt 模板 (含沉默的螺旋、观点变化限制、知识图谱注意力过滤)
@@ -155,9 +155,9 @@ class LLMAgent:
         self.last_decision_snapshot: Optional[Dict] = None
 
         # === 沉默的螺旋：新增属性 ===
-        np.random.seed(agent_id + 1000)  # 使用不同种子确保独立性
-        self.fear_of_isolation = float(np.random.beta(2, 2))  # 孤立恐惧感 [0, 1]
-        self.conviction = float(np.random.beta(2, 2))  # 初始信念强度 [0, 1]
+        _rng = np.random.RandomState(agent_id + 1000)
+        self.fear_of_isolation = float(_rng.beta(2, 2))  # 孤立恐惧感 [0, 1]
+        self.conviction = float(_rng.beta(2, 2))  # 初始信念强度 [0, 1]
         self.is_silent = False  # 是否选择沉默
         self.perceived_climate: Optional[Dict] = None  # 感知到的舆论气候
 

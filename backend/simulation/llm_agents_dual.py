@@ -31,14 +31,14 @@ PERSONA_TEMPLATES = [
 
 def get_persona(agent_id: int, opinion: float, susceptibility: float) -> Dict:
     """根据属性生成人设"""
-    np.random.seed(agent_id)
+    rng = np.random.RandomState(agent_id)
     if susceptibility > 0.5:
         pool = [PERSONA_TEMPLATES[0], PERSONA_TEMPLATES[2], PERSONA_TEMPLATES[3]]
     elif opinion < -0.3:
         pool = [PERSONA_TEMPLATES[4], PERSONA_TEMPLATES[6]]
     else:
         pool = PERSONA_TEMPLATES
-    return np.random.choice(pool)
+    return rng.choice(pool)
 
 
 # ==================== 双模态 Prompt 模板 ====================
@@ -149,9 +149,9 @@ class LLMAgent:
         self.last_decision_snapshot: Optional[Dict] = None
 
         # === 沉默的螺旋属性 ===
-        np.random.seed(agent_id + 1000)
-        self.fear_of_isolation = float(np.random.beta(2, 2))
-        self.conviction = float(np.random.beta(2, 2))
+        _rng = np.random.RandomState(agent_id + 1000)
+        self.fear_of_isolation = float(_rng.beta(2, 2))
+        self.conviction = float(_rng.beta(2, 2))
         self.is_silent = False
         self.perceived_climate: Optional[Dict] = None
 
