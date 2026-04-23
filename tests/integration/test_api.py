@@ -18,10 +18,10 @@ def client():
 @pytest.fixture(autouse=True)
 def reset_engine():
     """每个测试前重置引擎"""
-    import backend.app
-    backend.app.engine = None
+    import backend.state
+    backend.state.engine = None
     yield
-    backend.app.engine = None
+    backend.state.engine = None
 
 
 class TestRootEndpoint:
@@ -85,12 +85,12 @@ class TestSimulationStart:
 
     def test_start_initializes_engine(self, client):
         """测试启动初始化引擎"""
-        import backend.app
+        import backend.state
 
         client.post("/api/simulation/start", json={"use_llm": False})
 
-        assert backend.app.engine is not None
-        assert backend.app.engine.use_llm is False
+        assert backend.state.engine is not None
+        assert backend.state.engine.use_llm is False
 
 
 class TestSimulationStep:

@@ -4,29 +4,24 @@ Ascend 环境运行提示:
   1. conda activate info-cocoon  # 激活环境
   2. uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Path
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, List, Any
-from datetime import datetime
 import asyncio
 import json
-import os
-import subprocess
-import platform
 import logging
+import os
+from typing import Optional
 
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
+from . import state
+from .helpers import calculate_max_concurrent, _state_to_dict
+from .routers import simulation as sim_router
+from .routers import report as report_router
+from .routers import event as event_router
+from .routers import prediction as pred_router
+from .llm.client import LLMConfig
 from .simulation.engine import SimulationEngine
 from .simulation.engine_dual import SimulationEngineDual
-from .simulation.agents import AgentPopulation
-from .simulation.llm_agents import get_agent_snapshot_global
-from .simulation.llm_agents_dual import get_agent_snapshot_global as get_agent_snapshot_global_dual
-from .simulation.analyst_agent import generate_intelligence_report, AnalystAgent, DataSampler
-from .simulation.prediction import PredictionModel, PredictionConfig
-from .simulation.risk_alert import get_risk_engine, RiskLevel
-from .models.schemas import SimulationParams, SimulationState
-from .llm.client import LLMConfig
 
 # 配置日志
 logging.basicConfig(
@@ -50,256 +45,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 全局模拟引擎实例
-engine: Optional[SimulationEngine] = None
-
-# 待注入的事件/知识图谱（推演开始前可预先准备）
-pending_knowledge_graph: Optional[dict] = None
-pending_event_content: Optional[str] = None
-pending_event_source: Optional[str] = None
-
-# 事件注入进行中标志（推演时检查，暂停推演）
-injection_in_progress: bool = False
-
-# 预测模型和风险引擎
-prediction_model: Optional[PredictionModel] = None
-
-
-class StartRequest(BaseModel):
-    """推演启动请求参数"""
-    # 推演模式
-    mode: str = "sandbox"  # sandbox(沙盘) / news(新闻)
-    
-    # 基础参数
-    cocoon_strength: float = 0.5
-    debunk_delay: int = 10                              # 兼容旧参数名
-    response_delay: Optional[int] = None                # 权威回应延迟（新参数名，优先于 debunk_delay）
-    population_size: int = 200
-    initial_rumor_spread: float = 0.3                   # 兼容旧参数名
-    initial_negative_spread: Optional[float] = None    # 初始负面信念传播率（新参数名，优先）
-    network_type: str = "small_world"
-    use_llm: bool = True
-
-    # LLM并发参数（留空则自动计算）
-    max_concurrent: Optional[int] = None  # None 表示根据 population_size 自动计算
-    connection_pool_size: int = 600
-    timeout: int = 60
-    max_retries: int = 5
-
-    # 双层网络参数
-    use_dual_network: bool = True     # 是否使用双层网络模式
-    num_communities: int = 8          # 私域社群数量
-    public_m: int = 3                 # 公域网络 BA 模型参数
-
-    # 增强版数学模型参数
-    debunk_credibility: float = 0.7       # 兼容旧参数名
-    response_credibility: Optional[float] = None  # 权威回应来源可信度（新参数名，优先） [0, 1]
-    authority_factor: float = 0.5        # 权威影响力系数 [0, 1]
-    backfire_strength: float = 0.3       # 逆火效应强度 [0, 1]
-    silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
-    polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
-    echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
-
-    # Phase 3: 新闻模式专用参数
-    init_distribution: Optional[Dict[str, float]] = None
-    """真实分布锚定，格式:
-    {
-        "believe_rumor": 0.25,  # 初始误信比例
-        "believe_truth": 0.15,  # 初始正确认知比例
-        "neutral": 0.60         # 中立比例
-    }
-    """
-    time_acceleration: float = 1.0  # 时间加速比
-
-
-class ParseRequest(BaseModel):
-    """知识图谱解析请求参数"""
-    content: str  # 新闻文本内容
-
-
-class AirdropRequest(BaseModel):
-    """事件注入请求参数"""
-    content: str  # 事件文本内容
-    source: str = "public"  # 来源 (public/private)
-    skip_parse: bool = False  # 跳过知识图谱解析（快速注入模式）
-    credibility: str = "不确定"  # 新闻可信度 (高可信/低可信/不确定)
-
-
-def _is_local_llm_runtime(llm_config: LLMConfig) -> bool:
-    """根据 LLM 配置判断是否本地推理环境（如 Ollama）。"""
-    base_url = (llm_config.base_url or "").lower()
-    local_hosts = ("localhost", "127.0.0.1", "::1")
-    return any(host in base_url for host in local_hosts) or "11434" in base_url
-
-
-def _infer_ollama_model_size_b(model_name: str) -> int:
-    """
-    从模型名推断参数规模（如 gemma4:31b -> 31）。
-    解析失败返回 0。
-    """
-    if not model_name:
-        return 0
-    model_name = model_name.lower()
-    if "b" not in model_name or ":" not in model_name:
-        return 0
-    try:
-        suffix = model_name.split(":")[-1]
-        if suffix.endswith("b"):
-            return int(suffix[:-1])
-    except ValueError:
-        return 0
-    return 0
-
-
-def calculate_max_concurrent(population_size: int) -> int:
-    """
-    根据 Agent 数量自动计算合理的并发数
-
-    默认 auto 策略会按运行环境自适应：
-    - local: 本地推理（如 Ollama），更保守，避免超时重试风暴
-    - remote: 远程推理服务，允许更高并发
-
-    可通过环境变量覆盖：
-    - LLM_CONCURRENCY_PROFILE=local|remote|auto
-    """
-    profile = os.getenv("LLM_CONCURRENCY_PROFILE", "auto").strip().lower()
-    llm_config = LLMConfig()
-    is_local = _is_local_llm_runtime(llm_config)
-    model_size_b = _infer_ollama_model_size_b(llm_config.model)
-
-    if profile == "local" or (profile == "auto" and is_local):
-        # 本地推理：默认保守；超大模型（>=20B）更保守
-        max_cap = 16 if model_size_b >= 20 else 20
-        return max(4, min(int(population_size * 0.2), max_cap))
-
-    # remote / auto(remote)
-    return max(10, min(int(population_size * 0.5), 100))
-
-
-def _build_perceived_climate_summary(agent_id: int) -> dict:
-    """
-    统一构建 Agent 邻居舆论气候（兼容单层/双层网络）。
-    返回前端透视面板所需的扁平字段。
-    """
-    global engine
-
-    default_climate = {
-        "total": 0,
-        "pro_rumor_ratio": 0.0,
-        "pro_truth_ratio": 0.0,
-        "neutral_ratio": 1.0,
-        "silent_ratio": 0.0,
-        "avg_opinion": 0.0
-    }
-
-    if engine is None or not getattr(engine, "use_llm", False) or not getattr(engine, "llm_population", None):
-        return default_climate
-
-    population = engine.llm_population
-    if agent_id < 0 or agent_id >= len(population.agents):
-        return default_climate
-
-    try:
-        # 双层网络模式：合并公域+私域邻居去重后统计
-        if hasattr(population, "get_public_neighbor_agents") and hasattr(population, "get_private_neighbor_agents"):
-            public_neighbors = population.get_public_neighbor_agents(agent_id)
-            private_neighbors = population.get_private_neighbor_agents(agent_id)
-            neighbor_map = {n.id: n for n in (public_neighbors + private_neighbors)}
-            neighbors = list(neighbor_map.values())
-        # 单层网络模式
-        elif hasattr(population, "get_neighbor_agents"):
-            neighbors = population.get_neighbor_agents(agent_id)
-        else:
-            neighbors = []
-    except Exception:
-        neighbors = []
-
-    if not neighbors:
-        return default_climate
-
-    total = len(neighbors)
-    pro_rumor = sum(1 for n in neighbors if n.opinion < -0.2)
-    pro_truth = sum(1 for n in neighbors if n.opinion > 0.2)
-    neutral = total - pro_rumor - pro_truth
-    silent = sum(1 for n in neighbors if getattr(n, "is_silent", False))
-    avg_opinion = sum(float(n.opinion) for n in neighbors) / total
-
-    return {
-        "total": total,
-        "pro_rumor_ratio": pro_rumor / total,
-        "pro_truth_ratio": pro_truth / total,
-        "neutral_ratio": neutral / total,
-        "silent_ratio": silent / total,
-        "avg_opinion": avg_opinion
-    }
-
-
-def _normalize_snapshot_climate(snapshot: dict) -> dict:
-    """
-    规范化快照中的 perceived_climate，保证前端字段可用。
-    """
-    agent_id = int(snapshot.get("agent_id", -1))
-    climate = snapshot.get("perceived_climate")
-
-    # 1) 已是前端需要的扁平结构，补默认值后直接返回
-    if isinstance(climate, dict) and "total" in climate:
-        climate.setdefault("pro_rumor_ratio", 0.0)
-        climate.setdefault("pro_truth_ratio", 0.0)
-        climate.setdefault("neutral_ratio", 1.0)
-        climate.setdefault("silent_ratio", 0.0)
-        climate.setdefault("avg_opinion", 0.0)
-        snapshot["perceived_climate"] = climate
-        return snapshot
-
-    # 2) 双层结构（public/private）或缺失时，统一重算扁平结构
-    snapshot["perceived_climate"] = _build_perceived_climate_summary(agent_id)
-    return snapshot
-
-
-def _get_v3_agent_fields(agent_id: int) -> dict:
-    """
-    获取指定 Agent 的 v3.0 字段（rumor_trust, truth_trust, dominant_need, predicted_behavior 等）
-    """
-    if engine is None:
-        return {}
-
-    v3_fields = {}
-
-    # 优先从 v3 获取（最准确）
-    if hasattr(engine, 'v3') and engine.v3:
-        agent_state = engine.v3.get_agent_v3_fields(agent_id)
-        if agent_state:
-            v3_fields.update(agent_state)
-
-    # 从 engine 的 current_state 中获取 agent 列表（补充）
-    if hasattr(engine, 'current_state') and engine.current_state:
-        agents = engine.current_state.agents if hasattr(engine.current_state, 'agents') else []
-        for agent in agents:
-            agent_dict = agent.model_dump() if hasattr(agent, 'model_dump') else agent
-            if agent_dict.get('id') == agent_id:
-                # 只在 v3_fields 没有值时才覆盖
-                if not v3_fields.get('rumor_trust') and agent_dict.get('rumor_trust'):
-                    v3_fields['rumor_trust'] = agent_dict.get('rumor_trust', 0.0)
-                if not v3_fields.get('truth_trust') and agent_dict.get('truth_trust'):
-                    v3_fields['truth_trust'] = agent_dict.get('truth_trust', 0.0)
-                if not v3_fields.get('dominant_need') and agent_dict.get('dominant_need'):
-                    v3_fields['dominant_need'] = agent_dict.get('dominant_need', '')
-                if not v3_fields.get('predicted_behavior') and agent_dict.get('predicted_behavior'):
-                    v3_fields['predicted_behavior'] = agent_dict.get('predicted_behavior', '')
-                if 'behavior_confidence' not in v3_fields:
-                    v3_fields['behavior_confidence'] = agent_dict.get('behavior_confidence', 0.0)
-                if 'cognitive_closed_need' not in v3_fields:
-                    v3_fields['cognitive_closed_need'] = agent_dict.get('cognitive_closed_need', 0.5)
-                break
-
-    return v3_fields
-
-
-def _state_to_dict(state) -> dict:
-    """将 SimulationState 转换为字典，并附加引擎级别数据（如 event_pool）"""
-    d = state.to_dict()
-    d["event_pool"] = list(getattr(engine, "event_pool", [])) if engine else []
-    return d
+# 注册路由
+app.include_router(sim_router.router)
+app.include_router(report_router.router)
+app.include_router(event_router.router)
+app.include_router(pred_router.router)
 
 
 @app.get("/")
@@ -308,796 +58,7 @@ async def root():
     return {"status": "ok", "service": "信息茧房推演系统", "version": "3.0.0"}
 
 
-@app.post("/api/simulation/start")
-async def start_simulation(params: StartRequest):
-    """
-    启动新的推演模拟
-    如果有待注入的事件/知识图谱，会自动注入到引擎中
-    返回初始状态
-    """
-    global engine, pending_knowledge_graph, pending_event_content, pending_event_source
-
-    # 如果有待注入事件，根据事件内容设置初始分布
-    if pending_knowledge_graph and pending_event_content:
-        sentiment = pending_knowledge_graph.get("sentiment", "中性")
-        credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
-        entity_count = len(pending_knowledge_graph.get('entities', []))
-        logger.info(f"检测到待注入事件，情感={sentiment}, 可信度={credibility}, 实体数={entity_count}")
-        # 注意：这里不直接设置initial_negative_spread，而是在引擎创建后调用set_initial_distribution_from_news
-
-    # 自动计算并发数（如果未指定）
-    max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
-    logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {params.population_size})")
-
-    # 使用环境变量中的LLM配置，仅覆盖并发数和超时参数
-    llm_config = LLMConfig(
-        max_concurrent=max_concurrent,
-        timeout=params.timeout,
-        max_retries=params.max_retries,
-        connection_pool_size=params.connection_pool_size
-    )
-
-    # 参数兼容解析：新参数名优先，旧参数名兜底
-    effective_initial_spread = params.initial_negative_spread if params.initial_negative_spread is not None else params.initial_rumor_spread
-    effective_debunk_delay = params.response_delay if params.response_delay is not None else params.debunk_delay
-    effective_credibility = params.response_credibility if params.response_credibility is not None else params.debunk_credibility
-
-    # 根据是否启用双层网络选择引擎
-    if params.use_dual_network:
-        logger.info(f"使用双层网络引擎, 社群数: {params.num_communities}, LLM模式: {params.use_llm}")
-        engine = SimulationEngineDual(
-            population_size=params.population_size,
-            cocoon_strength=params.cocoon_strength,
-            debunk_delay=effective_debunk_delay,
-            initial_rumor_spread=effective_initial_spread,
-            use_llm=params.use_llm,
-            llm_config=llm_config,
-            num_communities=params.num_communities,
-            public_m=params.public_m,
-            # 增强版数学模型参数
-            debunk_credibility=effective_credibility,
-            authority_factor=params.authority_factor,
-            backfire_strength=params.backfire_strength,
-            silence_threshold=params.silence_threshold,
-            polarization_factor=params.polarization_factor,
-            echo_chamber_factor=params.echo_chamber_factor
-        )
-    else:
-        engine = SimulationEngine(
-            population_size=params.population_size,
-            cocoon_strength=params.cocoon_strength,
-            debunk_delay=effective_debunk_delay,
-            initial_rumor_spread=effective_initial_spread,
-            network_type=params.network_type,
-            use_llm=params.use_llm,
-            llm_config=llm_config,
-            # 增强版数学模型参数
-            debunk_credibility=effective_credibility,
-            authority_factor=params.authority_factor,
-            backfire_strength=params.backfire_strength,
-            silence_threshold=params.silence_threshold,
-            polarization_factor=params.polarization_factor,
-            echo_chamber_factor=params.echo_chamber_factor,
-            # Phase 3: 运行模式参数
-            mode=params.mode,
-            init_distribution=params.init_distribution,
-            time_acceleration=params.time_acceleration
-        )
-
-    # 如果有待注入事件，根据事件内容设置初始分布
-    if pending_knowledge_graph and pending_event_content:
-        sentiment = pending_knowledge_graph.get("sentiment", "中性")
-        credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
-        entity_count = len(pending_knowledge_graph.get('entities', []))
-        if hasattr(engine, 'set_initial_distribution_from_news'):
-            engine.set_initial_distribution_from_news(sentiment, credibility, entity_count)
-            logger.info(f"已根据新闻内容设置初始分布")
-
-    initial_state = engine.initialize()
-    
-    # ==================== 自动注入待处理的事件 ====================
-    if pending_knowledge_graph and pending_event_content:
-        logger.info(f"检测到待注入事件，自动注入到引擎: {pending_event_content[:50]}...")
-
-        # === Phase 1: 设置知识图谱，启用知识驱动演化（初始化时不融合）===
-        entities = pending_knowledge_graph.get('entities', [])
-        relations = pending_knowledge_graph.get('relations', [])
-        if entities and hasattr(engine, 'set_knowledge_graph'):
-            # 初始化时不与现有图谱融合（因为是首次注入）
-            engine.set_knowledge_graph(entities, relations, merge=False)
-            logger.info(f"知识驱动演化已启用")
-
-        # 如果引擎支持设置新闻
-        if hasattr(engine, 'set_news'):
-            import inspect
-            if inspect.iscoroutinefunction(engine.set_news):
-                await engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
-            else:
-                engine.set_news(pending_event_content, pending_event_source or "public", parse_graph=False)
-
-        # 广播事件（触发事件冲击）
-        target_scope = "all"
-        if pending_event_source == "public":
-            target_scope = "public_only"
-        elif pending_event_source == "private":
-            target_scope = "private_only"
-        
-        sentiment = pending_knowledge_graph.get("sentiment", "中性")
-        credibility = pending_knowledge_graph.get("credibility_hint", "不确定")
-        engine.broadcast_event(pending_event_content, target_scope, sentiment=sentiment, credibility=credibility)
-
-        logger.info(f"待注入事件已成功注入，图谱包含 {len(pending_knowledge_graph.get('entities', []))} 个实体")
-
-        # 清空待注入数据
-        pending_knowledge_graph = None
-        pending_event_content = None
-        pending_event_source = None
-    
-    return JSONResponse(content=initial_state.to_dict())
-
-
-@app.get("/api/simulation/step")
-async def step_simulation():
-    """执行单步推演并返回新状态 (仅数学模型模式)"""
-    global engine
-    if engine is None:
-        return JSONResponse(
-            content={"error": "请先启动模拟"},
-            status_code=400
-        )
-
-    if engine.use_llm:
-        # LLM 模式需要通过 WebSocket
-        return JSONResponse(
-            content={"error": "LLM 模式请使用 WebSocket"},
-            status_code=400
-        )
-
-    state = engine.step()
-    return JSONResponse(content=state.to_dict())
-
-
-@app.get("/api/simulation/state")
-async def get_state():
-    """获取当前状态"""
-    global engine
-    if engine is None:
-        return JSONResponse(content={"error": "未初始化"}, status_code=400)
-
-    state_dict = engine.current_state.to_dict()
-    # 附加引擎级别数据
-    state_dict["event_pool"] = getattr(engine, "event_pool", [])
-    return JSONResponse(content=state_dict)
-
-
-@app.get("/api/math-model/explanation")
-async def get_math_model_explanation():
-    """
-    获取增强版数学模型的理论解释
-    
-    返回：
-    - theories: 各社会心理学机制的理论说明
-    - parameters: 各参数的含义和影响
-    """
-    from .simulation.math_model_enhanced import EnhancedMathModel
-    
-    model = EnhancedMathModel()
-    
-    return JSONResponse(content={
-        "theories": model.get_theory_explanation(),
-        "parameters": model.get_parameter_explanation()
-    })
-
-
-@app.get("/api/agent/{agent_id}/inspect")
-async def inspect_agent(agent_id: int):
-    """
-    微观行为透视接口
-    获取指定Agent的决策上下文快照
-    """
-    global engine
-
-    # 检查引擎是否初始化
-    if engine is None:
-        return JSONResponse(
-            content={"error": "模拟未启动，请先开始推演", "has_decided": False},
-            status_code=400
-        )
-
-    # 检查agent_id是否有效
-    if agent_id < 0 or agent_id >= engine.population_size:
-        return JSONResponse(
-            content={"error": f"无效的Agent ID: {agent_id}", "has_decided": False},
-            status_code=404
-        )
-
-    # 优先从全局存储获取快照（同时检查单层和双层）
-    snapshot = get_agent_snapshot_global(agent_id) or get_agent_snapshot_global_dual(agent_id)
-
-    if snapshot:
-        result = _normalize_snapshot_climate(snapshot)
-        # 附加 v3.0 字段
-        result.update(_get_v3_agent_fields(agent_id))
-        return JSONResponse(content=result)
-
-    # 如果全局存储没有，尝试从引擎获取（支持双层网络）
-    if engine.use_llm and hasattr(engine, 'llm_population') and engine.llm_population:
-        snapshot = engine.llm_population.get_agent_snapshot(agent_id)
-        if snapshot:
-            result = _normalize_snapshot_climate(snapshot)
-            result.update(_get_v3_agent_fields(agent_id))
-            return JSONResponse(content=result)
-
-    # 获取基础Agent信息（未参与决策）
-    if engine.use_llm and engine.llm_population:
-        agent = engine.llm_population.agents[agent_id]
-        return JSONResponse(content={
-            "agent_id": agent_id,
-            "persona": agent.persona,
-            "persona_str": f"{agent.persona['type']} - {agent.persona['desc']}",
-            "belief_strength": float(agent.belief_strength),
-            "susceptibility": float(agent.susceptibility),
-            "influence": float(agent.influence),
-            "old_opinion": float(agent.opinion),
-            "new_opinion": float(agent.opinion),
-            "received_news": [],
-            "llm_raw_response": None,
-            "emotion": "未激活",
-            "action": "未参与",
-            "generated_comment": "",
-            "reasoning": "该Agent尚未参与本轮推演，处于初始状态",
-            "has_decided": False,
-            # 沉默的螺旋相关
-            "fear_of_isolation": float(agent.fear_of_isolation),
-            "conviction": float(agent.conviction),
-            "is_silent": bool(agent.is_silent),
-            "perceived_climate": _build_perceived_climate_summary(agent_id),
-            # v3.0 字段
-            **_get_v3_agent_fields(agent_id)
-        })
-
-    return JSONResponse(
-        content={"error": "Agent信息不可用", "has_decided": False},
-        status_code=500
-    )
-
-
-@app.post("/api/simulation/finish")
-async def finish_simulation():
-    """结束模拟并生成报告"""
-    global engine
-    if engine is None:
-        return JSONResponse(content={"error": "未初始化"}, status_code=400)
-
-    report_path = engine.generate_report()
-    # 使用正斜杠，避免JSON转义问题
-    report_path_safe = report_path.replace("\\", "/") if report_path else None
-    report_filename = os.path.basename(report_path) if report_path else None
-
-    # 重置引擎状态，以便下次启动
-    engine = None
-
-    return JSONResponse(content={
-        "success": True,
-        "report_path": report_path_safe,
-        "report_filename": report_filename
-    })
-
-
-@app.post("/api/report/open")
-async def open_report(data: dict):
-    """使用系统默认应用打开报告文件"""
-    report_path = data.get("path", "").replace("/", os.sep).replace("\\", os.sep)
-
-    if not report_path or not os.path.exists(report_path):
-        return JSONResponse(content={"success": False, "error": f"报告文件不存在: {report_path}"}, status_code=404)
-
-    try:
-        system = platform.system()
-        if system == "Windows":
-            subprocess.run(["cmd", "/c", "start", "", report_path], check=True)
-        elif system == "Darwin":
-            subprocess.run(["open", report_path], check=True)
-        else:
-            subprocess.run(["xdg-open", report_path], check=True)
-
-        return JSONResponse(content={"success": True, "message": "已打开报告"})
-    except Exception as e:
-        logger.error(f"打开报告失败: {e}")
-        return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
-
-
-@app.get("/api/report/content")
-async def get_report_content(filename: str):
-    """获取报告内容"""
-    reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
-    reports_dir = os.path.abspath(reports_dir)
-    report_path = os.path.join(reports_dir, filename)
-
-    if not os.path.exists(report_path):
-        return JSONResponse(content={"error": f"报告不存在: {filename}"}, status_code=404)
-
-    try:
-        with open(report_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return JSONResponse(content={"success": True, "content": content, "filename": filename})
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
-
-@app.get("/api/report/download")
-async def download_report(filename: str):
-    """下载报告文件"""
-    reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
-    reports_dir = os.path.abspath(reports_dir)
-    report_path = os.path.join(reports_dir, filename)
-
-    if not os.path.exists(report_path):
-        return JSONResponse(content={"error": "报告不存在"}, status_code=404)
-
-    return FileResponse(
-        path=report_path,
-        filename=filename,
-        media_type="text/markdown"
-    )
-
-
-@app.get("/api/report/list")
-async def list_reports(
-    type: Optional[str] = None,
-    search: Optional[str] = None,
-    sort: Optional[str] = "modified",
-    order: Optional[str] = "desc"
-):
-    """
-    列出所有报告文件，支持分类、搜索、排序
-
-    Args:
-        type: 报告类型筛选 (simulation/intelligence/all)，默认 all
-        search: 文件名搜索关键词
-        sort: 排序字段 (modified/size/name)，默认 modified
-        order: 排序方向 (desc/asc)，默认 desc
-
-    Returns:
-        reports: 所有报告列表
-        simulation_reports: 推演报告列表
-        intelligence_reports: 智库专报列表
-        counts: 各类型数量统计
-    """
-    reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
-    reports_dir = os.path.abspath(reports_dir)
-
-    if not os.path.exists(reports_dir):
-        return JSONResponse(content={
-            "reports": [],
-            "simulation_reports": [],
-            "intelligence_reports": [],
-            "counts": {"total": 0, "simulation": 0, "intelligence": 0}
-        })
-
-    all_reports = []
-    simulation_reports = []
-    intelligence_reports = []
-
-    for f in os.listdir(reports_dir):
-        if not f.endswith(".md"):
-            continue
-
-        filepath = os.path.join(reports_dir, f)
-        stat = os.stat(filepath)
-
-        # 根据文件名判断类型
-        if f.startswith("intelligence_report_"):
-            report_type = "intelligence"
-        elif f.startswith("report_") or f.startswith("report_dual_"):
-            report_type = "simulation"
-        else:
-            report_type = "other"
-
-        report_item = {
-            "filename": f,
-            "path": filepath,
-            "size": stat.st_size,
-            "modified": stat.st_mtime,
-            "type": report_type
-        }
-
-        all_reports.append(report_item)
-
-        if report_type == "simulation":
-            simulation_reports.append(report_item)
-        elif report_type == "intelligence":
-            intelligence_reports.append(report_item)
-
-    # 搜索过滤
-    if search:
-        search_lower = search.lower()
-        all_reports = [r for r in all_reports if search_lower in r["filename"].lower()]
-        simulation_reports = [r for r in simulation_reports if search_lower in r["filename"].lower()]
-        intelligence_reports = [r for r in intelligence_reports if search_lower in r["filename"].lower()]
-
-    # 类型筛选
-    if type == "simulation":
-        filtered_reports = simulation_reports
-    elif type == "intelligence":
-        filtered_reports = intelligence_reports
-    else:
-        filtered_reports = all_reports
-
-    # 排序
-    reverse = (order == "desc")
-    if sort == "size":
-        filtered_reports.sort(key=lambda r: r["size"], reverse=reverse)
-        simulation_reports.sort(key=lambda r: r["size"], reverse=reverse)
-        intelligence_reports.sort(key=lambda r: r["size"], reverse=reverse)
-    elif sort == "name":
-        filtered_reports.sort(key=lambda r: r["filename"], reverse=reverse)
-        simulation_reports.sort(key=lambda r: r["filename"], reverse=reverse)
-        intelligence_reports.sort(key=lambda r: r["filename"], reverse=reverse)
-    else:  # modified
-        filtered_reports.sort(key=lambda r: r["modified"], reverse=reverse)
-        simulation_reports.sort(key=lambda r: r["modified"], reverse=reverse)
-        intelligence_reports.sort(key=lambda r: r["modified"], reverse=reverse)
-
-    return JSONResponse(content={
-        "reports": filtered_reports,
-        "simulation_reports": simulation_reports,
-        "intelligence_reports": intelligence_reports,
-        "counts": {
-            "total": len(all_reports),
-            "simulation": len(simulation_reports),
-            "intelligence": len(intelligence_reports)
-        }
-    })
-
-
-@app.post("/api/report/generate")
-async def generate_intelligence_report_endpoint():
-    """
-    生成智库专报 (异步，耗时较长)
-
-    调用 AnalystAgent 基于 LLM 生成专业的舆情分析报告
-    """
-    global engine
-    if engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化，请先运行推演"},
-            status_code=400
-        )
-
-    if not engine.use_llm:
-        return JSONResponse(
-            content={"success": False, "error": "智库专报仅支持LLM驱动模式"},
-            status_code=400
-        )
-
-    if not engine.history:
-        return JSONResponse(
-            content={"success": False, "error": "推演尚未运行，请先执行推演"},
-            status_code=400
-        )
-
-    if not engine.llm_population:
-        return JSONResponse(
-            content={"success": False, "error": "Agent群体未初始化"},
-            status_code=400
-        )
-
-    try:
-        # 生成智库专报
-        report_content = await generate_intelligence_report(
-            engine,
-            engine.llm_population
-        )
-
-        # 保存报告
-        reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
-        reports_dir = os.path.abspath(reports_dir)
-        os.makedirs(reports_dir, exist_ok=True)
-
-        import time
-        report_filename = f"intelligence_report_{int(time.time())}.md"
-        report_path = os.path.join(reports_dir, report_filename)
-
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(report_content)
-
-        return JSONResponse(content={
-            "success": True,
-            "content": report_content,
-            "filename": report_filename,
-            "path": report_path.replace("\\", "/")
-        })
-
-    except Exception as e:
-        logger.error(f"智库专报生成失败: {e}")
-        return JSONResponse(
-            content={"success": False, "error": f"报告生成失败: {str(e)}"},
-            status_code=500
-        )
-
-
-@app.get("/api/report/stream")
-async def stream_intelligence_report():
-    """
-    流式生成智库专报 (SSE)
-
-    使用 Server-Sent Events 实时推送报告内容
-    """
-    global engine
-    if engine is None:
-        return JSONResponse(
-            content={"error": "推演引擎未初始化，请先运行推演"},
-            status_code=400
-        )
-
-    if not engine.use_llm:
-        return JSONResponse(
-            content={"error": "智库专报仅支持LLM驱动模式"},
-            status_code=400
-        )
-
-    if not engine.history:
-        return JSONResponse(
-            content={"error": "推演尚未运行，请先执行推演"},
-            status_code=400
-        )
-
-    if not engine.llm_population:
-        return JSONResponse(
-            content={"error": "Agent群体未初始化"},
-            status_code=400
-        )
-
-    async def event_generator():
-        """SSE 事件生成器"""
-        try:
-            # 构建上下文
-            context = DataSampler.build_context(engine, engine.llm_population)
-
-            # 创建 AnalystAgent 实例
-            llm_config = LLMConfig()
-            llm_config.timeout = 120
-            llm_config.max_tokens = 2000
-            llm_config.temperature = 0.5
-
-            async with AnalystAgent(llm_config) as agent:
-                async for chunk in agent.generate_report_stream(context):
-                    # SSE 格式: data: {content}\n\n
-                    yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
-
-            # 发送结束信号
-            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
-
-        except Exception as e:
-            logger.error(f"流式报告生成失败: {e}")
-            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-
-@app.post("/api/event/parse")
-async def parse_news_event(req: ParseRequest):
-    """
-    解析新闻文本为知识图谱
-
-    Request Body:
-        content: 新闻文本内容
-    """
-    from .simulation.graph_parser_agent import get_graph_parser
-
-    try:
-        graph_parser = get_graph_parser()
-        knowledge_graph = await graph_parser.parse(req.content)
-
-        return {
-            "success": True,
-            "data": knowledge_graph
-        }
-    except Exception as e:
-        logger.error(f"知识图谱解析失败: {e}")
-        return JSONResponse(
-            content={"success": False, "error": str(e)},
-            status_code=500
-        )
-
-
-@app.post("/api/event/airdrop")
-async def airdrop_event(req: AirdropRequest):
-    """
-    注入突发事件 - "解析-注入-推演"三段式管线
-
-    第一阶段（解析）：调用 GraphParserAgent 提取结构化知识图谱（可选跳过）
-    第二阶段（封装）：将图谱+原始文本封装成结构化的 EventMsg
-    第三阶段（广播）：将 EventMsg 发送给网络中的节点
-
-    Request Body:
-        content: 事件文本内容
-        source: 来源 (public/private)
-        skip_parse: 跳过知识图谱解析（快速注入模式）
-
-    Response:
-        success: 是否成功
-        knowledge_graph: 解析后的知识图谱 JSON
-        event: 事件记录
-    """
-    global engine, pending_knowledge_graph, pending_event_content, pending_event_source, injection_in_progress
-
-    # ==================== 标记注入进行中（暂停推演）====================
-    injection_in_progress = True
-    logger.info(f"[管线] 事件注入开始，推演暂停等待")
-
-    try:
-        # ==================== 第一阶段：解析（可选跳过）====================
-        if req.skip_parse:
-            # 快速注入模式：跳过 LLM 解析，使用简单图谱
-            logger.info(f"[快速注入] 跳过知识图谱解析: {req.content[:50]}...")
-            knowledge_graph = {
-                "entities": [{"id": "e1", "name": "事件主体", "type": "事件", "description": req.content[:50]}],
-                "relations": [],
-                "summary": req.content[:100],
-                "keywords": [],
-                "sentiment": "中性",
-                "credibility_hint": "不确定",
-                "skip_parse": True
-            }
-        else:
-            # 完整解析模式：调用 LLM 解析知识图谱
-            logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
-
-            try:
-                from .simulation.graph_parser_agent import get_graph_parser
-                graph_parser = get_graph_parser()
-                knowledge_graph = await graph_parser.parse(req.content)
-
-                entity_count = len(knowledge_graph.get('entities', []))
-                relation_count = len(knowledge_graph.get('relations', []))
-                logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
-
-            except Exception as e:
-                logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
-                # 即使解析失败，也继续流程，使用空图谱
-                knowledge_graph = {
-                    "entities": [],
-                    "relations": [],
-                    "summary": req.content[:100],
-                    "parse_error": True,
-                    "error_message": str(e)
-                }
-
-        # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
-        logger.info(f"[管线阶段2] 封装结构化事件消息...")
-
-        # 构建结构化事件消息
-        # 用户选择的可信度优先于自动解析的
-        final_credibility = req.credibility if req.credibility != "不确定" else knowledge_graph.get("credibility_hint", "不确定")
-        # 同步到 knowledge_graph 供后续待注入使用
-        knowledge_graph["credibility_hint"] = final_credibility
-        event_msg = {
-            "type": "breaking_news",
-            "content": req.content,  # 原始文本
-            "source": req.source,    # 来源
-            "knowledge_graph": knowledge_graph,  # 解析后的图谱
-            "summary": knowledge_graph.get("summary", ""),
-            "keywords": knowledge_graph.get("keywords", []),
-            "sentiment": knowledge_graph.get("sentiment", "中性"),
-            "credibility_hint": final_credibility,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-        # 确定广播范围
-        target_scope = "all"
-        if req.source == "public":
-            target_scope = "public_only"
-        elif req.source == "private":
-            target_scope = "private_only"
-
-        # ==================== 处理推演未开始的情况 ====================
-        if engine is None:
-            logger.info("[管线阶段3] 推演引擎未初始化，存储待注入事件供后续使用")
-            # 存储待注入的事件
-            pending_knowledge_graph = knowledge_graph
-            pending_event_content = req.content
-            pending_event_source = req.source
-
-            return {
-                "success": True,
-                "data": {
-                    "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True, "credibility": final_credibility},
-                    "knowledge_graph": knowledge_graph,
-                    "event_msg": event_msg,
-                    "message": "事件已解析并存储，将在推演开始时自动注入"
-                }
-            }
-
-        # ==================== 第三阶段：广播（发送给推演引擎）====================
-        logger.info(f"[管线阶段3] 广播事件到推演引擎, 范围: {target_scope}")
-
-        # 获取情感和可信度
-        sentiment = knowledge_graph.get("sentiment", "中性")
-        # 使用前面计算的 final_credibility
-        credibility = final_credibility
-        entity_count = len(knowledge_graph.get('entities', []))
-
-        # 更新引擎的新闻和图谱
-        if hasattr(engine, 'set_news'):
-            import inspect
-            if inspect.iscoroutinefunction(engine.set_news):
-                await engine.set_news(req.content, req.source, parse_graph=False)
-            else:
-                engine.set_news(req.content, req.source, parse_graph=False)
-
-        # 更新引擎的知识图谱（融合模式）
-        entities = knowledge_graph.get('entities', [])
-        relations = knowledge_graph.get('relations', [])
-        if entities and hasattr(engine, 'set_knowledge_graph'):
-            engine.set_knowledge_graph(entities, relations, merge=True)
-            logger.info(f"知识图谱已融合，知识驱动演化已启用")
-        else:
-            # 没有实体时仍然更新图谱数据
-            engine.knowledge_graph = knowledge_graph
-
-        # 广播事件（包含图谱信息，触发事件冲击）
-        event = engine.broadcast_event(
-            content=req.content,
-            target_scope=target_scope,
-            sentiment=sentiment,
-            credibility=credibility
-        )
-        # 返回融合后的知识图谱
-        merged_graph = engine.knowledge_graph
-        event["knowledge_graph"] = merged_graph
-        event["event_msg"] = event_msg
-
-        logger.info(f"[管线完成] 事件注入成功，已广播给所有Agent，图谱包含 {len(merged_graph.get('entities', []))} 个实体")
-
-        return {
-            "success": True,
-            "data": {
-                "event": event,
-                "knowledge_graph": merged_graph,
-                "event_msg": event_msg
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"[管线] 事件注入失败: {e}")
-        return JSONResponse(
-            content={"success": False, "error": f"事件注入失败: {str(e)}"},
-            status_code=500
-        )
-    finally:
-        # 无论成功失败，都解除推演暂停
-        injection_in_progress = False
-        logger.info(f"[管线] 事件注入结束，推演可恢复")
-
-
-@app.get("/api/event/knowledge-graph")
-async def get_current_knowledge_graph():
-    """
-    获取当前推演的知识图谱
-    """
-    global engine
-    
-    if engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化"},
-            status_code=400
-        )
-    
-    return {
-        "success": True,
-        "data": engine.knowledge_graph
-    }
-
+# ==================== WebSocket ====================
 
 @app.websocket("/ws/simulation")
 async def websocket_simulation(websocket: WebSocket):
@@ -1115,7 +76,6 @@ async def websocket_simulation(websocket: WebSocket):
         {"type": "progress", "step": 1, "total": 200, "message": "Agent 1/200"}
         {"type": "error", "message": "..."}
     """
-    global engine
     await websocket.accept()
     logger.info("WebSocket 连接已建立")
 
@@ -1132,7 +92,7 @@ async def websocket_simulation(websocket: WebSocket):
                 "step": step,
                 "total": total,
                 "percentage": round(step / total * 100, 1) if total > 0 else 0,
-                "current_step": engine.step_count if engine else 0,
+                "current_step": state.engine.step_count if state.engine else 0,
                 "max_steps": max_steps
             }
 
@@ -1160,11 +120,10 @@ async def websocket_simulation(websocket: WebSocket):
     async def auto_step_loop(interval: int):
         """自动推演循环"""
         nonlocal max_steps
-        while auto_mode and engine and engine.step_count < max_steps:
+        while auto_mode and state.engine and state.engine.step_count < max_steps:
             try:
                 # 如果事件注入正在进行，等待注入完成
-                global injection_in_progress
-                if injection_in_progress:
+                if state.injection_in_progress:
                     logger.debug("事件注入进行中，推演等待...")
                     await websocket.send_json({
                         "type": "progress",
@@ -1172,10 +131,10 @@ async def websocket_simulation(websocket: WebSocket):
                     })
                     # 等待注入完成（最多等待60秒）
                     for _ in range(60):
-                        if not injection_in_progress:
+                        if not state.injection_in_progress:
                             break
                         await asyncio.sleep(1)
-                    if injection_in_progress:
+                    if state.injection_in_progress:
                         logger.warning("事件注入超时，恢复推演")
                     else:
                         logger.info("事件注入完成，恢复推演")
@@ -1184,10 +143,10 @@ async def websocket_simulation(websocket: WebSocket):
                             "message": "事件注入完成，恢复推演"
                         })
 
-                state = await engine.async_step()
+                s = await state.engine.async_step()
                 await websocket.send_json({
                     "type": "state",
-                    "data": _state_to_dict(state)
+                    "data": _state_to_dict(s)
                 })
                 await asyncio.sleep(interval / 1000)
             except asyncio.CancelledError:
@@ -1238,7 +197,7 @@ async def websocket_simulation(websocket: WebSocket):
                 # 根据是否启用双层网络选择引擎
                 if use_dual_network:
                     logger.info(f"使用双层网络引擎, 社群数: {params.get('num_communities', 8)}, LLM模式: {use_llm}")
-                    engine = SimulationEngineDual(
+                    state.engine = SimulationEngineDual(
                         population_size=population_size,
                         cocoon_strength=params.get("cocoon_strength", 0.5),
                         debunk_delay=effective_debunk_delay,
@@ -1256,7 +215,7 @@ async def websocket_simulation(websocket: WebSocket):
                         echo_chamber_factor=params.get("echo_chamber_factor", 0.2)
                     )
                 else:
-                    engine = SimulationEngine(
+                    state.engine = SimulationEngine(
                         population_size=population_size,
                         cocoon_strength=params.get("cocoon_strength", 0.5),
                         debunk_delay=effective_debunk_delay,
@@ -1274,9 +233,9 @@ async def websocket_simulation(websocket: WebSocket):
                     )
 
                 # 设置进度回调
-                engine.set_progress_callback(send_progress)
+                state.engine.set_progress_callback(send_progress)
 
-                initial_state = engine.initialize()
+                initial_state = state.engine.initialize()
                 await websocket.send_json({
                     "type": "state",
                     "data": _state_to_dict(initial_state)
@@ -1285,7 +244,7 @@ async def websocket_simulation(websocket: WebSocket):
 
             elif action == "step":
                 # 单步推演
-                if engine is None:
+                if state.engine is None:
                     await websocket.send_json({
                         "type": "error",
                         "message": "请先启动模拟"
@@ -1293,10 +252,10 @@ async def websocket_simulation(websocket: WebSocket):
                     continue
 
                 try:
-                    state = await engine.async_step()
+                    s = await state.engine.async_step()
                     await websocket.send_json({
                         "type": "state",
-                        "data": _state_to_dict(state)
+                        "data": _state_to_dict(s)
                     })
                 except Exception as e:
                     logger.error(f"推演错误: {e}")
@@ -1307,7 +266,7 @@ async def websocket_simulation(websocket: WebSocket):
 
             elif action == "auto":
                 # 自动推演
-                if engine is None:
+                if state.engine is None:
                     await websocket.send_json({
                         "type": "error",
                         "message": "请先启动模拟"
@@ -1329,13 +288,13 @@ async def websocket_simulation(websocket: WebSocket):
 
             elif action == "resume":
                 # 恢复自动推演
-                if engine is None:
+                if state.engine is None:
                     await websocket.send_json({
                         "type": "error",
                         "message": "请先启动模拟"
                     })
                     continue
-                if engine.step_count >= max_steps:
+                if state.engine.step_count >= max_steps:
                     await websocket.send_json({
                         "type": "error",
                         "message": "推演已完成，无法恢复"
@@ -1356,14 +315,14 @@ async def websocket_simulation(websocket: WebSocket):
 
             elif action == "finish":
                 # 生成报告
-                if engine is None:
+                if state.engine is None:
                     await websocket.send_json({
                         "type": "error",
                         "message": "请先启动模拟"
                     })
                     continue
 
-                report_path = engine.generate_report()
+                report_path = state.engine.generate_report()
                 report_path_safe = report_path.replace("\\", "/") if report_path else None
                 await websocket.send_json({
                     "type": "report",
@@ -1379,183 +338,3 @@ async def websocket_simulation(websocket: WebSocket):
         auto_mode = False
     except Exception as e:
         logger.error(f"WebSocket 错误: {e}")
-
-
-# ==================== Phase 2: 预测与风险预警 API ====================
-
-@app.get("/api/prediction")
-async def get_prediction():
-    """
-    获取预测结果
-    
-    基于历史数据预测未来趋势，返回预测区间
-    """
-    global engine, prediction_model
-    
-    if engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化"},
-            status_code=400
-        )
-    
-    if len(engine.history) < 3:
-        return {
-            "success": True,
-            "data": {
-                "available": False,
-                "message": "历史数据不足，需要至少3步推演后才能预测",
-                "min_steps_required": 3,
-                "current_steps": len(engine.history)
-            }
-        }
-    
-    # 初始化或更新预测模型
-    if prediction_model is None:
-        prediction_model = PredictionModel()
-    
-    prediction_model.update(engine.history)
-
-    # 获取当前状态（兼容新旧键名）
-    current_state = {
-        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
-        "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
-    }
-
-    # 执行预测
-    prediction = prediction_model.predict(current_state)
-    
-    # 获取干预建议
-    recommendation = prediction_model.get_intervention_recommendation(current_state, prediction)
-    
-    # 获取预测轨迹（用于前端绘图）
-    trajectory = prediction_model.get_trajectory(current_state, steps=10)
-    
-    return {
-        "success": True,
-        "data": {
-            "available": True,
-            "current_step": engine.step_count,
-            "prediction": prediction,
-            "trajectory": trajectory,
-            "recommendation": recommendation
-        }
-    }
-
-
-@app.get("/api/risk-alerts")
-async def get_risk_alerts():
-    """
-    获取风险预警
-    
-    检测当前状态的风险并返回预警列表
-    """
-    global engine
-    
-    if engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化"},
-            status_code=400
-        )
-    
-    # 获取风险引擎
-    risk_engine = get_risk_engine()
-
-    # 获取当前状态（兼容新旧键名）
-    current_state = {
-        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5,
-        "silence_rate": engine.current_state.silence_rate if engine.current_state else 0.0
-    }
-
-    # 执行风险检查
-    alerts = risk_engine.check(current_state, engine.history)
-    
-    # 获取风险摘要
-    risk_summary = risk_engine.get_risk_summary(current_state)
-    
-    return {
-        "success": True,
-        "data": {
-            "alerts": [a.to_dict() for a in alerts],
-            "risk_summary": risk_summary,
-            "recent_alerts": risk_engine.get_recent_alerts(5)
-        }
-    }
-
-
-@app.get("/api/prediction/trajectory")
-async def get_prediction_trajectory(steps: int = 10):
-    """
-    获取预测轨迹
-    
-    用于前端绘制预测曲线
-    """
-    global engine, prediction_model
-    
-    if engine is None:
-        return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化"},
-            status_code=400
-        )
-    
-    if len(engine.history) < 3:
-        return {
-            "success": True,
-            "data": {
-                "available": False,
-                "message": "历史数据不足"
-            }
-        }
-    
-    if prediction_model is None:
-        prediction_model = PredictionModel()
-    
-    prediction_model.update(engine.history)
-
-    # 获取当前状态（兼容新旧键名）
-    current_state = {
-        "negative_belief_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "rumor_spread_rate": engine.current_state.rumor_spread_rate if engine.current_state else 0.3,
-        "correct_belief_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "truth_acceptance_rate": engine.current_state.truth_acceptance_rate if engine.current_state else 0.15,
-        "polarization_index": engine.current_state.polarization_index if engine.current_state else 0.5
-    }
-
-    trajectory = prediction_model.get_trajectory(current_state, steps=steps)
-    
-    return {
-        "success": True,
-        "data": {
-            "available": True,
-            "trajectory": trajectory,
-            "steps": steps
-        }
-    }
-
-
-@app.post("/api/risk-alerts/clear")
-async def clear_risk_alerts():
-    """清空预警历史"""
-    risk_engine = get_risk_engine()
-    risk_engine.clear_history()
-    return {"success": True, "message": "预警历史已清空"}
-
-
-@app.get("/api/docs/usage")
-async def get_usage_docs():
-    """获取使用说明文档"""
-    try:
-        import os
-        docs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs", "README.md")
-        with open(docs_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return {"success": True, "content": content}
-    except Exception as e:
-        return {"success": False, "error": str(e)}

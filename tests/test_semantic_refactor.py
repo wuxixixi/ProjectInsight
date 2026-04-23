@@ -151,10 +151,10 @@ class TestAPIParamsCompatibility:
     @pytest.fixture(autouse=True)
     def reset_engine(self):
         """每个测试前重置引擎"""
-        import backend.app
-        backend.app.engine = None
+        import backend.state
+        backend.state.engine = None
         yield
-        backend.app.engine = None
+        backend.state.engine = None
 
     def test_start_with_new_param_names(self, client):
         """测试使用新参数名启动推演"""
@@ -359,10 +359,10 @@ class TestFullIntegration:
     @pytest.fixture(autouse=True)
     def reset_engine(self):
         """每个测试前重置引擎"""
-        import backend.app
-        backend.app.engine = None
+        import backend.state
+        backend.state.engine = None
         yield
-        backend.app.engine = None
+        backend.state.engine = None
 
     def test_full_flow_with_new_naming(self, client):
         """测试使用新命名的完整流程"""

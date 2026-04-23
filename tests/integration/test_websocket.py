@@ -19,10 +19,10 @@ def client():
 @pytest.fixture(autouse=True)
 def reset_engine():
     """每个测试前重置引擎"""
-    import backend.app
-    backend.app.engine = None
+    import backend.state
+    backend.state.engine = None
     yield
-    backend.app.engine = None
+    backend.state.engine = None
 
 
 class TestWebSocketConnection:

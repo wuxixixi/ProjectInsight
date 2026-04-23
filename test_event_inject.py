@@ -32,7 +32,8 @@ async def test_api_endpoint():
     """直接测试 API 端点函数"""
     print("\n3. 测试 API 端点...")
     try:
-        from backend.app import AirdropRequest, airdrop_event
+        from backend.helpers import AirdropRequest
+        from backend.routers.event import airdrop_event
         
         req = AirdropRequest(content='test news from API', source='public')
         result = await airdrop_event(req)
