@@ -231,7 +231,8 @@ class AgentMemory:
             query += " AND source = ?"
             params.append(source)
 
-        query += f" ORDER BY timestamp DESC LIMIT {limit}"
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
 
         rows = self.conn.execute(query, params).fetchall()
         self._read_count += 1

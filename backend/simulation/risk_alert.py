@@ -99,7 +99,7 @@ class RiskAlertEngine:
         self.rules.append(RiskRule(
             name="negative_rising",
             metric="negative_belief_rate",
-            condition=lambda x: False,  # 需要历史数据判断
+            condition=lambda x: False,  # 趋势判断在 check() 中单独处理
             level=RiskLevel.MEDIUM,
             message_template="📈 负面信念传播率快速上升，当前 {value:.0%}",
             suggestion="密切监控舆情动态，做好干预准备",

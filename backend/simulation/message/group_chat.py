@@ -48,18 +48,35 @@ class ChatGroup:
 class GroupChat:
     """
     群组讨论管理器
-    
+
     管理:
     - 群组创建和销毁
     - 消息路由
     - 社会验证效应
     - 观点碰撞检测
     """
-    
-    def __init__(self):
+
+    def __init__(
+        self,
+        opinion_clash_threshold: float = 0.2,
+        validation_weight_agreement: float = 0.6,
+        validation_weight_neutrality: float = 0.4
+    ):
+        """
+        初始化群组讨论管理器
+
+        Args:
+            opinion_clash_threshold: 观点碰撞检测阈值，观点绝对值超过此值视为明显立场
+            validation_weight_agreement: 社会验证中一致性权重
+            validation_weight_neutrality: 社会验证中中立性权重
+        """
+        self.opinion_clash_threshold = opinion_clash_threshold
+        self.validation_weight_agreement = validation_weight_agreement
+        self.validation_weight_neutrality = validation_weight_neutrality
+
         # 群组: group_id -> ChatGroup
         self._groups: Dict[str, ChatGroup] = {}
-        
+
         # 消息日志
         self._log: List[Message] = []
     
@@ -210,7 +227,8 @@ class GroupChat:
         agreement_ratio = agreeing / len(group_opinions)
         
         # 社会验证强度
-        validation = agreement_ratio * 0.6 + 0.4 * (1 - abs(agent_opinion))
+        validation = (agreement_ratio * self.validation_weight_agreement +
+                      self.validation_weight_neutrality * (1 - abs(agent_opinion)))
         
         return {
             "validation": validation,
@@ -238,8 +256,9 @@ class GroupChat:
             return None
         
         # 检查是否有明显对立
-        positive = sum(1 for o in opinions if o > 0.2)
-        negative = sum(1 for o in opinions if o < -0.2)
+        threshold = self.opinion_clash_threshold
+        positive = sum(1 for o in opinions if o > threshold)
+        negative = sum(1 for o in opinions if o < -threshold)
         
         if positive > 0 and negative > 0:
             return {

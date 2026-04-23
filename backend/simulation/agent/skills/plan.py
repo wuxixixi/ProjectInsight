@@ -6,6 +6,7 @@ Plan Skill - 规划技能
 """
 from typing import Dict, Any, List
 import logging
+import numpy as np
 
 from .base import SkillBase, SkillMetadata, SkillContext, SkillResult
 from .loader import SkillLoader
@@ -136,8 +137,7 @@ class PlanSkill(SkillBase):
                 "理性分析，不要急着下结论。"
             ]
         
-        import random
-        return random.choice(comments)
+        return np.random.choice(comments)
     
     def _infer_emotion(self, cognition: Dict, context: SkillContext) -> str:
         """推断情绪状态"""
