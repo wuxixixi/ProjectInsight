@@ -345,8 +345,8 @@ class EnhancedMathModel:
         # 辟谣基础效果
         base_effect = 0.2 * self.params.debunk_credibility
 
-        # 延迟惩罚
-        delay_penalty = max(0.5, 1.0 - (self.params.debunk_delay / 100))
+        # 延迟惩罚（分母与前端滑块范围0-30匹配）
+        delay_penalty = max(0.3, 1.0 - (self.params.debunk_delay / 30))
 
         # 茧房阻尼
         cocoon_resistance = 1.0 - self.params.cocoon_strength * 0.3
@@ -428,7 +428,8 @@ class EnhancedMathModel:
         old_belief: np.ndarray,
         old_opinions: np.ndarray,
         new_opinions: np.ndarray,
-        dissonance_adjustment: np.ndarray
+        dissonance_adjustment: np.ndarray,
+        mean_reversion_rate: float = 0.02
     ) -> np.ndarray:
         """
         更新信念强度
@@ -436,17 +437,23 @@ class EnhancedMathModel:
         规则：
         1. 认知失调可能导致信念强化
         2. 观点大幅变化可能导致信念弱化
+        3. 均值回归：防止信念单调递增
         """
         new_belief = old_belief.copy()
 
         # 认知失调强化信念
-        dissonance_boost = np.abs(dissonance_adjustment) * 0.1
+        dissonance_boost = np.abs(dissonance_adjustment) * 0.08  # 略微降低系数
         new_belief += dissonance_boost
 
         # 观点变化大则信念弱化
         opinion_change = np.abs(new_opinions - old_opinions)
-        belief_decay = opinion_change * 0.1
+        belief_decay = opinion_change * 0.12  # 略微提高系数
         new_belief -= belief_decay
+
+        # 均值回归：长期避免信念单调递增
+        belief_mean = 0.5  # 信念强度的长期均衡值
+        mean_reversion = (belief_mean - old_belief) * mean_reversion_rate
+        new_belief += mean_reversion
 
         # 裁剪到有效范围
         new_belief = np.clip(new_belief, 0.1, 0.95)

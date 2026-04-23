@@ -556,7 +556,7 @@
                   left: (getPredictionField('negative', 'optimistic') * 100) + '%',
                   right: (100 - getPredictionField('negative', 'pessimistic') * 100) + '%'
                 }">
-                  <div class="bar-expected" :style="{ left: ((getPredictionField('negative', 'expected') - getPredictionField('negative', 'optimistic')) / (getPredictionField('negative', 'pessimistic') - getPredictionField('negative', 'optimistic')) * 100) + '%' }"></div>
+                  <div class="bar-expected" :style="{ left: getExpectedPosition('negative', 'optimistic', 'pessimistic') + '%' }"></div>
                 </div>
               </div>
               <div class="prediction-values">
@@ -572,7 +572,7 @@
                   left: (getPredictionField('positive', 'pessimistic') * 100) + '%',
                   right: (100 - getPredictionField('positive', 'optimistic') * 100) + '%'
                 }">
-                  <div class="bar-expected" :style="{ left: ((getPredictionField('positive', 'expected') - getPredictionField('positive', 'pessimistic')) / (getPredictionField('positive', 'optimistic') - getPredictionField('positive', 'pessimistic')) * 100) + '%' }"></div>
+                  <div class="bar-expected" :style="{ left: getExpectedPosition('positive', 'pessimistic', 'optimistic') + '%' }"></div>
                 </div>
               </div>
               <div class="prediction-values">
@@ -2242,6 +2242,15 @@ export default {
         }
       }
       return 0
+    },
+
+    // 计算预测区间期望值位置百分比（带除零保护）
+    getExpectedPosition(category, lowField, highField) {
+      const expected = this.getPredictionField(category, 'expected')
+      const low = this.getPredictionField(category, lowField)
+      const high = this.getPredictionField(category, highField)
+      const range = high - low
+      return range > 0 ? ((expected - low) / range * 100) : 50
     },
 
     // 展开信息面板并高亮指定项
