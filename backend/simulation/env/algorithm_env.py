@@ -54,7 +54,9 @@ class AlgorithmEnv(EnvBase):
         cocoon_strength: float = 0.5,
         diversity_threshold: float = 0.3,
         content_pool: Optional[Dict[str, List[str]]] = None,
-        seed: int = 42
+        seed: int = 42,
+        content_threshold_negative: float = -0.2,
+        content_threshold_positive: float = 0.2
     ):
         super().__init__()
 
@@ -69,6 +71,10 @@ class AlgorithmEnv(EnvBase):
 
         # 实例级随机生成器（确保可重现性）
         self._rng = random.Random(seed)
+
+        # 内容分类阈值（可配置）
+        self._content_threshold_negative = content_threshold_negative
+        self._content_threshold_positive = content_threshold_positive
     
     @property
     def name(self) -> str:
@@ -99,6 +105,9 @@ class AlgorithmEnv(EnvBase):
         """
         获取用户信息多样性指数
 
+        使用 Shannon 熵衡量推荐内容类型的多样性，
+        而非观点方差（方差反映分散度而非信息来源多样性）。
+
         Args:
             agent_id: Agent ID
 
@@ -109,12 +118,32 @@ class AlgorithmEnv(EnvBase):
         if len(history) < 2:
             return 1.0
 
-        # 计算观点标准差（观点 ∈ [-1, 1]，最大方差 = 1）
-        opinions = [h.get("opinion", h.get("content_alignment", 0)) for h in history]
-        avg = sum(opinions) / len(opinions)
-        variance = sum((o - avg) ** 2 for o in opinions) / len(opinions)
-        # 观点范围 [-1, 1] 理论最大方差为 1，直接使用方差作为多样性指数
-        diversity = min(1.0, variance)
+        # 基于内容分类计数计算 Shannon 熵
+        import math
+        categories = {"negative": 0, "neutral": 0, "positive": 0}
+        for h in history:
+            alignment = h.get("content_alignment", 0)
+            if alignment < self._content_threshold_negative:
+                categories["negative"] += 1
+            elif alignment > self._content_threshold_positive:
+                categories["positive"] += 1
+            else:
+                categories["neutral"] += 1
+
+        total = sum(categories.values())
+        if total == 0:
+            return 0.0
+
+        # Shannon 熵
+        entropy = 0.0
+        for count in categories.values():
+            if count > 0:
+                p = count / total
+                entropy -= p * math.log2(p)
+
+        # 最大熵 = log2(3) ≈ 1.585（三类均匀分布时）
+        max_entropy = math.log2(3)
+        diversity = min(1.0, entropy / max_entropy) if max_entropy > 0 else 0.0
 
         return diversity
     
@@ -182,9 +211,9 @@ class AlgorithmEnv(EnvBase):
         # 茧房效应：高强度时推荐与观点一致的内容
         if self._rng.random() < self._cocoon_strength:
             # 推荐与当前观点一致的内容
-            if opinion < -0.2:
+            if opinion < self._content_threshold_negative:
                 pool = self._content_pool["negative"]
-            elif opinion > 0.2:
+            elif opinion > self._content_threshold_positive:
                 pool = self._content_pool["positive"]
             else:
                 pool = self._content_pool["neutral"]
