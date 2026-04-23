@@ -187,6 +187,11 @@ async def get_prediction_trajectory(steps: int = 10):
 @router.post("/risk-alerts/clear")
 async def clear_risk_alerts():
     """清空预警历史"""
+    if state.engine is None:
+        return JSONResponse(
+            content={"success": False, "error": "推演引擎未初始化"},
+            status_code=400
+        )
     risk_engine = get_risk_engine()
     risk_engine.clear_history()
     return {"success": True, "message": "预警历史已清空"}

@@ -41,7 +41,7 @@ class LLMConfig:
     max_retries: int = field(default_factory=lambda: get_env_int("LLM_MAX_RETRIES", 5))
     temperature: float = 0.7
     max_tokens: int = 150
-    seed: int = 42  # 随机种子（用于抖动等，issue #527）
+    seed: int = 42  # 退避抖动RNG种子，不影响LLM API调用的seed参数
 
     # 连接池配置
     connection_pool_size: int = 500  # 连接池大小
