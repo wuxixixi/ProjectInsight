@@ -113,7 +113,8 @@ class LLMAgent:
         belief_strength: float,
         influence: float,
         susceptibility: float,
-        belief_reduction_on_authority: float = 0.1
+        belief_reduction_on_authority: float = 0.1,
+        silence_opinion_change_factor: float = 0.1
     ):
         self.id = agent_id
         self.opinion = opinion
@@ -121,6 +122,7 @@ class LLMAgent:
         self.influence = influence
         self.susceptibility = susceptibility
         self.belief_reduction_on_authority = belief_reduction_on_authority
+        self.silence_opinion_change_factor = silence_opinion_change_factor
         self.exposed_to_negative = opinion < 0
         self.exposed_to_positive = False
 
@@ -460,8 +462,8 @@ class LLMAgent:
 
             # 如果选择沉默，观点变化应该更小（保持原有观点）
             if is_silent:
-                # 沉默时观点变化幅度降低到原来的30%
-                max_change = 0.1 * (1 - self.belief_strength * 0.5)
+                # 沉默时观点变化幅度降低
+                max_change = self.silence_opinion_change_factor * (1 - self.belief_strength * 0.5)
                 if abs_change > max_change:
                     new_opinion = self.opinion + np.sign(change) * max_change
                     new_opinion = np.clip(new_opinion, -1, 1)
@@ -604,7 +606,8 @@ class LLMAgentPopulation:
         initial_rumor_spread: float = None,  # 兼容旧参数名
         network_type: str = "small_world",
         llm_config: Optional[LLMConfig] = None,
-        belief_reduction_on_authority: float = 0.1
+        belief_reduction_on_authority: float = 0.1,
+        silence_opinion_change_factor: float = 0.1
     ):
         # 兼容旧参数名
         if initial_rumor_spread is not None:
@@ -638,7 +641,8 @@ class LLMAgentPopulation:
                 belief_strength=belief_strengths[i],
                 influence=influences[i],
                 susceptibility=susceptibilities[i],
-                belief_reduction_on_authority=belief_reduction_on_authority
+                belief_reduction_on_authority=belief_reduction_on_authority,
+                silence_opinion_change_factor=silence_opinion_change_factor
             )
             for i in range(size)
         ]
