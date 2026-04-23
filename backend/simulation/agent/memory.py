@@ -174,22 +174,24 @@ class AgentMemory:
     
     def store_exposure(self, event: ExposureEvent, step: int):
         """存储暴露事件到长时记忆"""
-        self.conn.execute("""
-            INSERT INTO exposure_log
-            (agent_id, step, source, content, alignment, trust_delta, 
-             sender_id, credibility)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            self.agent_id,
-            step,
-            event.source.value,
-            event.content,
-            event.alignment,
-            event.trust_delta,
-            event.sender_id,
-            event.credibility
-        ))
-        self.conn.commit()
+        # issue #1152: 使用_db_lock保护SQLite写操作
+        with self._db_lock:
+            self.conn.execute("""
+                INSERT INTO exposure_log
+                (agent_id, step, source, content, alignment, trust_delta,
+                 sender_id, credibility)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                self.agent_id,
+                step,
+                event.source.value,
+                event.content,
+                event.alignment,
+                event.trust_delta,
+                event.sender_id,
+                event.credibility
+            ))
+            self.conn.commit()
         self._write_count += 1
     
     def get_belief_history(

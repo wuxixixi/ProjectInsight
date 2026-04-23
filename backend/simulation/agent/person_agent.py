@@ -91,6 +91,9 @@ class PersonAgent(AgentBase):
     opinion_max_change_factor: float = 0.3
     # 社会影响系数（issue #838: 与 opinion_max_change_factor 分离）
     social_influence_coeff: float = 0.3
+    # 沉默判定阈值（issue #1148: 参数化硬编码值）
+    silence_fear_threshold: float = 0.6
+    silence_delta_threshold: float = 0.1
 
     def __init__(
         self,
@@ -331,7 +334,11 @@ class PersonAgent(AgentBase):
             delta = 0
 
         # issue #1060: 基于孤立恐惧计算沉默概率
-        is_silent = self.profile.fear_of_isolation > 0.6 and abs(delta) > 0.1
+        # issue #1148: 使用类变量而非硬编码阈值
+        is_silent = (
+            self.profile.fear_of_isolation > self.silence_fear_threshold
+            and abs(delta) > self.silence_delta_threshold
+        )
 
         return {
             "new_opinion": new_opinion,

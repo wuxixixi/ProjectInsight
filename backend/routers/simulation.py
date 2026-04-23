@@ -2,6 +2,7 @@
 推演相关路由
 """
 import logging
+import os
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -286,8 +287,16 @@ async def finish_simulation():
     if state.engine is None:
         return JSONResponse(content={"error": "未初始化"}, status_code=400)
 
-    import os
-    report_path = state.engine.generate_report()
+    try:
+        report_path = state.engine.generate_report()
+    except Exception as e:
+        logger.error(f"报告生成失败: {e}")
+        # issue #1156: 不重置引擎，允许重试
+        return JSONResponse(
+            content={"success": False, "error": f"报告生成失败: {e}"},
+            status_code=500
+        )
+
     # 使用正斜杠，避免JSON转义问题
     report_path_safe = report_path.replace("\\", "/") if report_path else None
     report_filename = os.path.basename(report_path) if report_path else None

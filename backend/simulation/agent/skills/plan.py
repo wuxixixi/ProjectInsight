@@ -96,20 +96,23 @@ class PlanSkill(SkillBase):
     def _decide_silence(self, observation: Dict, context: SkillContext) -> bool:
         """决定是否沉默"""
         social_pressure = observation.get("social_pressure", 0.0)
-        fear_of_isolation = context.belief_state.get("fear_of_isolation", 0.5)
+        # issue #1167: fear_of_isolation是agent profile属性，应从config获取
+        fear_of_isolation = context.config.get("fear_of_isolation", 0.5)
 
         # 沉默条件: 高社交压力 + 高孤立恐惧
         if social_pressure > self.silence_pressure_threshold and fear_of_isolation > self.silence_fear_threshold:
             # 计算"观点偏离主流"程度
             peer_opinions = observation.get("peer_opinions", [])
             if peer_opinions:
-                current = context.belief_state.get("opinion", 0.0)
+                # opinion = truth_trust - rumor_trust
+                current = context.belief_state.get("opinion",
+                    context.belief_state.get("truth_trust", 0) - context.belief_state.get("rumor_trust", 0))
                 avg_peer = sum(peer_opinions) / len(peer_opinions)
 
                 # 观点偏离且恐惧 → 沉默
                 if abs(current - avg_peer) > self.silence_deviation_threshold:
                     return True
-        
+
         return False
     
     def _select_action(
@@ -121,22 +124,24 @@ class PlanSkill(SkillBase):
         """选择行动类型"""
         if is_silent:
             return "沉默"
-        
+
         belief_delta = abs(cognition.get("belief_delta", 0.0))
-        
+
         # 基于观点变化程度选择行动
         if belief_delta < self.action_wait_threshold:
             return "观望"
         elif belief_delta < self.action_moderate_threshold:
             # 有变化但不剧烈
-            influence = context.belief_state.get("influence", 0.5)
+            # issue #1167: influence是agent profile属性，应从config获取
+            influence = context.config.get("influence", 0.5)
             if influence > 0.6:
                 return "转发"  # 高影响力者倾向于转发
             else:
                 return "观望"
         else:
             # 剧烈变化
-            susceptibility = context.belief_state.get("susceptibility", 0.5)
+            # issue #1167: susceptibility是agent profile属性，应从config获取
+            susceptibility = context.config.get("susceptibility", 0.5)
             if susceptibility > 0.6:
                 return "转发"
             else:

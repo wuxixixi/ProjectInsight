@@ -23,14 +23,19 @@ def _get_current_state_dict() -> Optional[dict]:
         return None
     current = engine.current_state
 
-    # issue #1026: 计算 debunk_effect（辟谣前后真相接受率变化）
+    # issue #1026/#1155: 计算 debunk_effect（辟谣前后真相接受率变化）
     debunk_effect = 0.0
     if getattr(engine, 'responded', False) and engine.history:
-        response_step = getattr(engine, 'response_delay', 0)
-        if response_step < len(engine.history):
-            pre_rate = engine.history[response_step].get(
+        # 找到实际辟谣发布时的步骤（而非用response_delay索引）
+        responded_at = None
+        for i, h in enumerate(engine.history):
+            if h.get('response_released') or h.get('debunk_released'):
+                responded_at = i
+                break
+        if responded_at is not None and responded_at > 0:
+            pre_rate = engine.history[responded_at - 1].get(
                 'positive_belief_rate',
-                engine.history[response_step].get('truth_acceptance_rate', 0)
+                engine.history[responded_at - 1].get('truth_acceptance_rate', 0)
             )
             debunk_effect = current.positive_belief_rate - pre_rate
 

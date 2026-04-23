@@ -35,6 +35,9 @@ def reset_global_state():
     from backend.simulation.agent.person_agent import PersonAgent
     PersonAgent.opinion_max_change_factor = 0.3
     PersonAgent.social_influence_coeff = 0.3
+    # issue #1148: 重置沉默阈值类变量
+    PersonAgent.silence_fear_threshold = 0.6
+    PersonAgent.silence_delta_threshold = 0.1
 
     yield
 
@@ -45,3 +48,5 @@ def reset_global_state():
     reset_risk_engine()
     PersonAgent.opinion_max_change_factor = 0.3
     PersonAgent.social_influence_coeff = 0.3
+    PersonAgent.silence_fear_threshold = 0.6
+    PersonAgent.silence_delta_threshold = 0.1

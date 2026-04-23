@@ -552,14 +552,18 @@ def merge_knowledge_graphs(
                 "target": tgt
             })
 
+    # issue #1161: 构建ID到名称的映射，避免O(n)线性扫描
+    existing_id_to_name = {e.get('id'): e.get('name', '') for e in existing_entities}
+    merged_id_to_name = {e.get('id'): e.get('name', '') for e in merged_entities}
+
     # 先加入现有关系（source/target 可能是 ID 或 name）
     for r in existing_relations:
         src = r.get("source", "")
         act = r.get("action", "")
         tgt = r.get("target", "")
         # 如果是 ID，尝试解析为 name
-        src_name = _resolve_id_to_name(src, existing_entities)
-        tgt_name = _resolve_id_to_name(tgt, existing_entities)
+        src_name = _resolve_id_to_name(src, existing_id_to_name)
+        tgt_name = _resolve_id_to_name(tgt, existing_id_to_name)
         _add_relation(src_name or src, act, tgt_name or tgt)
 
     # 再加入新关系（需要 ID 重映射）
@@ -571,8 +575,8 @@ def merge_knowledge_graphs(
         src = id_remap.get(src, src)
         tgt = id_remap.get(tgt, tgt)
         # 再解析为 name
-        src_name = _resolve_id_to_name(src, merged_entities)
-        tgt_name = _resolve_id_to_name(tgt, merged_entities)
+        src_name = _resolve_id_to_name(src, merged_id_to_name)
+        tgt_name = _resolve_id_to_name(tgt, merged_id_to_name)
         _add_relation(src_name or src, act, tgt_name or tgt)
 
     # === 3. 元数据融合 ===
@@ -601,9 +605,6 @@ def merge_knowledge_graphs(
     }
 
 
-def _resolve_id_to_name(id_str: str, entities: List[Dict]) -> str:
+def _resolve_id_to_name(id_str: str, id_to_name: Dict[str, str]) -> str:
     """将实体 ID 解析为名称，如果找不到则返回空字符串"""
-    for e in entities:
-        if e.get("id") == id_str:
-            return e.get("name", "")
-    return ""
+    return id_to_name.get(id_str, "")
