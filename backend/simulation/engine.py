@@ -137,7 +137,7 @@ class SimulationEngine:
             polarization_factor=polarization_factor,
             echo_chamber_factor=echo_chamber_factor
         )
-        self.math_model = EnhancedMathModel(math_params)
+        self.math_model = EnhancedMathModel(math_params, seed=self.seed)
 
         # 历史记录
         self.history: List[Dict] = []

@@ -33,7 +33,7 @@ def get_env_int(key: str, default: int) -> int:
 @dataclass
 class LLMConfig:
     """LLM 配置 - 从环境变量读取默认值"""
-    base_url: str = field(default_factory=lambda: get_env_str("LLM_BASE_URL", "http://10.17.2.29:31277/v1"))
+    base_url: str = field(default_factory=lambda: get_env_str("LLM_BASE_URL", ""))
     api_key: str = field(default_factory=lambda: get_env_str("LLM_API_KEY", ""))
     model: str = field(default_factory=lambda: get_env_str("LLM_MODEL", "Qwen2.5-32B-Instruct"))
     max_concurrent: int = field(default_factory=lambda: get_env_int("LLM_MAX_CONCURRENT", 100))
@@ -41,6 +41,7 @@ class LLMConfig:
     max_retries: int = field(default_factory=lambda: get_env_int("LLM_MAX_RETRIES", 5))
     temperature: float = 0.7
     max_tokens: int = 150
+    seed: int = 42  # 随机种子（用于抖动等，issue #527）
 
     # 连接池配置
     connection_pool_size: int = 500  # 连接池大小
@@ -95,6 +96,8 @@ class LLMClient:
         self._request_count = 0
         self._success_count = 0
         self._retry_count = 0
+        # 实例级随机生成器 (issue #527)
+        self._rng = random.Random(self.config.seed)
 
     async def __aenter__(self):
         # 配置连接池，解除默认限制
@@ -144,7 +147,7 @@ class LLMClient:
 
         # 添加随机抖动，避免惊群效应
         if self.config.jitter:
-            backoff = backoff * (0.5 + random.random())
+            backoff = backoff * (0.5 + self._rng.random())
 
         return backoff
 

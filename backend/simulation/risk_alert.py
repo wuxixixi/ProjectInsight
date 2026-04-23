@@ -13,6 +13,7 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Callable
 from enum import Enum
+from collections import deque
 import numpy as np
 import logging
 from datetime import datetime
@@ -96,7 +97,7 @@ class RiskAlertEngine:
     def __init__(self, thresholds: Optional[RiskThresholds] = None):
         self.thresholds = thresholds or RiskThresholds()
         self.rules: List[RiskRule] = []
-        self.alert_history: List[Alert] = []
+        self.alert_history: deque = deque(maxlen=100)
         self._setup_default_rules()
     
     def _setup_default_rules(self):
@@ -378,7 +379,7 @@ class RiskAlertEngine:
     
     def clear_history(self):
         """清空预警历史"""
-        self.alert_history = []
+        self.alert_history = deque(maxlen=100)
 
 
 # 全局实例

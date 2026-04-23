@@ -50,8 +50,9 @@ class EnhancedMathModel:
     6. 认知失调 - 面对矛盾信息的心理调适
     """
 
-    def __init__(self, params: Optional[EnhancedMathParams] = None):
+    def __init__(self, params: Optional[EnhancedMathParams] = None, seed: int = None):
         self.params = params or EnhancedMathParams()
+        self._rng = np.random.default_rng(seed)
 
     def compute_step(
         self,
@@ -122,7 +123,7 @@ class EnhancedMathModel:
         new_opinions += dissonance_adjustment
 
         # 7. 随机噪声
-        noise = np.random.normal(0, 0.01, size)
+        noise = self._rng.normal(0, 0.01, size)
         new_opinions += noise
 
         # 裁剪到有效范围
@@ -288,7 +289,7 @@ class EnhancedMathModel:
             # 应用调节因素
             adjusted_fear = isolation_fear * importance_factor * efficacy_factor[pressure_mask]
             silence_prob = 1 / (1 + np.exp(-(adjusted_fear - conviction) * 3))
-            random_vals = np.random.random(np.sum(pressure_mask))
+            random_vals = self._rng.random(np.sum(pressure_mask))
             silent_local = random_vals < silence_prob
             is_silent[pressure_mask] = silent_local
             silence_pressure[pressure_mask] = adjusted_fear * silent_local
@@ -387,7 +388,7 @@ class EnhancedMathModel:
         # 信念极强的人：可能逆火
         if np.any(strong_belief_mask):
             backfire_risk = self.params.backfire_strength * (belief_strength[strong_belief_mask] - backfire_threshold)
-            random_vals = np.random.random(np.sum(strong_belief_mask))
+            random_vals = self._rng.random(np.sum(strong_belief_mask))
             backfire_mask_local = random_vals < backfire_risk
 
             # 正常辟谣
@@ -428,7 +429,7 @@ class EnhancedMathModel:
         if np.any(mask):
             dissonance = change_magnitude[mask] - self.params.cognitive_dissonance_threshold
             reinforce_probability = belief_strength[mask] * 0.5
-            random_vals = np.random.random(np.sum(mask))
+            random_vals = self._rng.random(np.sum(mask))
             reinforce_mask = random_vals < reinforce_probability
 
             # 强化原有信念，抵消部分变化
