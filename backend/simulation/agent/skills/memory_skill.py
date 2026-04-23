@@ -64,20 +64,32 @@ class MemorySkill(SkillBase):
         )
     
     def _analyze_belief_trend(self, history: List[Dict]) -> str:
-        """分析信念变化趋势"""
+        """分析信念变化趋势（基于线性回归斜率，issue #450）"""
         if len(history) < 2:
             return "数据不足"
-        
-        recent = history[-3:] if len(history) >= 3 else history
+
+        recent = history[-5:] if len(history) >= 5 else history
         opinions = [h.get("opinion", 0) for h in recent if "opinion" in h]
-        
+
         if len(opinions) < 2:
             return "数据不足"
-        
-        delta = opinions[-1] - opinions[0]
-        if delta > 0.05:
+
+        # 线性回归计算斜率
+        n = len(opinions)
+        x_mean = (n - 1) / 2.0
+        y_mean = sum(opinions) / n
+        numerator = sum((i - x_mean) * (opinions[i] - y_mean) for i in range(n))
+        denominator = sum((i - x_mean) ** 2 for i in range(n))
+
+        if denominator == 0:
+            return "保持稳定"
+
+        slope = numerator / denominator
+
+        # 斜率阈值判定趋势
+        if slope > 0.02:
             return "趋向正面"
-        elif delta < -0.05:
+        elif slope < -0.02:
             return "趋向负面"
         else:
             return "保持稳定"

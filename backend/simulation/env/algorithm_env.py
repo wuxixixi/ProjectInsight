@@ -11,6 +11,7 @@ import random
 import logging
 
 from .base import EnvBase, tool, ToolKind
+from ...constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,8 @@ class AlgorithmEnv(EnvBase):
         diversity_threshold: float = 0.3,
         content_pool: Optional[Dict[str, List[str]]] = None,
         seed: int = 42,
-        content_threshold_negative: float = -0.2,
-        content_threshold_positive: float = 0.2
+        content_threshold_negative: float = None,
+        content_threshold_positive: float = None
     ):
         super().__init__()
 
@@ -72,9 +73,9 @@ class AlgorithmEnv(EnvBase):
         # 实例级随机生成器（确保可重现性）
         self._rng = random.Random(seed)
 
-        # 内容分类阈值（可配置）
-        self._content_threshold_negative = content_threshold_negative
-        self._content_threshold_positive = content_threshold_positive
+        # 内容分类阈值（使用 constants.py 中的默认值，issue #440）
+        self._content_threshold_negative = content_threshold_negative if content_threshold_negative is not None else OPINION_THRESHOLD_NEGATIVE
+        self._content_threshold_positive = content_threshold_positive if content_threshold_positive is not None else OPINION_THRESHOLD_POSITIVE
     
     @property
     def name(self) -> str:

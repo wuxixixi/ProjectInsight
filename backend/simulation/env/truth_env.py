@@ -67,24 +67,28 @@ class TruthEnv(EnvBase):
     def __init__(
         self,
         response_delay: int = 10,
-        default_credibility: float = 0.7
+        default_credibility: float = 0.7,
+        seed: int = 42
     ):
         super().__init__()
-        
+
         self._response_delay = response_delay
         self._default_credibility = default_credibility
-        
+
         # 干预事件列表
         self._interventions: List[Intervention] = []
-        
+
         # 已发布的干预
         self._published: List[Intervention] = []
-        
+
         # 辟谣效果追踪: agent_id -> set of intervention ids (issue #340)
         self._exposure_tracking: Dict[int, set] = {}
-        
+
         # 当前步数
         self._current_step = 0
+
+        # 实例级随机生成器 (issue #442)
+        self._rng = np.random.default_rng(seed)
     
     @property
     def name(self) -> str:
@@ -105,9 +109,11 @@ class TruthEnv(EnvBase):
             if not intervention.active:
                 continue
 
-            # 使用确定性随机（基于 agent_id 和 step）确保可重现性
-            rng = np.random.RandomState(agent_id + self._current_step * 1000)
-            if rng.random() < intervention.reach:
+            # 使用确定性随机（基于 agent_id 和 step）确保可重现性 (issue #442)
+            # 从实例 RNG 派生种子，避免全局 RandomState
+            derived_seed = int(self._rng.integers(0, 2**31) + agent_id + self._current_step * 1000) % (2**31)
+            agent_rng = np.random.default_rng(derived_seed)
+            if agent_rng.random() < intervention.reach:
                 # 记录暴露（使用稳定的业务ID）
                 if agent_id not in self._exposure_tracking:
                     self._exposure_tracking[agent_id] = set()

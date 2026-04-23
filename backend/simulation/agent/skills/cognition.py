@@ -111,16 +111,14 @@ class CognitionSkill(SkillBase):
         return social_influence
     
     def _reason_algorithm_effect(self, observation: Dict, context: SkillContext) -> float:
-        """推理算法茧房效应"""
+        """推理算法茧房效应（渐进式，issue #449）"""
         social_pressure = observation.get("social_pressure", 0.0)
-        
-        # 高社交压力 → 更依赖算法推荐（承认茧房）
-        if social_pressure > 0.5:
-            current = context.belief_state.get("opinion", 0.0)
-            # 茧房强化既有观点
-            return current * 0.05 * social_pressure
-        
-        return 0.0
+
+        # 渐进式：社交压力越高，茧房效应越强（不再用0.5硬阈值）
+        current = context.belief_state.get("opinion", 0.0)
+        cocoon_effect = current * 0.05 * social_pressure
+
+        return cocoon_effect
     
     def _reason_truth_effect(self, observation: Dict, context: SkillContext) -> float:
         """推理官方辟谣影响"""

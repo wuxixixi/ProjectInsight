@@ -124,16 +124,17 @@ class SocialEnv(EnvBase):
         }
     
     @tool(readonly=True, kind="observe")
-    async def get_majority_opinion(self, agent_id: int, threshold: float = 0.1) -> float:
+    async def get_majority_opinion(self, agent_id: int, threshold: float = 0.1, discrete: bool = False) -> float:
         """
-        获取主流观点（邻居中多数观点方向）
+        获取主流观点（邻居平均观点）
 
         Args:
             agent_id: Agent ID
-            threshold: 判断方向性的阈值
+            threshold: 离散模式下判断方向性的阈值
+            discrete: 是否返回离散值 (-1, 0, 1)，默认返回连续值
 
         Returns:
-            主流观点方向 (-1, 0, 1)
+            主流观点值 (连续: [-1, 1], 离散: -1/0/1)
         """
         neighbors = self._adjacency.get(agent_id, [])
         if not neighbors:
@@ -142,12 +143,15 @@ class SocialEnv(EnvBase):
         neighbor_opinions = [self._opinions.get(n, 0.0) for n in neighbors]
         avg = sum(neighbor_opinions) / len(neighbor_opinions)
 
-        if avg > threshold:
-            return 1.0
-        elif avg < -threshold:
-            return -1.0
-        else:
-            return 0.0
+        if discrete:
+            if avg > threshold:
+                return 1.0
+            elif avg < -threshold:
+                return -1.0
+            else:
+                return 0.0
+
+        return avg
 
     @tool(readonly=True, kind="observe")
     async def get_average_neighbor_opinion(self, agent_id: int) -> float:
