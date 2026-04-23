@@ -4,9 +4,11 @@
 用于计算不同人设类型对信息的接受度和影响力
 避免硬编码，便于调优
 """
-
+import logging
 from dataclasses import dataclass
 from typing import Dict
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -145,10 +147,13 @@ def get_persona_weights(persona_type: str) -> PersonaWeights:
     if persona_type in PERSONA_CONFIGS:
         return PERSONA_CONFIGS[persona_type]
     
-    # 模糊匹配
-    for key, weights in PERSONA_CONFIGS.items():
-        if key in persona_type or persona_type in key:
-            return weights
+    # 模糊匹配（限制最小匹配长度，避免单字误匹配，issue #852）
+    min_match_len = 2
+    if len(persona_type) >= min_match_len:
+        for key, weights in PERSONA_CONFIGS.items():
+            if (len(key) >= min_match_len and (key in persona_type or persona_type in key)):
+                logger.debug(f"人设权重模糊匹配: '{persona_type}' → '{key}'")
+                return weights
     
     # 返回默认配置
     return PersonaWeights(persona_type=persona_type)
