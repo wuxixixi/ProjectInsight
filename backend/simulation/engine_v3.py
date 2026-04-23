@@ -293,9 +293,9 @@ class EngineV3Integration:
                 receptivity = 1.0
             
             # 计算 TPB
-            import random
+            rng = np.random.RandomState(agent_id + self.context.step)
             result = tpb.compute_full(
-                info_credibility=random.uniform(0.4, 0.8),
+                info_credibility=float(rng.uniform(0.4, 0.8)),
                 content_relevance=0.5 + abs(new_opinion) * 0.3,
                 cognitive_dissonance=max(0, abs(new_opinion - old_opinion) - 0.1),
                 social_pressure=sum(peer_opinions) / len(peer_opinions) if peer_opinions else 0,

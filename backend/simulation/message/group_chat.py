@@ -60,7 +60,8 @@ class GroupChat:
         self,
         opinion_clash_threshold: float = 0.2,
         validation_weight_agreement: float = 0.6,
-        validation_weight_neutrality: float = 0.4
+        validation_weight_neutrality: float = 0.4,
+        default_propagation_prob: float = 0.7
     ):
         """
         初始化群组讨论管理器
@@ -69,10 +70,12 @@ class GroupChat:
             opinion_clash_threshold: 观点碰撞检测阈值，观点绝对值超过此值视为明显立场
             validation_weight_agreement: 社会验证中一致性权重
             validation_weight_neutrality: 社会验证中中立性权重
+            default_propagation_prob: 默认消息传播概率
         """
         self.opinion_clash_threshold = opinion_clash_threshold
         self.validation_weight_agreement = validation_weight_agreement
         self.validation_weight_neutrality = validation_weight_neutrality
+        self.default_propagation_prob = default_propagation_prob
 
         # 群组: group_id -> ChatGroup
         self._groups: Dict[str, ChatGroup] = {}
@@ -145,7 +148,7 @@ class GroupChat:
             receiver_ids=receiver_ids,
             content=content,
             opinion=opinion,
-            propagation_prob=0.7,
+            propagation_prob=self.default_propagation_prob,
             status=MessageStatus.SENT
         )
         
