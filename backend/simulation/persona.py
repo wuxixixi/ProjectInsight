@@ -4,6 +4,7 @@
 提供 Agent 人设模板和生成函数，供 llm_agents.py 和 llm_agents_dual.py 共用。
 """
 import numpy as np
+import threading
 from typing import Dict, Any, Optional
 
 
@@ -76,20 +77,69 @@ def get_persona(
     return PERSONA_TEMPLATES[chosen_idx]
 
 
-# 全局决策快照存储 (agent_id -> 上下文快照)
-AGENT_DECISION_SNAPSHOTS: Dict[int, Dict[str, Any]] = {}
+class SnapshotManager:
+    """
+    线程安全的决策快照管理器
+
+    替代全局可变字典，提供线程安全的快照存储。
+    每个引擎实例可持有独立的 SnapshotManager。
+    支持字典式访问以保持向后兼容。
+    """
+
+    def __init__(self):
+        self._snapshots: Dict[int, Dict[str, Any]] = {}
+        self._lock = threading.RLock()
+
+    def get(self, agent_id: int) -> Optional[Dict[str, Any]]:
+        """获取指定 Agent 的快照"""
+        with self._lock:
+            return self._snapshots.get(agent_id)
+
+    def set(self, agent_id: int, snapshot: Dict[str, Any]):
+        """设置指定 Agent 的快照"""
+        with self._lock:
+            self._snapshots[agent_id] = snapshot
+
+    def clear(self):
+        """清空所有快照"""
+        with self._lock:
+            self._snapshots.clear()
+
+    def get_all(self) -> Dict[int, Dict[str, Any]]:
+        """获取所有快照的副本"""
+        with self._lock:
+            return dict(self._snapshots)
+
+    # 字典式访问支持（向后兼容）
+    def __getitem__(self, agent_id: int) -> Optional[Dict[str, Any]]:
+        return self.get(agent_id)
+
+    def __setitem__(self, agent_id: int, snapshot: Dict[str, Any]):
+        self.set(agent_id, snapshot)
+
+    def __contains__(self, agent_id: int) -> bool:
+        with self._lock:
+            return agent_id in self._snapshots
 
 
-def get_agent_snapshot(agent_id: int) -> Dict[str, Any]:
-    """获取全局决策快照"""
-    return AGENT_DECISION_SNAPSHOTS.get(agent_id)
+# 全局默认实例（向后兼容）
+_global_snapshot_manager = SnapshotManager()
+
+
+def get_agent_snapshot(agent_id: int) -> Optional[Dict[str, Any]]:
+    """获取全局决策快照（向后兼容函数）"""
+    return _global_snapshot_manager.get(agent_id)
 
 
 def set_agent_snapshot(agent_id: int, snapshot: Dict[str, Any]):
-    """设置全局决策快照"""
-    AGENT_DECISION_SNAPSHOTS[agent_id] = snapshot
+    """设置全局决策快照（向后兼容函数）"""
+    _global_snapshot_manager.set(agent_id, snapshot)
 
 
 def clear_agent_snapshots():
-    """清空所有快照"""
-    AGENT_DECISION_SNAPSHOTS.clear()
+    """清空所有快照（向后兼容函数）"""
+    _global_snapshot_manager.clear()
+
+
+# 类型别名，供需要独立实例的模块使用
+AGENT_DECISION_SNAPSHOTS = _global_snapshot_manager
