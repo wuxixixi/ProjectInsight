@@ -18,19 +18,22 @@ logger = logging.getLogger(__name__)
 class P2PMessenger:
     """
     P2P 通信器
-    
+
     管理 Agent 间的一对一通信:
     - 消息发送和接收
     - 传播概率计算
     - 消息队列
     """
-    
-    def __init__(self):
+
+    def __init__(self, seed: int = 42):
         # 消息队列: receiver_id -> [Message]
         self._inbox: Dict[int, List[Message]] = {}
-        
+
         # 消息日志
         self._log: List[Message] = []
+
+        # 实例级随机生成器（确保可重现性）
+        self._rng = random.Random(seed)
     
     async def send(
         self,
@@ -91,7 +94,7 @@ class P2PMessenger:
         # 根据传播概率过滤
         received = []
         for msg in messages:
-            if random.random() < msg.propagation_prob:
+            if self._rng.random() < msg.propagation_prob:
                 msg.status = MessageStatus.DELIVERED
                 received.append(msg)
             else:

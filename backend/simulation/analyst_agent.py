@@ -391,13 +391,17 @@ class AnalystAgent:
     基于 LLM 生成专业的舆情分析报告
     """
 
-    def __init__(self, llm_config: Optional[LLMConfig] = None):
-        # 优化生成速度：减少token数量，降低温度
+    def __init__(
+        self,
+        llm_config: Optional[LLMConfig] = None,
+        temperature: float = 0.5,
+        max_tokens: int = 2000
+    ):
         if llm_config is None:
             llm_config = LLMConfig()
-            llm_config.timeout = 120  # 2分钟超时
-            llm_config.max_tokens = 2000  # 减少输出长度
-            llm_config.temperature = 0.5  # 降低随机性加速生成
+            llm_config.timeout = 120
+            llm_config.max_tokens = max_tokens
+            llm_config.temperature = temperature
         self.llm_config = llm_config
         self.llm_client: Optional[LLMClient] = None
 
