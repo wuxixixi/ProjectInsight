@@ -287,31 +287,32 @@ class PersonAgent(AgentBase):
         return str(response)
     
     def _parse_decision(self, content: str) -> Dict[str, Any]:
-        """解析 LLM 决策"""
+        """解析 LLM 决策，复用 LLMClient._parse_json_content"""
         try:
-            # 尝试提取 JSON
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
-            
-            decision = json.loads(content.strip())
-            
+            # 复用 LLMClient 的 JSON 解析方法
+            temp_client = LLMClient()
+            decision = temp_client._parse_json_content(content)
+
+            # 检查解析是否成功（失败时返回 {"raw_content": ...}）
+            if "raw_content" in decision and len(decision) == 1:
+                logger.warning(f"Agent {self.id} LLM 响应解析失败: {content[:100]}")
+                return {"new_opinion": self.get_opinion(), "is_silent": False}
+
             # 验证必要字段
             if "new_opinion" not in decision:
                 decision["new_opinion"] = self.get_opinion()
-            
+
             # 限制观点范围
             decision["new_opinion"] = max(-1.0, min(1.0, decision["new_opinion"]))
-            
+
             # 应用变化限制
             max_change = 0.3 * (1 - self.belief_state.belief_strength)
             delta = decision["new_opinion"] - self.get_opinion()
             if abs(delta) > max_change:
                 decision["new_opinion"] = self.get_opinion() + (max_change if delta > 0 else -max_change)
-            
+
             return decision
-            
+
         except json.JSONDecodeError:
             logger.warning(f"Agent {self.id} LLM 响应解析失败: {content[:100]}")
             return {"new_opinion": self.get_opinion(), "is_silent": False}

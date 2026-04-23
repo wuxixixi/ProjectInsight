@@ -6,6 +6,8 @@
 import asyncio
 import json
 import logging
+import re
+import threading
 from typing import Dict, List, Any, Optional
 from ..llm.client import LLMClient, LLMConfig
 
@@ -261,59 +263,25 @@ class GraphParserAgent:
         """
         从 LLM 响应中提取 JSON
 
+        复用 LLMClient._parse_json_content 方法
+
         Args:
             response: LLM 响应文本
 
         Returns:
             解析后的字典，或 None
         """
-        # 尝试找到 JSON 块
-        import re
+        if not response:
+            return None
 
-        # 方法1: 尝试直接解析整个响应
-        if response:
-            try:
-                return json.loads(response)
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.debug(f"JSON直接解析失败: {e}")
+        # 创建临时 LLMClient 实例以复用其 _parse_json_content 方法
+        temp_client = LLMClient()
+        result = temp_client._parse_json_content(response)
 
-        # 方法2: 尝试找到 ```json ... ``` 块
-        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response or "")
-        if json_match:
-            try:
-                return json.loads(json_match.group(1))
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.debug(f"json代码块解析失败: {e}")
-
-        # 方法3: 尝试找到 ``` ... ``` 块（不带json标签）
-        json_match = re.search(r'```\s*([\s\S]*?)\s*```', response or "")
-        if json_match:
-            try:
-                result = json.loads(json_match.group(1))
-                if isinstance(result, dict):
-                    return result
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.debug(f"代码块解析失败: {e}")
-
-        # 方法4: 尝试找到 { ... } 块
-        brace_match = re.search(r'\{[\s\S]*\}', response or "")
-        if brace_match:
-            try:
-                return json.loads(brace_match.group(0))
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.debug(f"花括号块解析失败: {e}")
-
-        # 方法5: 尝试找到 "content": "..." 中的 JSON 字符串
-        content_match = re.search(r'"content"\s*:\s*"([\s\S]*?)"', response or "")
-        if content_match:
-            try:
-                # 解码转义字符
-                content = content_match.group(1).replace('\\n', '\n').replace('\\"', '"')
-                return json.loads(content)
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.debug(f"content字段解析失败: {e}")
-
-        return None
+        # 检查是否解析成功（失败时返回 {"raw_content": ...}）
+        if "raw_content" in result and len(result) == 1:
+            return None
+        return result
 
     def _get_empty_graph(self) -> Dict[str, Any]:
         """
@@ -339,8 +307,6 @@ class GraphParserAgent:
         Returns:
             默认图谱结构
         """
-        import re
-        
         # 提取摘要
         sentences = news_content.replace('\n', ' ').split('。')
         summary = sentences[0][:50] + '...' if sentences and len(sentences[0]) > 50 else (sentences[0] if sentences else news_content[:50])
@@ -378,11 +344,12 @@ class GraphParserAgent:
 # ==================== 全局单例 ====================
 
 _graph_parser_instance: Optional[GraphParserAgent] = None
+_graph_parser_lock = threading.Lock()
 
 
 def get_graph_parser(llm_config: Optional[LLMConfig] = None) -> GraphParserAgent:
     """
-    获取全局 GraphParserAgent 实例
+    获取全局 GraphParserAgent 实例（线程安全）
 
     Args:
         llm_config: LLM 配置
@@ -392,11 +359,14 @@ def get_graph_parser(llm_config: Optional[LLMConfig] = None) -> GraphParserAgent
     """
     global _graph_parser_instance
     if _graph_parser_instance is None:
-        _graph_parser_instance = GraphParserAgent(llm_config)
+        with _graph_parser_lock:
+            if _graph_parser_instance is None:
+                _graph_parser_instance = GraphParserAgent(llm_config)
     return _graph_parser_instance
 
 
 def reset_graph_parser():
     """重置全局单例（用于测试）"""
     global _graph_parser_instance
-    _graph_parser_instance = None
+    with _graph_parser_lock:
+        _graph_parser_instance = None

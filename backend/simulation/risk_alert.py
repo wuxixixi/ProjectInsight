@@ -392,3 +392,9 @@ def get_risk_engine() -> RiskAlertEngine:
     if _risk_engine is None:
         _risk_engine = RiskAlertEngine()
     return _risk_engine
+
+
+def reset_risk_engine():
+    """重置全局实例（用于测试）"""
+    global _risk_engine
+    _risk_engine = None

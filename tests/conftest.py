@@ -23,8 +23,18 @@ def reset_global_state():
     import backend.llm.client
     backend.llm.client._llm_client = None
 
+    # 重置 GraphParserAgent 全局单例
+    from backend.simulation.graph_parser_agent import reset_graph_parser
+    reset_graph_parser()
+
+    # 重置 RiskAlertEngine 全局实例
+    from backend.simulation.risk_alert import reset_risk_engine
+    reset_risk_engine()
+
     yield
 
     clear_agent_snapshots()
     state.reset_state()
     backend.llm.client._llm_client = None
+    reset_graph_parser()
+    reset_risk_engine()
