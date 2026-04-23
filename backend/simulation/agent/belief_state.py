@@ -8,7 +8,7 @@ BeliefState - 结构化信念状态模型
 - cognitive_closed_need: 认知闭合需求 [0, 1]
 - exposure_history: 信息暴露历史
 """
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from enum import Enum
@@ -41,6 +41,17 @@ class ExposureEvent(BaseModel):
     trust_delta: float = Field(0.0, description="观点变化量")
     sender_id: Optional[int] = None
     credibility: float = Field(0.5, ge=0.0, le=1.0, description="信息可信度")
+
+    @field_validator('sender_id')
+    @classmethod
+    def validate_sender_id(cls, v, info):
+        # issue #1138: 验证sender_id
+        if v is not None and v < 0:
+            raise ValueError('sender_id must be non-negative')
+        # SOCIAL类型暴露事件应有sender_id
+        if info.data.get('source') == ExposureSource.SOCIAL and v is None:
+            raise ValueError('SOCIAL exposure must have sender_id')
+        return v
 
 
 class BeliefState(BaseModel):

@@ -120,10 +120,12 @@ class P2PMessenger:
                 received.append(msg)
             else:
                 msg.status = MessageStatus.FAILED
-        
-        # 清空收件箱
-        self._inbox[receiver_id] = []
-        
+
+        # issue #1149: 只移除已消费消息，保留FAILED消息以便重试
+        self._inbox[receiver_id] = [
+            m for m in messages if m.status != MessageStatus.DELIVERED
+        ]
+
         return received
     
     def compute_propagation_probability(
