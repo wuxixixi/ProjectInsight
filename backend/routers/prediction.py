@@ -177,5 +177,5 @@ async def get_usage_docs():
         with open(docs_path, "r", encoding="utf-8") as f:
             content = f.read()
         return {"success": True, "content": content}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    except OSError as e:
+        return {"success": False, "error": f"文档读取失败: {e}"}

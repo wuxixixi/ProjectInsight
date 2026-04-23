@@ -63,7 +63,7 @@ async def open_report(data: dict):
             subprocess.run(["xdg-open", abs_path], check=True)
 
         return JSONResponse(content={"success": True, "message": "已打开报告"})
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         logger.error(f"打开报告失败: {e}")
         return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
 
@@ -85,8 +85,9 @@ async def get_report_content(filename: str):
         with open(report_path, "r", encoding="utf-8") as f:
             content = f.read()
         return JSONResponse(content={"success": True, "content": content, "filename": filename})
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+    except OSError as e:
+        logger.error(f"读取报告内容失败: {e}")
+        return JSONResponse(content={"error": f"文件读取错误: {e}"}, status_code=500)
 
 
 @router.get("/download")

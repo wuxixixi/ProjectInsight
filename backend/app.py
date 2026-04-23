@@ -55,9 +55,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+# 启动时检查 CORS 安全配置
+if "*" in CORS_ALLOWED_ORIGINS:
+    logger.warning("CORS允许所有来源(*), 不建议在生产环境使用!")
 
 # 注册路由
 app.include_router(sim_router.router)
