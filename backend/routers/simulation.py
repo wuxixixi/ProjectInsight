@@ -213,8 +213,13 @@ async def inspect_agent(agent_id: int):
             status_code=400
         )
 
-    # 检查agent_id是否有效
-    if agent_id < 0 or agent_id >= engine.population_size:
+    # 检查agent_id是否有效（优先使用实际Agent数量）
+    if engine.use_llm and hasattr(engine, 'llm_population') and engine.llm_population:
+        max_agents = len(engine.llm_population.agents)
+    else:
+        max_agents = engine.population_size
+
+    if agent_id < 0 or agent_id >= max_agents:
         return JSONResponse(
             content={"error": f"无效的Agent ID: {agent_id}", "has_decided": False},
             status_code=404

@@ -310,9 +310,9 @@ async def stream_intelligence_report():
 
             # 创建 AnalystAgent 实例
             llm_config = LLMConfig()
-            llm_config.timeout = 120
-            llm_config.max_tokens = 2000
-            llm_config.temperature = 0.5
+            llm_config.timeout = int(os.environ.get("REPORT_LLM_TIMEOUT", "120"))
+            llm_config.max_tokens = int(os.environ.get("REPORT_LLM_MAX_TOKENS", "2000"))
+            llm_config.temperature = float(os.environ.get("REPORT_LLM_TEMPERATURE", "0.5"))
 
             async with AnalystAgent(llm_config) as agent:
                 async for chunk in agent.generate_report_stream(context):

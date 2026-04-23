@@ -143,8 +143,9 @@ async def websocket_simulation(websocket: WebSocket):
                         "type": "progress",
                         "message": "事件注入解析中，推演暂停等待..."
                     })
-                    # 等待注入完成（最多等待60秒）
-                    for _ in range(60):
+                    # 等待注入完成（可配置超时，默认120秒）
+                    injection_timeout = int(os.environ.get("INJECTION_TIMEOUT", "120"))
+                    for _ in range(injection_timeout):
                         if not state.injection_in_progress:
                             break
                         await asyncio.sleep(1)

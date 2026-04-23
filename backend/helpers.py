@@ -7,7 +7,9 @@ from typing import Optional, Dict, List
 from pydantic import BaseModel
 
 from .llm.client import LLMConfig
+from .constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 from . import state
+
 
 
 # ==================== 请求模型 ====================
@@ -167,8 +169,8 @@ def _build_perceived_climate_summary(agent_id: int) -> dict:
         return default_climate
 
     total = len(neighbors)
-    pro_rumor = sum(1 for n in neighbors if n.opinion < -0.2)
-    pro_truth = sum(1 for n in neighbors if n.opinion > 0.2)
+    pro_rumor = sum(1 for n in neighbors if n.opinion < OPINION_THRESHOLD_NEGATIVE)
+    pro_truth = sum(1 for n in neighbors if n.opinion > OPINION_THRESHOLD_POSITIVE)
     neutral = total - pro_rumor - pro_truth
     silent = sum(1 for n in neighbors if getattr(n, "is_silent", False))
     avg_opinion = sum(float(n.opinion) for n in neighbors) / total

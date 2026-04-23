@@ -23,6 +23,7 @@ from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionCon
 from .engine_v3 import EngineV3Integration
 from .agent import BeliefState
 from ..models.schemas import SimulationState, SimulationMode
+from ..constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 from ..llm.client import LLMClient, LLMConfig
 
 logger = logging.getLogger(__name__)
@@ -806,13 +807,21 @@ class SimulationEngine:
         # === 为每个 Agent 生成决策快照 ===
         self._generate_math_snapshots(old_opinions, new_opinions, is_silent, neighbors_list)
 
-    def _get_influencer_ids(self) -> List[int]:
-        """获取意见领袖ID列表（影响力前5%的节点）"""
+    def _get_influencer_ids(self, percentile: float = 95) -> List[int]:
+        """
+        获取意见领袖ID列表
+
+        Args:
+            percentile: 影响力百分位阈值，默认95表示前5%为意见领袖
+
+        Returns:
+            意见领袖Agent ID列表
+        """
         if self.population is None:
             return []
 
         pop = self.population
-        threshold = np.percentile(pop.influence, 95)
+        threshold = np.percentile(pop.influence, percentile)
         return list(np.where(pop.influence >= threshold)[0])
     
     def _get_personas(self) -> List[str]:
@@ -968,9 +977,9 @@ class SimulationEngine:
             opinions = pop.opinions
             belief_strengths = pop.belief_strength
             # 三个互斥类别：拒绝/中立/相信
-            reject_mask = opinions < -0.1    # 拒绝新闻
-            uncertain_mask = np.abs(opinions) <= 0.1  # 中立/不确定
-            believe_mask = opinions > 0.1    # 相信新闻
+            reject_mask = opinions < OPINION_THRESHOLD_NEGATIVE
+            uncertain_mask = np.abs(opinions) <= min(abs(OPINION_THRESHOLD_NEGATIVE), OPINION_THRESHOLD_POSITIVE)
+            believe_mask = opinions > OPINION_THRESHOLD_POSITIVE
 
             believe_rate = float(np.mean(believe_mask))
             reject_rate = float(np.mean(reject_mask))
