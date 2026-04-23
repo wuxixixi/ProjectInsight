@@ -10,7 +10,8 @@ import asyncio
 import logging
 
 from .agents import AgentPopulation
-from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
+from .llm_agents import LLMAgentPopulation
+from .persona import AGENT_DECISION_SNAPSHOTS
 from .llm_agents_dual import LLMAgentPopulationDual
 from .dual_network import DualLayerNetwork
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams

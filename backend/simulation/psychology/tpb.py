@@ -175,11 +175,12 @@ class TheoryOfPlannedBehavior(BaseModel):
         social_pressure: float,
         conformity_tendency: float,
         media_literacy: float,
-        current_opinion: float = 0.0
+        current_opinion: float = 0.0,
+        neighbor_avg_opinion: Optional[float] = None
     ) -> TPBResult:
         """
         完整 TPB 计算
-        
+
         Args:
             info_credibility: 信息可信度 [0, 1]
             content_relevance: 内容相关性 [0, 1]
@@ -188,26 +189,29 @@ class TheoryOfPlannedBehavior(BaseModel):
             conformity_tendency: 从众倾向 [0, 1]
             media_literacy: 媒介素养 [0, 1]
             current_opinion: 当前观点值
-        
+            neighbor_avg_opinion: 邻居平均观点值（用于主观规范方向）
+
         Returns:
             TPBResult
         """
         # 1. 态度计算
         attitude = info_credibility * content_relevance - cognitive_dissonance
         attitude = max(-1.0, min(1.0, attitude))
-        
+
         # 2. 主观规范计算
-        # 社交压力方向由多数人观点决定
-        norm_direction = 1 if current_opinion > 0 else -1
+        # 社交压力方向由邻居/舆论气候决定（改进：不再仅依赖自己观点）
+        # 如果没有邻居信息，退化为基于自身观点（向后兼容）
+        reference_opinion = neighbor_avg_opinion if neighbor_avg_opinion is not None else current_opinion
+        norm_direction = 1 if reference_opinion > 0 else -1
         subjective_norm = norm_direction * social_pressure * conformity_tendency
         subjective_norm = max(-1.0, min(1.0, subjective_norm))
-        
+
         # 3. 知觉行为控制计算
         perceived_control = media_literacy * 0.6 + content_relevance * 0.4
-        
+
         # 4. 行为意向
         intention = self.compute_intention(attitude, subjective_norm, perceived_control)
-        
+
         # 5. 预测行为
         return self.predict_behavior(
             intention, attitude, subjective_norm, perceived_control, current_opinion

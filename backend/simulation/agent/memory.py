@@ -116,8 +116,8 @@ class AgentMemory:
         try:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_step ON belief_history(agent_id, step)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_exposure ON exposure_log(agent_id, step)")
-        except:
-            pass  # 索引可能已存在
+        except Exception:
+            pass
         
         self.conn.commit()
     
@@ -218,18 +218,21 @@ class AgentMemory:
         limit: int = 50
     ) -> List[Dict]:
         """查询暴露历史"""
+        # 安全检查：确保 limit 为正整数
+        limit = max(1, min(int(limit), 1000))
+
         query = "SELECT * FROM exposure_log WHERE agent_id = ?"
         params = [self.agent_id]
-        
+
         if source:
             query += " AND source = ?"
             params.append(source)
-        
+
         query += f" ORDER BY timestamp DESC LIMIT {limit}"
-        
+
         rows = self.conn.execute(query, params).fetchall()
         self._read_count += 1
-        
+
         return [dict(row) for row in rows]
     
     # ==================== 认知缓冲操作 ====================
@@ -326,5 +329,5 @@ class AgentMemory:
         """析构时关闭连接"""
         try:
             self.close()
-        except:
+        except Exception:
             pass

@@ -125,7 +125,7 @@ class ReplayWriter:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_belief_sim_agent ON belief_history(simulation_id, agent_id)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_message_sim ON message_log(simulation_id, step)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_exposure_sim_agent ON exposure_events(simulation_id, agent_id)")
-        except:
+        except Exception:
             pass
         
         self.conn.commit()
@@ -316,5 +316,5 @@ class ReplayWriter:
     def __del__(self):
         try:
             self.close()
-        except:
+        except Exception:
             pass

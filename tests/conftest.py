@@ -8,3 +8,12 @@ from pathlib import Path
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+
+@pytest.fixture(autouse=True)
+def reset_global_state():
+    """每个测试前重置全局状态，避免测试间污染"""
+    from backend.simulation.persona import clear_agent_snapshots
+    clear_agent_snapshots()
+    yield
+    clear_agent_snapshots()

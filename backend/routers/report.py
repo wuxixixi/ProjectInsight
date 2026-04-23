@@ -27,14 +27,24 @@ async def open_report(data: dict):
     if not report_path or not os.path.exists(report_path):
         return JSONResponse(content={"success": False, "error": f"报告文件不存在: {report_path}"}, status_code=404)
 
+    # 安全检查：只允许打开 reports 目录下的文件，防止路径遍历
+    reports_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+    abs_path = os.path.abspath(report_path)
+    if not abs_path.startswith(reports_dir):
+        return JSONResponse(content={"success": False, "error": "路径不合法"}, status_code=403)
+
+    # 安全检查：只允许 .md 文件
+    if not abs_path.endswith(".md"):
+        return JSONResponse(content={"success": False, "error": "仅支持打开 .md 文件"}, status_code=403)
+
     try:
         system = platform.system()
         if system == "Windows":
-            subprocess.run(["cmd", "/c", "start", "", report_path], check=True)
+            os.startfile(abs_path)
         elif system == "Darwin":
-            subprocess.run(["open", report_path], check=True)
+            subprocess.run(["open", abs_path], check=True)
         else:
-            subprocess.run(["xdg-open", report_path], check=True)
+            subprocess.run(["xdg-open", abs_path], check=True)
 
         return JSONResponse(content={"success": True, "message": "已打开报告"})
     except Exception as e:
@@ -45,9 +55,12 @@ async def open_report(data: dict):
 @router.get("/content")
 async def get_report_content(filename: str):
     """获取报告内容"""
-    reports_dir = os.path.join(os.path.dirname(__file__), "..", "..", "reports")
-    reports_dir = os.path.abspath(reports_dir)
-    report_path = os.path.join(reports_dir, filename)
+    reports_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+    report_path = os.path.abspath(os.path.join(reports_dir, filename))
+
+    # 安全检查：防止路径遍历
+    if not report_path.startswith(reports_dir) or not filename.endswith(".md"):
+        return JSONResponse(content={"error": "无效的文件名"}, status_code=403)
 
     if not os.path.exists(report_path):
         return JSONResponse(content={"error": f"报告不存在: {filename}"}, status_code=404)
@@ -63,9 +76,12 @@ async def get_report_content(filename: str):
 @router.get("/download")
 async def download_report(filename: str):
     """下载报告文件"""
-    reports_dir = os.path.join(os.path.dirname(__file__), "..", "..", "reports")
-    reports_dir = os.path.abspath(reports_dir)
-    report_path = os.path.join(reports_dir, filename)
+    reports_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports"))
+    report_path = os.path.abspath(os.path.join(reports_dir, filename))
+
+    # 安全检查：防止路径遍历
+    if not report_path.startswith(reports_dir) or not filename.endswith(".md"):
+        return JSONResponse(content={"error": "无效的文件名"}, status_code=403)
 
     if not os.path.exists(report_path):
         return JSONResponse(content={"error": "报告不存在"}, status_code=404)

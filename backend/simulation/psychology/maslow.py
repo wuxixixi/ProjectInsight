@@ -186,7 +186,8 @@ class NeedsHierarchy(BaseModel):
         agent_id: int,
         fear_of_isolation: float,
         susceptibility: float,
-        influence: float
+        influence: float,
+        mapping_config: Optional[Dict[str, float]] = None
     ) -> "NeedsHierarchy":
         """
         从 Agent 特征推断需求层次
@@ -196,12 +197,34 @@ class NeedsHierarchy(BaseModel):
             fear_of_isolation: 孤立恐惧（映射到社交需求）
             susceptibility: 易感性（映射到安全需求）
             influence: 影响力（映射到尊重需求）
+            mapping_config: 映射系数配置，覆盖默认值。格式:
+                {
+                    "safety_base": 0.55, "safety_susceptibility": -0.35,
+                    "love_base": 0.45, "love_fear": -0.3,
+                    "esteem_base": 0.35, "esteem_influence": 0.45,
+                    "cognitive_base": 0.40, "physiological_base": 0.82
+                }
 
         Returns:
             需求层次模型
+
+        Note:
+            映射公式为简化线性模型，假设关系为单调近似。
+            系数缺乏直接实证支撑，仅作为理论到模型的桥梁假设。
+            可通过 mapping_config 参数覆盖默认系数以适配不同场景。
         """
         import random
         import time
+
+        # 默认映射系数（可被 mapping_config 覆盖）
+        cfg = {
+            "safety_base": 0.55, "safety_susceptibility": -0.35,
+            "love_base": 0.45, "love_fear": -0.3,
+            "esteem_base": 0.35, "esteem_influence": 0.45,
+            "cognitive_base": 0.40, "physiological_base": 0.82,
+        }
+        if mapping_config:
+            cfg.update(mapping_config)
 
         # 每个个体有独特的随机种子（agent_id + 时间戳微秒）
         base_seed = int(time.time() * 1000) % 100000
@@ -213,14 +236,13 @@ class NeedsHierarchy(BaseModel):
         cognitive_noise = rng.uniform(-0.25, 0.3)
 
         # 反向映射：高恐惧/易感性 = 需求未满足 = 低满足度
-        safety = max(0.15, min(0.9, 0.55 - susceptibility * 0.35 + noise))
-        love = max(0.15, min(0.9, 0.45 - fear_of_isolation * 0.3 + noise))
-        esteem = max(0.15, min(0.9, 0.35 + influence * 0.45 + noise))
-        # 认知需求：批判性思维，中等偏低基础值（人群趋向感性）
-        cognitive = max(0.15, min(0.9, 0.40 + cognitive_noise))
+        safety = max(0.15, min(0.9, cfg["safety_base"] + susceptibility * cfg["safety_susceptibility"] + noise))
+        love = max(0.15, min(0.9, cfg["love_base"] + fear_of_isolation * cfg["love_fear"] + noise))
+        esteem = max(0.15, min(0.9, cfg["esteem_base"] + influence * cfg["esteem_influence"] + noise))
+        cognitive = max(0.15, min(0.9, cfg["cognitive_base"] + cognitive_noise))
 
         # 生理需求基本满足（现代人都吃饱了）
-        physiological = max(0.7, min(0.95, 0.82 + noise * 0.5))
+        physiological = max(0.7, min(0.95, cfg["physiological_base"] + noise * 0.5))
 
         hierarchy = cls(
             physiological=physiological,

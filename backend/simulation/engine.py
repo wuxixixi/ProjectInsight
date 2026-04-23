@@ -16,7 +16,8 @@ import logging
 import uuid
 
 from .agents import AgentPopulation
-from .llm_agents import LLMAgentPopulation, AGENT_DECISION_SNAPSHOTS
+from .llm_agents import LLMAgentPopulation
+from .persona import AGENT_DECISION_SNAPSHOTS
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
 from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionConfig
 from .engine_v3 import EngineV3Integration
