@@ -150,11 +150,14 @@ class KnowledgeDrivenEvolution:
         entities: List[Dict],
         relations: List[Dict],
         config: KnowledgeEvolutionConfig = None,
-        impact_config: EntityImpactConfig = None
+        impact_config: EntityImpactConfig = None,
+        seed: Optional[int] = None
     ):
         self.config = config or KnowledgeEvolutionConfig()
         self.impact_calculator = EntityImpactCalculator(impact_config)
-        
+        # issue #1029: 实例级 RNG，确保可重现性
+        self._rng = np.random.default_rng(seed)
+
         # 存储原始数据
         self.entities = entities
         self.relations = relations
@@ -360,7 +363,7 @@ class KnowledgeDrivenEvolution:
             
             # 按影响力加权随机选择
             if len(self.entity_names) >= n_entities:
-                selected_indices = np.random.choice(
+                selected_indices = self._rng.choice(
                     len(self.entity_names),
                     size=n_entities,
                     replace=False,

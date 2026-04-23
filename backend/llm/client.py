@@ -89,8 +89,8 @@ class LLMClient:
 
     def __init__(self, config: Optional[LLMConfig] = None):
         self.config = config or LLMConfig()
-        # 并发控制信号量
-        self._semaphore = asyncio.Semaphore(self.config.max_concurrent)
+        # 并发控制信号量（lazy init，避免在无事件循环时创建）
+        self._semaphore: Optional[asyncio.Semaphore] = None
         self._session: Optional[aiohttp.ClientSession] = None
         # 统计信息
         self._request_count = 0
@@ -98,6 +98,13 @@ class LLMClient:
         self._retry_count = 0
         # 实例级随机生成器 (issue #527)
         self._rng = random.Random(self.config.seed)
+
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        """Lazy-init semaphore: only creates when first accessed inside an event loop"""
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.config.max_concurrent)
+        return self._semaphore
 
     async def __aenter__(self):
         # 配置连接池，解除默认限制
@@ -185,7 +192,7 @@ class LLMClient:
         last_error = None
 
         # 使用信号量控制并发
-        async with self._semaphore:
+        async with self.semaphore:
             for attempt in range(self.config.max_retries + 1):
                 try:
                     async with self._session.post(
@@ -375,7 +382,7 @@ class LLMClient:
 
         self._request_count += 1
 
-        async with self._semaphore:
+        async with self.semaphore:
             try:
                 async with self._session.post(
                     f"{self.config.base_url}/chat/completions",

@@ -9,7 +9,7 @@ AgentMemory - 三层记忆系统
 参考: AgentSociety Memory 设计
 """
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 import sqlite3
@@ -135,7 +135,7 @@ class AgentMemory:
             "type": "belief",
             "step": step,
             "belief": belief.to_dict(),
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(timezone.utc)
         }
         self.short_term.append(snapshot)
     
@@ -256,7 +256,7 @@ class AgentMemory:
             "input_data": input_data,
             "output_data": output_data,
             "reasoning": reasoning,
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(timezone.utc)
         })
     
     def flush_cognition(self, step: int):

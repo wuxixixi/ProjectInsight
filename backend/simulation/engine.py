@@ -9,7 +9,7 @@ v3.0 新增:
 """
 import numpy as np
 from typing import Optional, Dict, List, Callable, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import asyncio
 import logging
@@ -500,7 +500,7 @@ class SimulationEngine:
         self.step_count = 0
         self.responded = False
         self.history = []
-        self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.start_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         self.event_pool = []  # 清空事件池
         self.news_content = ""
         self.news_credibility = "不确定"
@@ -1146,7 +1146,7 @@ class SimulationEngine:
 
         report = f"""# 信息茧房推演报告
 
-> 生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+> 生成时间: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}
 > 推演模式: {mode_str}
 
 ## 模拟参数

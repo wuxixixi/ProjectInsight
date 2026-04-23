@@ -49,7 +49,8 @@ class TestLLMClientInit:
         client = LLMClient()
 
         assert client.config is not None
-        assert client._semaphore is not None
+        # issue #1030: semaphore is now lazy-init, accessed via property
+        assert client.semaphore is not None  # property triggers lazy init
         assert client._session is None
 
     def test_init_with_custom_config(self):
@@ -118,7 +119,7 @@ class TestConcurrencyControl:
 
         async def track_concurrency():
             nonlocal call_count, max_concurrent, current_concurrent
-            async with client._semaphore:
+            async with client.semaphore:
                 current_concurrent += 1
                 call_count += 1
                 max_concurrent = max(max_concurrent, current_concurrent)
@@ -141,7 +142,7 @@ class TestConcurrencyControl:
         completed = []
 
         async def track_task(task_id):
-            async with client._semaphore:
+            async with client.semaphore:
                 await asyncio.sleep(0.02)
                 completed.append(task_id)
 

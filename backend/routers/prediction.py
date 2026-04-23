@@ -2,6 +2,7 @@
 预测与风险预警路由
 """
 import logging
+from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -21,6 +22,18 @@ def _get_current_state_dict() -> Optional[dict]:
     if engine is None or engine.current_state is None:
         return None
     current = engine.current_state
+
+    # issue #1026: 计算 debunk_effect（辟谣前后真相接受率变化）
+    debunk_effect = 0.0
+    if getattr(engine, 'responded', False) and engine.history:
+        response_step = getattr(engine, 'response_delay', 0)
+        if response_step < len(engine.history):
+            pre_rate = engine.history[response_step].get(
+                'positive_belief_rate',
+                engine.history[response_step].get('truth_acceptance_rate', 0)
+            )
+            debunk_effect = current.positive_belief_rate - pre_rate
+
     return {
         # 核心指标
         "negative_belief_rate": current.negative_belief_rate,
@@ -33,6 +46,8 @@ def _get_current_state_dict() -> Optional[dict]:
         # issue #744: 添加深度误信/正确认知率
         "deep_negative_rate": current.deep_negative_rate,
         "deep_positive_rate": current.deep_positive_rate,
+        # issue #1026: 辟谣效果指标
+        "debunk_effect": debunk_effect,
     }
 
 

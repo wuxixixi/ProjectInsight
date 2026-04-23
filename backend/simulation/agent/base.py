@@ -10,7 +10,7 @@ AgentBase - Agent 抽象基类
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from .belief_state import BeliefState, ExposureEvent
@@ -155,7 +155,7 @@ class AgentBase(ABC):
         """更新信念状态"""
         new_belief.reasoning_trace = reasoning
         self.belief_state = new_belief
-        self.belief_state.last_updated = datetime.now()
+        self.belief_state.last_updated = datetime.now(timezone.utc)
         
         # 存储到记忆
         self.memory.store_belief(new_belief, self.step_count)

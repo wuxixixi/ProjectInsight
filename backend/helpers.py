@@ -224,16 +224,17 @@ def _get_v3_agent_fields(agent_id: int) -> dict:
             v3_fields.update(agent_state)
 
     # 从 engine 的 current_state 中获取 agent 列表（补充）
-    # issue #738: 构建索引避免 O(n) 线性搜索
+    # issue #1027: 使用 dict 索引代替 O(n) 线性搜索
     if hasattr(engine, 'current_state') and engine.current_state:
         agents = engine.current_state.agents if hasattr(engine.current_state, 'agents') else []
-        target = None
-        for agent in agents:
-            agent_dict = agent.model_dump() if hasattr(agent, 'model_dump') else agent
-            if agent_dict.get('id') == agent_id:
-                target = agent_dict
-                break
-        if target:
+        # 构建 id → agent 字典（仅当需要时）
+        agents_by_id = {
+            (a.model_dump() if hasattr(a, 'model_dump') else a).get('id'): a
+            for a in agents
+        }
+        target_dict = agents_by_id.get(agent_id)
+        if target_dict:
+            target = target_dict.model_dump() if hasattr(target_dict, 'model_dump') else target_dict
             # 只在 v3_fields 没有值时才覆盖
             if not v3_fields.get('rumor_trust') and target.get('rumor_trust'):
                 v3_fields['rumor_trust'] = target.get('rumor_trust', 0.0)

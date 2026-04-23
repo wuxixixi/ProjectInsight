@@ -4,7 +4,7 @@
 """
 import numpy as np
 from typing import Optional, Dict, List, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import asyncio
 import logging
@@ -245,7 +245,7 @@ class SimulationEngineDual:
             "step": self.step_count,
             "content": content,
             "target_scope": target_scope,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "sentiment": sentiment,
             "credibility": credibility,
             "impact_strength": impact_strength or 0.0
@@ -444,7 +444,7 @@ class SimulationEngineDual:
         self.step_count = 0
         self.responded = False  # 新名称（兼容属性debunked会返回此值）
         self.history = []
-        self.start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.start_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         self.event_pool = []  # 清空事件池
         self.news_content = ""
         self.news_credibility = "不确定"
@@ -965,7 +965,7 @@ class SimulationEngineDual:
 
         report = f"""# 信息茧房推演报告（双层模态版本）
 
-> 生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+> 生成时间: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}
 > 推演模式: {mode_str}
 
 ## 模拟参数

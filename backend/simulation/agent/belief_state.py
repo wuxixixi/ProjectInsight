@@ -9,7 +9,7 @@ BeliefState - 结构化信念状态模型
 - exposure_history: 信息暴露历史
 """
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
@@ -194,7 +194,7 @@ class BeliefState(BaseModel):
             self.rumor_trust = min(1.0, -new_opinion)
             self.truth_trust = max(0.0, self.truth_trust - abs(delta) * self.decay_coefficient)
 
-        self.last_updated = datetime.now()
+        self.last_updated = datetime.now(timezone.utc)
     
     def add_exposure(self, event: ExposureEvent):
         """添加信息暴露事件"""

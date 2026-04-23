@@ -16,7 +16,7 @@ from enum import Enum
 from collections import deque
 import numpy as np
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ class RiskAlertEngine:
             触发的预警列表
         """
         alerts = []
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         
         for rule in self.rules:
             # 获取指标值
@@ -341,10 +341,12 @@ class RiskAlertEngine:
         deep_negative_rate = current_state.get("deep_negative_rate", 0)
 
         # 使用配置权重计算综合风险评分
+        # issue #1026: 避免双重计算 deep_negative 已包含在 negative 中
+        shallow_negative = max(0, negative_rate - deep_negative_rate)
         t = self.thresholds
         risk_score = (
-            negative_rate * t.weight_negative +
-            deep_negative_rate * t.weight_deep_negative +
+            shallow_negative * t.weight_negative +
+            deep_negative_rate * (t.weight_negative + t.weight_deep_negative) +
             polarization * t.weight_polarization +
             silence_rate * t.weight_silence +
             (1 - truth_rate) * t.weight_truth_deficit

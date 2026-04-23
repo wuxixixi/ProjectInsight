@@ -10,7 +10,7 @@ ReplayWriter - 推演状态持久化
 import sqlite3
 import json
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 import logging
@@ -151,7 +151,7 @@ class ReplayWriter:
             """, (
                 simulation_id,
                 mode,
-                datetime.now().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 total_steps,
                 json.dumps(config)
             ))
