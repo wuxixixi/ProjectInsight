@@ -989,7 +989,7 @@ class SimulationEngine:
                     if np.any(believe_mask) else 0.0
                 ),
                 "avg_opinion": float(np.mean(opinions)),
-                "polarization_index": float(min(1.0, np.std(opinions))),
+                "polarization_index": float(min(1.0, EnhancedMathModel.compute_polarization_index(opinions))),
                 "silence_rate": float(np.mean(pop.is_silent))
             }
             agents = pop.to_agent_list()

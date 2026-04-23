@@ -133,7 +133,7 @@ class EnhancedMathModel:
             belief_strength, opinions, new_opinions, dissonance_adjustment
         )
 
-        metrics['polarization_index'] = float(min(1.0, np.std(new_opinions)))
+        metrics['polarization_index'] = float(self._compute_polarization(new_opinions))
         metrics['avg_opinion'] = float(np.mean(new_opinions))
 
         return new_opinions, new_belief_strength, is_silent, metrics
@@ -244,7 +244,9 @@ class EnhancedMathModel:
         opinions: np.ndarray,
         belief_strength: np.ndarray,
         fear_of_isolation: np.ndarray,
-        neighbors: List[List[int]]
+        neighbors: List[List[int]],
+        issue_importance: float = 0.5,
+        self_efficacy: Optional[np.ndarray] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         沉默的螺旋（向量化实现）
@@ -252,10 +254,21 @@ class EnhancedMathModel:
         理论（Noelle-Neumann, 1974）：
         当个体感知自己的观点属于少数派时，由于害怕孤立，
         会选择沉默，导致多数派声音越来越大。
+
+        扩展：议题重要性（高重要性降低沉默概率）和
+        自我效能感（高效能感降低沉默概率）作为调节因素。
         """
         size = len(opinions)
         is_silent = np.zeros(size, dtype=bool)
         silence_pressure = np.zeros(size)
+
+        # 议题重要性调节：高重要性 → 更愿意发声
+        importance_factor = 1.0 - issue_importance * 0.5
+
+        # 自我效能感调节：高效能 → 更愿意发声
+        efficacy_factor = np.ones(size)
+        if self_efficacy is not None:
+            efficacy_factor = 1.0 - self_efficacy * 0.4
 
         # 预计算所有邻居的平均观点
         has_neighbors = np.array([bool(neighbors[i]) for i in range(size)])
@@ -272,11 +285,13 @@ class EnhancedMathModel:
         if np.any(pressure_mask):
             isolation_fear = fear_of_isolation[pressure_mask] * gap[pressure_mask]
             conviction = belief_strength[pressure_mask]
-            silence_prob = 1 / (1 + np.exp(-(isolation_fear - conviction) * 3))
+            # 应用调节因素
+            adjusted_fear = isolation_fear * importance_factor * efficacy_factor[pressure_mask]
+            silence_prob = 1 / (1 + np.exp(-(adjusted_fear - conviction) * 3))
             random_vals = np.random.random(np.sum(pressure_mask))
             silent_local = random_vals < silence_prob
             is_silent[pressure_mask] = silent_local
-            silence_pressure[pressure_mask] = isolation_fear * silent_local
+            silence_pressure[pressure_mask] = adjusted_fear * silent_local
 
         return is_silent, silence_pressure
 
@@ -459,6 +474,36 @@ class EnhancedMathModel:
         new_belief = np.clip(new_belief, 0.1, 0.95)
 
         return new_belief
+
+    @staticmethod
+    def compute_polarization_index(opinions: np.ndarray) -> float:
+        """
+        计算极化指数（双峰指数）
+
+        比标准差更能区分"两个极端阵营"和"均匀分布"。
+        值域 [0, 1]，1 表示完全两极分化。
+
+        Args:
+            opinions: 观点数组
+
+        Returns:
+            极化指数
+        """
+        n = len(opinions)
+        if n < 2:
+            return 0.0
+        left = np.sum(opinions < -0.3)
+        right = np.sum(opinions > 0.3)
+        center = n - left - right
+        # 双峰指数：极端派占比减去中间派占比，归一化到 [0, 1]
+        bimodal = (left + right - center) / n
+        # 结合标准差以兼顾分散程度
+        std_component = min(1.0, float(np.std(opinions)))
+        return min(1.0, max(0.0, 0.6 * bimodal + 0.4 * std_component))
+
+    def _compute_polarization(self, opinions: np.ndarray) -> float:
+        """计算极化指数（实例方法委托给静态方法）"""
+        return self.compute_polarization_index(opinions)
 
     def get_theory_explanation(self) -> Dict:
         """

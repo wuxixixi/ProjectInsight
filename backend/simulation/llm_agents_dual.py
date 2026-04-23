@@ -9,6 +9,7 @@ import logging
 import json
 
 from ..llm.client import LLMClient, LLMConfig
+from .math_model_enhanced import EnhancedMathModel
 from .dual_network import DualLayerNetwork, MessageRouter
 from .persona import (
     PERSONA_TEMPLATES, get_persona, AGENT_DECISION_SNAPSHOTS,
@@ -839,7 +840,7 @@ class LLMAgentPopulationDual:
                 if np.any(believe_mask) else 0.0
             ),
             "avg_opinion": float(np.mean(opinions)),
-            "polarization_index": float(min(1.0, np.std(opinions))),
+            "polarization_index": float(min(1.0, EnhancedMathModel.compute_polarization_index(opinions))),
             "silence_rate": float(np.mean([a.is_silent for a in self.agents])),
             # 兼容旧键名
             "negative_belief_rate": reject_rate,

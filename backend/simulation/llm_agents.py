@@ -11,6 +11,7 @@ import json
 import copy
 
 from ..llm.client import LLMClient, LLMConfig
+from .math_model_enhanced import EnhancedMathModel
 from .persona import (
     PERSONA_TEMPLATES, get_persona, AGENT_DECISION_SNAPSHOTS,
     get_agent_snapshot, set_agent_snapshot, clear_agent_snapshots
@@ -829,7 +830,7 @@ class LLMAgentPopulation:
                 if np.any(believe_mask) else 0.0
             ),
             "avg_opinion": float(np.mean(opinions)),
-            "polarization_index": float(min(1.0, np.std(opinions))),
+            "polarization_index": float(min(1.0, EnhancedMathModel.compute_polarization_index(opinions))),
             "silence_rate": float(np.mean([a.is_silent for a in self.agents])),
             # 兼容旧字段名
             "negative_spread_rate": reject_rate,

@@ -814,7 +814,7 @@ class SimulationEngineDual:
                 ),
                 "deep_positive_rate": float(np.mean(believe_mask & (belief_strengths > 0.5))),
                 "avg_opinion": float(np.mean(opinions)),
-                "polarization_index": float(min(1.0, np.std(opinions))),
+                "polarization_index": float(min(1.0, EnhancedMathModel.compute_polarization_index(opinions))),
                 "silence_rate": float(np.mean(pop.is_silent)),
             }
             agents = pop.to_agent_list()

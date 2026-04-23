@@ -50,8 +50,8 @@ def _get_env_bool(key: str, default: bool) -> bool:
 @dataclass
 class PredictionConfig:
     """预测模型配置（支持环境变量覆盖）"""
-    # 蒙特卡洛模拟次数
-    n_simulations: int = field(default_factory=lambda: _get_env_int("PREDICTION_N_SIMULATIONS", 100))
+    # 蒙特卡洛模拟次数（提高默认值以减少估计误差）
+    n_simulations: int = field(default_factory=lambda: _get_env_int("PREDICTION_N_SIMULATIONS", 500))
 
     # 预测步数（预测未来N步）
     forecast_steps: int = field(default_factory=lambda: _get_env_int("PREDICTION_FORECAST_STEPS", 10))
