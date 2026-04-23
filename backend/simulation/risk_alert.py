@@ -56,7 +56,7 @@ class RiskRule:
     """风险规则"""
     name: str
     metric: str                    # 监控指标
-    condition: Callable[[float], bool]  # 触发条件
+    condition: Optional[Callable[[float], bool]]  # 触发条件（None表示需要特殊处理）
     level: RiskLevel
     message_template: str
     suggestion: str
@@ -99,7 +99,7 @@ class RiskAlertEngine:
         self.rules.append(RiskRule(
             name="negative_rising",
             metric="negative_belief_rate",
-            condition=lambda x: False,  # 趋势判断在 check() 中单独处理
+            condition=None,  # 趋势判断在 check() 中单独处理
             level=RiskLevel.MEDIUM,
             message_template="📈 负面信念传播率快速上升，当前 {value:.0%}",
             suggestion="密切监控舆情动态，做好干预准备",
@@ -193,10 +193,12 @@ class RiskAlertEngine:
         for rule in self.rules:
             # 获取指标值
             value = current_state.get(rule.metric, 0)
-            
-            # 检查条件
-            triggered = rule.condition(value)
-            
+
+            # 检查条件（None 表示需要特殊处理逻辑）
+            triggered = False
+            if rule.condition is not None:
+                triggered = rule.condition(value)
+
             # 特殊处理趋势规则
             if rule.name == "negative_rising" and history:
                 triggered = self._check_rising_trend(history, "negative_belief_rate", 0.1)
