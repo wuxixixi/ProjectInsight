@@ -15,6 +15,7 @@ from pathlib import Path
 import sqlite3
 import json
 import logging
+import threading
 
 from .belief_state import BeliefState, ExposureEvent
 
@@ -64,7 +65,8 @@ class AgentMemory:
     def _init_db(self):
         """初始化 SQLite 数据库"""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
+        self._db_lock = threading.Lock()
+
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         
@@ -151,22 +153,23 @@ class AgentMemory:
     
     def store_belief(self, belief: BeliefState, step: int):
         """存储信念到长时记忆"""
-        self.conn.execute("""
-            INSERT INTO belief_history 
-            (agent_id, step, rumor_trust, truth_trust, belief_strength, 
-             cognitive_closed_need, opinion, reasoning)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            self.agent_id,
-            step,
-            belief.rumor_trust,
-            belief.truth_trust,
-            belief.belief_strength,
-            belief.cognitive_closed_need,
-            belief.to_opinion(),
-            belief.reasoning_trace
-        ))
-        self.conn.commit()
+        with self._db_lock:
+            self.conn.execute("""
+                INSERT INTO belief_history
+                (agent_id, step, rumor_trust, truth_trust, belief_strength,
+                 cognitive_closed_need, opinion, reasoning)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                self.agent_id,
+                step,
+                belief.rumor_trust,
+                belief.truth_trust,
+                belief.belief_strength,
+                belief.cognitive_closed_need,
+                belief.to_opinion(),
+                belief.reasoning_trace
+            ))
+            self.conn.commit()
         self._write_count += 1
     
     def store_exposure(self, event: ExposureEvent, step: int):

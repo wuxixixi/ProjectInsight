@@ -127,8 +127,6 @@ class PersonAgent(AgentBase):
     async def _ensure_skills_loaded(self):
         """确保技能已加载（懒加载）"""
         if not self._skills_loaded:
-            # TODO: 从 SKILL.yaml 加载技能元数据
-            # 目前使用内建技能
             self._skills_loaded = True
     
     async def observe(self, context: Dict[str, Any]) -> Dict[str, Any]:

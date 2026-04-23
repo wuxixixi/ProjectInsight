@@ -149,20 +149,35 @@ class GraphParserAgent:
                 "sentiment": "不确定",
                 "credibility_hint": "不确定",
                 "parse_error": True,
-                "error_type": "timeout"
+                "error_message": f"LLM调用超时{self.llm_config.timeout}秒"
             }
         except Exception as e:
-            logger.error(f"知识图谱解析错误: {type(e).__name__}: {e}")
-            return {
-                "entities": [{"id": "e1", "name": "解析异常", "type": "其他", "description": str(e)[:100], "importance": 1}],
-                "relations": [],
-                "summary": news_content[:100] if len(news_content) > 100 else news_content,
-                "keywords": [],
-                "sentiment": "不确定",
-                "credibility_hint": "不确定",
-                "parse_error": True,
-                "error_type": type(e).__name__
-            }
+            # LLM 客户端会将 asyncio.TimeoutError 转为普通 Exception
+            error_msg = str(e)
+            if "超时" in error_msg or "timeout" in error_msg.lower():
+                logger.error(f"知识图谱解析超时: {error_msg}")
+                return {
+                    "entities": [{"id": "e1", "name": "解析超时", "type": "其他", "description": f"LLM调用超时", "importance": 1}],
+                    "relations": [],
+                    "summary": news_content[:100] if len(news_content) > 100 else news_content,
+                    "keywords": [],
+                    "sentiment": "不确定",
+                    "credibility_hint": "不确定",
+                    "parse_error": True,
+                    "error_message": error_msg
+                }
+            else:
+                logger.error(f"知识图谱解析错误: {type(e).__name__}: {e}")
+                return {
+                    "entities": [{"id": "e1", "name": "解析异常", "type": "其他", "description": str(e)[:100], "importance": 1}],
+                    "relations": [],
+                    "summary": news_content[:100] if len(news_content) > 100 else news_content,
+                    "keywords": [],
+                    "sentiment": "不确定",
+                    "credibility_hint": "不确定",
+                    "parse_error": True,
+                    "error_type": type(e).__name__
+                }
 
     def _extract_response_content(self, response: Any) -> str:
         """
