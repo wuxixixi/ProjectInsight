@@ -1,0 +1,217 @@
+"""
+AlgorithmEnv - 算法推荐环境
+
+模拟信息茧房效应:
+- 根据用户观点推荐相似内容
+- 强化既有观点
+- 追踪信息多样性指数
+"""
+from typing import Dict, List, Any, Optional
+import random
+import logging
+
+from .base import EnvBase, tool, ToolKind
+
+logger = logging.getLogger(__name__)
+
+
+# 默认推荐内容池
+DEFAULT_CONTENT_POOL = {
+    "negative": [
+        "相关分析：局势可能进一步恶化...",
+        "专家警告：情况不容乐观...",
+        "多方质疑：官方说法存疑...",
+        "深度调查：真相尚未浮出水面...",
+        "舆论关注：事件仍有诸多疑点..."
+    ],
+    "neutral": [
+        "多方观点交织，建议理性看待...",
+        "情况复杂，需进一步观察...",
+        "各方说法不一，真相待揭晓...",
+        "事件仍在发展中，请持续关注..."
+    ],
+    "positive": [
+        "官方通报：情况已得到有效控制...",
+        "专家解读：措施得当，形势向好...",
+        "权威发布：事实真相已查明...",
+        "多方证实：信息不实，请勿传谣..."
+    ]
+}
+
+
+class AlgorithmEnv(EnvBase):
+    """
+    算法推荐环境
+    
+    模拟推荐算法的信息茧房效应:
+    - 基于用户观点历史生成推荐内容
+    - 茧房强度决定内容与用户观点的一致性
+    - 追踪每个用户的信息暴露历史
+    """
+    
+    def __init__(
+        self,
+        cocoon_strength: float = 0.5,
+        diversity_threshold: float = 0.3,
+        content_pool: Optional[Dict[str, List[str]]] = None
+    ):
+        super().__init__()
+
+        self._cocoon_strength = cocoon_strength
+        self._diversity_threshold = diversity_threshold
+
+        # 用户暴露历史: agent_id -> List[ExposureRecord]
+        self._exposure_history: Dict[int, List[Dict]] = {}
+
+        # 推荐内容库（支持外部注入）
+        self._content_pool = content_pool or DEFAULT_CONTENT_POOL
+    
+    @property
+    def name(self) -> str:
+        return "algorithm"
+    
+    @tool(readonly=True, kind="observe")
+    async def observe(self, agent_id: int, opinion: float) -> str:
+        """
+        感知算法推荐内容
+        
+        Args:
+            agent_id: Agent ID
+            opinion: 当前观点值 [-1, 1]
+        
+        Returns:
+            推荐内容
+        """
+        # 根据观点和茧房强度选择内容
+        recommended = self._generate_recommendation(opinion)
+        
+        # 记录暴露历史
+        self._record_exposure(agent_id, recommended, opinion)
+        
+        return recommended
+    
+    @tool(readonly=True, kind="statistics")
+    async def get_diversity_index(self, agent_id: int) -> float:
+        """
+        获取用户信息多样性指数
+        
+        Args:
+            agent_id: Agent ID
+        
+        Returns:
+            多样性指数 [0, 1]，越高越多样
+        """
+        history = self._exposure_history.get(agent_id, [])
+        if len(history) < 2:
+            return 1.0
+        
+        # 计算观点标准差
+        opinions = [h.get("content_alignment", 0) for h in history]
+        avg = sum(opinions) / len(opinions)
+        variance = sum((o - avg) ** 2 for o in opinions) / len(opinions)
+        diversity = min(1.0, variance * 5)  # 缩放到 [0, 1]
+        
+        return diversity
+    
+    @tool(readonly=True, kind="statistics")
+    async def get_cocoon_strength(self) -> float:
+        """
+        获取当前茧房强度
+        
+        Returns:
+            茧房强度 [0, 1]
+        """
+        return self._cocoon_strength
+    
+    @tool(readonly=True, kind="statistics")
+    async def get_exposure_count(self, agent_id: int) -> int:
+        """
+        获取用户暴露次数
+        
+        Args:
+            agent_id: Agent ID
+        
+        Returns:
+            暴露次数
+        """
+        return len(self._exposure_history.get(agent_id, []))
+    
+    @tool(readonly=True, kind="statistics")
+    async def get_statistics(self) -> Dict[str, Any]:
+        """
+        获取算法环境统计信息
+        
+        Returns:
+            统计数据
+        """
+        total_exposure = sum(len(h) for h in self._exposure_history.values())
+        agent_count = len(self._exposure_history)
+        
+        return {
+            "cocoon_strength": self._cocoon_strength,
+            "total_exposure": total_exposure,
+            "agent_count": agent_count,
+            "avg_exposure_per_agent": total_exposure / agent_count if agent_count > 0 else 0
+        }
+    
+    @tool(readonly=False, kind="interact")
+    async def set_cocoon_strength(self, strength: float):
+        """
+        设置茧房强度
+        
+        Args:
+            strength: 茧房强度 [0, 1]
+        """
+        self._cocoon_strength = max(0.0, min(1.0, strength))
+    
+    def _generate_recommendation(self, opinion: float) -> str:
+        """
+        生成推荐内容
+        
+        Args:
+            opinion: 用户观点值
+        
+        Returns:
+            推荐内容
+        """
+        # 茧房效应：高强度时推荐与观点一致的内容
+        if random.random() < self._cocoon_strength:
+            # 推荐与当前观点一致的内容
+            if opinion < -0.2:
+                pool = self._content_pool["negative"]
+            elif opinion > 0.2:
+                pool = self._content_pool["positive"]
+            else:
+                pool = self._content_pool["neutral"]
+        else:
+            # 低概率推荐多元内容
+            pool = self._content_pool["neutral"] + random.choice([
+                self._content_pool["negative"],
+                self._content_pool["positive"]
+            ])
+        
+        return random.choice(pool)
+    
+    def _record_exposure(self, agent_id: int, content: str, alignment: float):
+        """记录信息暴露"""
+        if agent_id not in self._exposure_history:
+            self._exposure_history[agent_id] = []
+        
+        self._exposure_history[agent_id].append({
+            "content": content,
+            "content_alignment": alignment,
+            "cocoon_strength": self._cocoon_strength
+        })
+    
+    async def reset(self):
+        """重置环境状态"""
+        self._exposure_history.clear()
+    
+    async def get_state(self) -> Dict[str, Any]:
+        """获取环境状态"""
+        return {
+            "cocoon_strength": self._cocoon_strength,
+            "exposure_history": {
+                k: len(v) for k, v in self._exposure_history.items()
+            }
+        }
