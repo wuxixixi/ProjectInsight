@@ -20,6 +20,7 @@ from .routers import report as report_router
 from .routers import event as event_router
 from .routers import prediction as pred_router
 from .llm.client import LLMConfig
+from .constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 from .simulation.engine import SimulationEngine
 from .simulation.engine_dual import SimulationEngineDual
 
@@ -55,7 +56,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -121,9 +122,9 @@ async def websocket_simulation(websocket: WebSocket):
 
                 # 根据观点值判断立场
                 if agent_opinion is not None:
-                    if agent_opinion < -0.3:
+                    if agent_opinion < OPINION_THRESHOLD_NEGATIVE:
                         stance = "误信"
-                    elif agent_opinion > 0.3:
+                    elif agent_opinion > OPINION_THRESHOLD_POSITIVE:
                         stance = "正确认知"
                     else:
                         stance = "中立"
