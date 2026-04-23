@@ -4,7 +4,7 @@ Observation Skill - 观察技能
 优先级: 10
 功能: 感知环境信息，收集暴露事件
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 
 from ..belief_state import ExposureEvent, ExposureSource
@@ -18,14 +18,35 @@ logger = logging.getLogger(__name__)
 class ObservationSkill(SkillBase):
     """
     观察技能
-    
+
     负责感知环境信息:
     - 算法推荐内容
     - 社交圈观点
     - 官方辟谣信息
     - 注入事件
     """
-    
+
+    def __init__(
+        self,
+        algorithm_credibility: float = 0.5,
+        max_peer_observations: int = 5,
+        truth_default_alignment: float = 1.0,
+        truth_default_credibility: float = 0.7,
+        metadata: Optional["SkillMetadata"] = None
+    ):
+        """
+        Args:
+            algorithm_credibility: 算法推荐内容默认可信度（issue #630）
+            max_peer_observations: 最多观察邻居数量
+            truth_default_alignment: 官方信息默认倾向
+            truth_default_credibility: 官方信息默认可信度
+        """
+        super().__init__(metadata)
+        self.algorithm_credibility = algorithm_credibility
+        self.max_peer_observations = max_peer_observations
+        self.truth_default_alignment = truth_default_alignment
+        self.truth_default_credibility = truth_default_credibility
+
     def _get_default_metadata(self) -> SkillMetadata:
         return SkillMetadata(
             name="observation",
@@ -94,7 +115,7 @@ class ObservationSkill(SkillBase):
             source=ExposureSource.ALGORITHM,
             content=algo_content,
             alignment=context.belief_state.get("opinion", 0.0),  # 茧房效应：推荐与观点一致的内容
-            credibility=0.5
+            credibility=self.algorithm_credibility
         )
     
     def _observe_social(self, context: SkillContext) -> tuple:
@@ -103,7 +124,7 @@ class ObservationSkill(SkillBase):
         peer_ids = context.observation.get("peer_ids", [])
         
         exposures = []
-        for i, peer_op in enumerate(peer_opinions[:5]):  # 最多5个邻居
+        for i, peer_op in enumerate(peer_opinions[:self.max_peer_observations]):
             exposures.append(ExposureEvent(
                 step=context.step,
                 source=ExposureSource.SOCIAL,
@@ -124,8 +145,8 @@ class ObservationSkill(SkillBase):
             step=context.step,
             source=ExposureSource.TRUTH,
             content=truth_content,
-            alignment=1.0,  # 官方信息倾向正面
-            credibility=context.config.get("truth_credibility", 0.7)
+            alignment=self.truth_default_alignment,  # 官方信息倾向正面
+            credibility=context.config.get("truth_credibility", self.truth_default_credibility)
         )
     
     def _observe_injected(self, context: SkillContext) -> ExposureEvent:

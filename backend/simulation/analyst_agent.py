@@ -5,7 +5,7 @@ AnalystAgent - 国家高端智库舆情分析专家
 import asyncio
 import numpy as np
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from ..llm.client import LLMClient, LLMConfig
@@ -18,6 +18,7 @@ class DataSampler:
     数据抽样器
     从推演历史中提取宏观数据和典型个体样本
     """
+    _rng = np.random.default_rng(42)
 
     @staticmethod
     def extract_macro_data(engine) -> Dict[str, Any]:
@@ -136,8 +137,8 @@ class DataSampler:
             "events_summary": events_summary  # 所有事件的摘要文本
         }
 
-    @staticmethod
-    def sample_agents(population, n: int = 3, news_credibility: str = "不确定") -> Dict[str, List[Dict]]:
+    @classmethod
+    def sample_agents(cls, population, n: int = 3, news_credibility: str = "不确定") -> Dict[str, List[Dict]]:
         """
         抽取典型 Agent 样本
 
@@ -212,8 +213,8 @@ class DataSampler:
                     "reasoning": snapshot.get('reasoning', '')
                 })
 
-        # 随机抽样（使用实例级 RNG 确保可重现性）
-        rng = np.random.default_rng(seed=42)
+        # 随机抽样（使用类级 RNG 确保可重现性）
+        rng = cls._rng
         def safe_sample(lst, count):
             if len(lst) <= count:
                 return lst
@@ -300,7 +301,7 @@ class DataSampler:
             "macro": macro_data,
             "agents": agent_samples,
             "extreme_changes": extreme_samples,  # 新增：极端变化样本
-            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         }
 
 

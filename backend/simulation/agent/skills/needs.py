@@ -156,14 +156,17 @@ class NeedsSkill(SkillBase):
     def _compute_motivation(self, need_state: Dict, context: SkillContext) -> float:
         """计算动机因子"""
         dominant = need_state.get("dominant_need", "safety")
-        
-        # 需求层次 → 动机强度
-        level_index = NEED_LEVELS.index(dominant) if dominant in NEED_LEVELS else 2
-        level_factor = (level_index + 1) / len(NEED_LEVELS)
-        
+
+        # 从配置读取权重（issue #623/#624: 使用配置而非硬编码）
+        need_weights = self.metadata.config.get("need_weights", {})
+        level_weight = need_weights.get(dominant, 0.2)
+
         # 认知闭合需求
         closed_need = context.belief_state.get("cognitive_closed_need", 0.5)
-        
-        # 综合动机
-        motivation = level_factor * 0.6 + closed_need * 0.4
+
+        # 综合动机：需求权重 × 需求层次 + 闭合需求
+        level_index = NEED_LEVELS.index(dominant) if dominant in NEED_LEVELS else 2
+        level_factor = (level_index + 1) / len(NEED_LEVELS)
+
+        motivation = level_factor * level_weight + closed_need * (1 - level_weight)
         return min(1.0, motivation)

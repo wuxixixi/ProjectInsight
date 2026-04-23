@@ -4,7 +4,7 @@ Plan Skill - 规划技能
 优先级: 50
 功能: 规划行动策略，决定最终行为
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 import numpy as np
 
@@ -31,7 +31,9 @@ class PlanSkill(SkillBase):
         action_moderate_threshold: float = 0.15,
         silence_pressure_threshold: float = 0.5,
         silence_fear_threshold: float = 0.6,
-        silence_deviation_threshold: float = 0.3
+        silence_deviation_threshold: float = 0.3,
+        seed: int = 42,
+        metadata: Optional["SkillMetadata"] = None
     ):
         """
         初始化规划技能
@@ -42,13 +44,15 @@ class PlanSkill(SkillBase):
             silence_pressure_threshold: 沉默判定社交压力阈值
             silence_fear_threshold: 沉默判定孤立恐惧阈值
             silence_deviation_threshold: 沉默判定观点偏离阈值
+            seed: 随机种子（issue #625）
         """
-        super().__init__()
+        super().__init__(metadata)
         self.action_wait_threshold = action_wait_threshold
         self.action_moderate_threshold = action_moderate_threshold
         self.silence_pressure_threshold = silence_pressure_threshold
         self.silence_fear_threshold = silence_fear_threshold
         self.silence_deviation_threshold = silence_deviation_threshold
+        self._rng = np.random.default_rng(seed)
 
     def _get_default_metadata(self) -> SkillMetadata:
         return SkillMetadata(
@@ -162,7 +166,7 @@ class PlanSkill(SkillBase):
                 "理性分析，不要急着下结论。"
             ]
         
-        return np.random.choice(comments)
+        return str(self._rng.choice(comments))
     
     def _infer_emotion(self, cognition: Dict, context: SkillContext) -> str:
         """推断情绪状态"""

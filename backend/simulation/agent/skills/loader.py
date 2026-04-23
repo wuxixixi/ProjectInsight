@@ -18,30 +18,33 @@ logger = logging.getLogger(__name__)
 class SkillLoader:
     """
     技能懒加载器
-    
+
     工作流程:
     1. 扫描 skills/ 目录，加载所有 SKILL.yaml 元数据
     2. 根据元数据中的 requires 和 priority 构建依赖图
     3. 按需加载技能实现（懒加载）
     """
-    
-    # 注册表: 技能名 → 实现类
-    _registry: Dict[str, Type[SkillBase]] = {}
-    
+
+    # 类级注册表: 用于装饰器注册（issue #637: 保持向后兼容）
+    _class_registry: Dict[str, Type[SkillBase]] = {}
+
     @classmethod
     def register(cls, name: str):
         """技能注册装饰器"""
         def decorator(skill_class: Type[SkillBase]):
-            cls._registry[name] = skill_class
+            cls._class_registry[name] = skill_class
             return skill_class
         return decorator
-    
+
     def __init__(self, skills_dir: Optional[Path] = None):
         """
         Args:
             skills_dir: 技能目录路径（包含 SKILL.yaml 的目录）
         """
         self.skills_dir = skills_dir or Path(__file__).parent
+
+        # 实例级注册表（从类级注册表初始化，支持测试隔离）
+        self._registry: Dict[str, Type[SkillBase]] = dict(self._class_registry)
         
         # 已加载的元数据
         self._metadata: Dict[str, SkillMetadata] = {}

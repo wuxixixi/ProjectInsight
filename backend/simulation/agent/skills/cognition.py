@@ -4,7 +4,7 @@ Cognition Skill - 认知推理技能
 优先级: 40
 功能: 推理观点变化，生成信念更新
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 
 from .base import SkillBase, SkillMetadata, SkillContext, SkillResult
@@ -17,12 +17,39 @@ logger = logging.getLogger(__name__)
 class CognitionSkill(SkillBase):
     """
     认知推理技能
-    
+
     负责:
     - 综合环境信息和记忆
     - 推理观点变化
     - 生成信念更新决策
     """
+
+    def __init__(
+        self,
+        social_influence_coeff: float = 0.3,
+        cocoon_coeff: float = 0.05,
+        truth_effect_coeff: float = 0.15,
+        max_change_factor: float = 0.3,
+        memory_trend_positive: float = 1.1,
+        memory_trend_negative: float = 0.9,
+        metadata: Optional["SkillMetadata"] = None
+    ):
+        """
+        Args:
+            social_influence_coeff: 社交影响力系数（issue #622）
+            cocoon_coeff: 茧房效应系数
+            truth_effect_coeff: 官方信息影响系数
+            max_change_factor: 信念强度限制最大变化系数
+            memory_trend_positive: 正向趋势记忆调节因子
+            memory_trend_negative: 负向趋势记忆调节因子
+        """
+        super().__init__(metadata)
+        self.social_influence_coeff = social_influence_coeff
+        self.cocoon_coeff = cocoon_coeff
+        self.truth_effect_coeff = truth_effect_coeff
+        self.max_change_factor = max_change_factor
+        self.memory_trend_positive = memory_trend_positive
+        self.memory_trend_negative = memory_trend_negative
     
     def _get_default_metadata(self) -> SkillMetadata:
         return SkillMetadata(
@@ -67,7 +94,7 @@ class CognitionSkill(SkillBase):
         
         # 应用信念强度限制
         strength = context.belief_state.get("belief_strength", 0.5)
-        max_change = 0.3 * (1 - strength)
+        max_change = self.max_change_factor * (1 - strength)
         total_delta = max(-max_change, min(max_change, total_delta))
         
         new_opinion = current_opinion + total_delta
@@ -106,7 +133,7 @@ class CognitionSkill(SkillBase):
         avg_peer = sum(peer_opinions) / len(peer_opinions)
         
         # 从众效应: 向邻居观点靠拢
-        social_influence = (avg_peer - current) * susceptibility * 0.3
+        social_influence = (avg_peer - current) * susceptibility * self.social_influence_coeff
         
         return social_influence
     
@@ -116,7 +143,7 @@ class CognitionSkill(SkillBase):
 
         # 渐进式：社交压力越高，茧房效应越强（不再用0.5硬阈值）
         current = context.belief_state.get("opinion", 0.0)
-        cocoon_effect = current * 0.05 * social_pressure
+        cocoon_effect = current * self.cocoon_coeff * social_pressure
 
         return cocoon_effect
     
@@ -131,19 +158,19 @@ class CognitionSkill(SkillBase):
                 alignment = exposure.get("alignment", 1.0)
                 
                 # 官方信息倾向于正面（提升 truth_trust）
-                truth_effect += credibility * alignment * 0.15
+                truth_effect += credibility * alignment * self.truth_effect_coeff
         
         return truth_effect
     
     def _reason_memory_effect(self, memory: Dict, context: SkillContext) -> float:
         """推理记忆效应"""
         trend = memory.get("belief_trend", "保持稳定")
-        
-        # 信念趋势影响改变难度
+
+        # 信念趋势影响改变难度（使用配置因子）
         if trend == "趋向正面":
-            return 1.1  # 正向趋势更容易继续正向
+            return self.memory_trend_positive  # 正向趋势更容易继续正向
         elif trend == "趋向负面":
-            return 0.9  # 负向趋势更难转向
+            return self.memory_trend_negative  # 负向趋势更难转向
         else:
             return 1.0
     

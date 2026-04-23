@@ -169,7 +169,10 @@ class LLMClient:
             完整的 API 响应
         """
         if not self._session:
-            raise RuntimeError("请使用 async with 上下文管理器")
+            raise RuntimeError(
+                "LLMClient must be used as async context manager. "
+                "Example: async with LLMClient() as client: await client.chat(...)"
+            )
 
         payload = {
             "model": self.config.model,
@@ -352,7 +355,10 @@ class LLMClient:
             str: 每个 token 文本片段
         """
         if not self._session:
-            raise RuntimeError("请使用 async with 上下文管理器")
+            raise RuntimeError(
+                "LLMClient must be used as async context manager. "
+                "Example: async with LLMClient() as client: await client.chat(...)"
+            )
 
         payload = {
             "model": self.config.model,

@@ -113,34 +113,69 @@ class CompositeSkill(SkillBase):
     """
     组合技能 - 串联多个子技能
     """
-    
-    def __init__(self, skills: List[SkillBase], metadata: Optional[SkillMetadata] = None):
+
+    def __init__(
+        self,
+        skills: List[SkillBase],
+        metadata: Optional[SkillMetadata] = None,
+        fail_fast: bool = True
+    ):
+        """
+        Args:
+            skills: 子技能列表
+            metadata: 元数据
+            fail_fast: 是否在依赖不满足时立即失败（issue #635）
+        """
         super().__init__(metadata)
         self._skills = sorted(skills, key=lambda s: s.metadata.priority)
-    
+        self._fail_fast = fail_fast
+
     async def execute(self, context: SkillContext) -> SkillResult:
         """依次执行所有子技能"""
         previous_results = {}
         all_outputs = {}
-        
+        failed_skill = None
+        failed_error = None
+
         for skill in self._skills:
-            # 检查依赖
+            # 检查依赖（issue #635: 可选立即失败）
             for required in skill.metadata.requires:
                 if required not in previous_results:
-                    logger.warning(f"Skill {skill.metadata.name} 依赖 {required} 未满足")
-            
+                    msg = f"Skill {skill.metadata.name} 依赖 {required} 未满足"
+                    if self._fail_fast:
+                        return SkillResult(
+                            skill_name=self.metadata.name,
+                            success=False,
+                            output=all_outputs,
+                            error=msg
+                        )
+                    logger.warning(msg)
+
             # 更新上下文
             context.previous_results = previous_results
-            
+
             # 执行技能
             result = await skill.execute(context)
-            
+
             if result.success:
                 previous_results[skill.metadata.name] = result.output
                 all_outputs.update(result.output)
             else:
+                # issue #634: 记录失败并停止执行
+                failed_skill = skill.metadata.name
+                failed_error = result.error
                 logger.error(f"Skill {skill.metadata.name} 执行失败: {result.error}")
-        
+                break
+
+        # issue #634: 失败时返回 success=False
+        if failed_skill:
+            return SkillResult(
+                skill_name=self.metadata.name,
+                success=False,
+                output=all_outputs,
+                error=f"子技能 {failed_skill} 执行失败: {failed_error}"
+            )
+
         return SkillResult(
             skill_name=self.metadata.name,
             success=True,
