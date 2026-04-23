@@ -166,11 +166,20 @@ async def airdrop_event(req: AirdropRequest):
         # 更新引擎的知识图谱（融合模式）
         entities = knowledge_graph.get('entities', [])
         relations = knowledge_graph.get('relations', [])
-        if entities and hasattr(state.engine, 'set_knowledge_graph'):
-            state.engine.set_knowledge_graph(entities, relations, merge=True)
-            logger.info(f"知识图谱已融合，知识驱动演化已启用")
+
+        if hasattr(state.engine, 'set_knowledge_graph'):
+            if entities:
+                state.engine.set_knowledge_graph(entities, relations, merge=True)
+                logger.info(f"知识图谱已融合，知识驱动演化已启用")
+            else:
+                # 空实体时仍更新图谱元数据（如 sentiment、credibility_hint）
+                if state.engine.knowledge_graph:
+                    state.engine.knowledge_graph.update(knowledge_graph)
+                else:
+                    state.engine.knowledge_graph = knowledge_graph
+                logger.info(f"知识图谱元数据已更新（无实体）")
         else:
-            # 没有实体时仍然更新图谱数据
+            # 降级：直接赋值
             state.engine.knowledge_graph = knowledge_graph
 
         # 广播事件（包含图谱信息，触发事件冲击）

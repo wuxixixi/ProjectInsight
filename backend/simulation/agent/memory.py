@@ -326,9 +326,18 @@ class AgentMemory:
         # 先 flush 认知缓冲
         if self.cognition_buffer:
             self.flush_cognition(step=0)
-        
+
         self.conn.close()
-    
+
+    def __enter__(self):
+        """上下文管理器入口"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器退出，确保资源清理"""
+        self.close()
+        return False
+
     def __del__(self):
         """析构时关闭连接"""
         try:

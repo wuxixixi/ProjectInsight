@@ -2,8 +2,12 @@
 Message Models - 消息数据模型
 
 定义消息类型、状态和消息结构
+
+Note: Pydantic 默认行为可正确处理 timestamp 的序列化/反序列化。
+- 序列化时 model_dump() / model_dump_json() 会输出 timestamp
+- 反序列化时 model_validate_json() 会从 JSON 读取 timestamp 值
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
