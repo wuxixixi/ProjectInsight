@@ -1,10 +1,10 @@
 """
 Skill Pipeline Module - 技能管道系统
 
-核心模式: 元数据优先 + 懒加载
-- SKILL.yaml 定义技能元数据
-- 按需加载技能实现
-- 优先级顺序执行
+核心模式: 元数据优先 + 注册制
+- 技能类通过装饰器自动注册到 SkillLoader
+- 按优先级顺序执行
+- 导入时即触发注册，非懒加载
 """
 
 from .base import SkillBase, SkillMetadata, SkillContext, SkillResult

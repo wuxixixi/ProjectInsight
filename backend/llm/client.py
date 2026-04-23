@@ -44,7 +44,7 @@ class LLMConfig:
     seed: int = 42  # 退避抖动RNG种子，不影响LLM API调用的seed参数
 
     # 连接池配置
-    connection_pool_size: int = 500  # 连接池大小
+    connection_pool_size: int = 100  # 连接池大小（注意：每个连接占用一个文件描述符）
     connection_keepalive: int = 30  # 连接保持时间(秒)
 
     # 指数退避配置

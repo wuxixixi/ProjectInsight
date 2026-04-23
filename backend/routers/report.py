@@ -8,7 +8,7 @@ import logging
 import platform
 import subprocess
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from typing import Optional
 
@@ -281,7 +281,7 @@ async def generate_intelligence_report_endpoint():
 
 
 @router.get("/stream")
-async def stream_intelligence_report():
+async def stream_intelligence_report(request: Request):
     """
     流式生成智库专报 (SSE)
 
@@ -305,6 +305,9 @@ async def stream_intelligence_report():
 
             async with AnalystAgent(llm_config) as agent:
                 async for chunk in agent.generate_report_stream(context):
+                    if await request.is_disconnected():
+                        logger.info("客户端已断开，停止报告生成")
+                        return
                     # SSE 格式: data: {content}\n\n
                     yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
 
