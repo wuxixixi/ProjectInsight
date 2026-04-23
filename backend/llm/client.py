@@ -321,7 +321,15 @@ class LLMClient:
         tasks = [chat_with_progress(messages) for messages in batch_messages]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        return results
+        # 过滤异常并记录日志
+        success_results = []
+        for i, r in enumerate(results):
+            if isinstance(r, Exception):
+                logger.warning(f"batch_chat: 请求 {i}/{total} 失败: {r}")
+            else:
+                success_results.append(r)
+
+        return success_results
 
     async def chat_stream(
         self,

@@ -324,7 +324,15 @@ class ReplayWriter:
     def close(self):
         """关闭连接"""
         self.conn.close()
-    
+
+    def __enter__(self):
+        """上下文管理器入口"""
+        return self
+
+    def __exit__(self, *args):
+        """上下文管理器出口，确保连接关闭"""
+        self.close()
+
     def __del__(self):
         try:
             self.close()
