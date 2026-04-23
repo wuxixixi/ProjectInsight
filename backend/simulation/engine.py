@@ -453,7 +453,7 @@ class SimulationEngine:
 
         # 计算最终初始误信率
         self.initial_negative_spread = np.clip(
-            base_rumor_spread + rumor_boost + truth_penalty + entity_factor,
+            base_negative_spread + negative_boost + positive_penalty + entity_factor,
             0.1, 0.6
         )
 
