@@ -95,6 +95,14 @@ class BeliefState(BaseModel):
         description="暴露历史最大保留条数"
     )
 
+    # 观点更新衰减系数（可配置）
+    decay_coefficient: float = Field(
+        0.3,
+        ge=0.0,
+        le=1.0,
+        description="观点更新时对立信念的衰减系数"
+    )
+
     # 元数据
     last_updated: Optional[datetime] = Field(
         default_factory=datetime.now,
@@ -164,28 +172,28 @@ class BeliefState(BaseModel):
     def update_from_opinion(self, new_opinion: float, max_change: float = None):
         """
         从新观点值更新信念状态
-        
+
         Args:
             new_opinion: 新的观点值
             max_change: 最大变化限制（可选）
         """
         old_opinion = self.to_opinion()
         delta = new_opinion - old_opinion
-        
+
         # 应用变化限制
         if max_change is not None:
             delta = max(-max_change, min(max_change, delta))
-        
+
         new_opinion = old_opinion + delta
-        
-        # 更新 belief_state
+
+        # 更新 belief_state，使用可配置衰减系数
         if new_opinion > 0:
             self.truth_trust = min(1.0, new_opinion)
-            self.rumor_trust = max(0.0, self.rumor_trust - abs(delta) * 0.3)
+            self.rumor_trust = max(0.0, self.rumor_trust - abs(delta) * self.decay_coefficient)
         else:
             self.rumor_trust = min(1.0, -new_opinion)
-            self.truth_trust = max(0.0, self.truth_trust - abs(delta) * 0.3)
-        
+            self.truth_trust = max(0.0, self.truth_trust - abs(delta) * self.decay_coefficient)
+
         self.last_updated = datetime.now()
     
     def add_exposure(self, event: ExposureEvent):

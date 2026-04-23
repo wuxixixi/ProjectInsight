@@ -28,7 +28,10 @@ class PlanSkill(SkillBase):
     def __init__(
         self,
         action_wait_threshold: float = 0.05,
-        action_moderate_threshold: float = 0.15
+        action_moderate_threshold: float = 0.15,
+        silence_pressure_threshold: float = 0.5,
+        silence_fear_threshold: float = 0.6,
+        silence_deviation_threshold: float = 0.3
     ):
         """
         初始化规划技能
@@ -36,10 +39,16 @@ class PlanSkill(SkillBase):
         Args:
             action_wait_threshold: 观望阈值，信念变化小于此值时选择观望
             action_moderate_threshold: 中等变化阈值，超过此值为剧烈变化
+            silence_pressure_threshold: 沉默判定社交压力阈值
+            silence_fear_threshold: 沉默判定孤立恐惧阈值
+            silence_deviation_threshold: 沉默判定观点偏离阈值
         """
         super().__init__()
         self.action_wait_threshold = action_wait_threshold
         self.action_moderate_threshold = action_moderate_threshold
+        self.silence_pressure_threshold = silence_pressure_threshold
+        self.silence_fear_threshold = silence_fear_threshold
+        self.silence_deviation_threshold = silence_deviation_threshold
 
     def _get_default_metadata(self) -> SkillMetadata:
         return SkillMetadata(
@@ -84,17 +93,17 @@ class PlanSkill(SkillBase):
         """决定是否沉默"""
         social_pressure = observation.get("social_pressure", 0.0)
         fear_of_isolation = context.belief_state.get("fear_of_isolation", 0.5)
-        
+
         # 沉默条件: 高社交压力 + 高孤立恐惧
-        if social_pressure > 0.5 and fear_of_isolation > 0.6:
+        if social_pressure > self.silence_pressure_threshold and fear_of_isolation > self.silence_fear_threshold:
             # 计算"观点偏离主流"程度
             peer_opinions = observation.get("peer_opinions", [])
             if peer_opinions:
                 current = context.belief_state.get("opinion", 0.0)
                 avg_peer = sum(peer_opinions) / len(peer_opinions)
-                
+
                 # 观点偏离且恐惧 → 沉默
-                if abs(current - avg_peer) > 0.3:
+                if abs(current - avg_peer) > self.silence_deviation_threshold:
                     return True
         
         return False

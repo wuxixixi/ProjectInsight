@@ -27,13 +27,41 @@ NEED_LEVELS = [
 class NeedsSkill(SkillBase):
     """
     需求分析技能
-    
+
     基于马斯洛需求层次理论:
     - 分析信息与需求的匹配度
     - 计算信息接受度
     - 预测观点影响程度
     """
-    
+
+    def __init__(
+        self,
+        safety_fear_threshold: float = 0.6,
+        social_susceptibility_threshold: float = 0.6,
+        cognitive_strength_threshold: float = 0.4,
+        base_acceptance: float = 0.3,
+        need_bonus_factor: float = 0.3,
+        strength_penalty_factor: float = 0.2
+    ):
+        """
+        初始化需求分析技能
+
+        Args:
+            safety_fear_threshold: 触发安全需求的恐惧阈值
+            social_susceptibility_threshold: 触发社交需求的易感性阈值
+            cognitive_strength_threshold: 触发认知需求的信念强度阈值
+            base_acceptance: 基础信息接受度
+            need_bonus_factor: 需求匹配加成系数
+            strength_penalty_factor: 信念强度减成系数
+        """
+        super().__init__()
+        self.safety_fear_threshold = safety_fear_threshold
+        self.social_susceptibility_threshold = social_susceptibility_threshold
+        self.cognitive_strength_threshold = cognitive_strength_threshold
+        self.base_acceptance = base_acceptance
+        self.need_bonus_factor = need_bonus_factor
+        self.strength_penalty_factor = strength_penalty_factor
+
     def _get_default_metadata(self) -> SkillMetadata:
         return SkillMetadata(
             name="needs",
@@ -82,28 +110,28 @@ class NeedsSkill(SkillBase):
         belief = context.belief_state
         fear = belief.get("fear_of_isolation", 0.5)
         susceptibility = belief.get("susceptibility", 0.5)
-        
-        # 简化映射
+
+        # 阈值参数化映射
         needs = {}
-        
+
         # 高恐惧 → 安全需求主导
-        if fear > 0.6:
+        if fear > self.safety_fear_threshold:
             needs["dominant_need"] = "safety"
             needs["safety_urgency"] = fear
         # 高易感性 → 社交需求主导
-        elif susceptibility > 0.6:
+        elif susceptibility > self.social_susceptibility_threshold:
             needs["dominant_need"] = "love"
             needs["social_urgency"] = susceptibility
-        # 中等信念强度 → 认知需求
-        elif belief.get("belief_strength", 0.5) < 0.4:
+        # 低信念强度 → 认知需求
+        elif belief.get("belief_strength", 0.5) < self.cognitive_strength_threshold:
             needs["dominant_need"] = "cognitive"
             needs["cognitive_urgency"] = 1 - belief.get("belief_strength", 0.5)
         else:
             needs["dominant_need"] = "esteem"
             needs["esteem_urgency"] = 0.5
-        
+
         return needs
-    
+
     def _compute_info_acceptance(
         self,
         exposures: List[Dict],
@@ -113,19 +141,16 @@ class NeedsSkill(SkillBase):
         """计算信息接受度"""
         if not exposures:
             return 0.5
-        
-        # 基础接受度
-        base_acceptance = 0.3
-        
+
         # 需求匹配加成
         dominant = need_state.get("dominant_need", "safety")
         urgency = need_state.get(f"{dominant}_urgency", 0.5)
-        need_bonus = urgency * 0.3
-        
+        need_bonus = urgency * self.need_bonus_factor
+
         # 信念强度减成（信念越强，越难接受新信息）
-        strength_penalty = context.belief_state.get("belief_strength", 0.5) * 0.2
-        
-        acceptance = base_acceptance + need_bonus - strength_penalty
+        strength_penalty = context.belief_state.get("belief_strength", 0.5) * self.strength_penalty_factor
+
+        acceptance = self.base_acceptance + need_bonus - strength_penalty
         return max(0.1, min(0.9, acceptance))
     
     def _compute_motivation(self, need_state: Dict, context: SkillContext) -> float:
