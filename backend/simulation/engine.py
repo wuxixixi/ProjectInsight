@@ -56,6 +56,7 @@ class SimulationEngine:
         network_type: str = "small_world",
         use_llm: bool = True,
         llm_config: Optional[LLMConfig] = None,
+        seed: Optional[int] = None,
         # 增强版数学模型参数
         response_credibility: float = 0.7,
         authority_factor: float = 0.5,
@@ -102,6 +103,10 @@ class SimulationEngine:
         self.initial_negative_spread = initial_negative_spread
         self.network_type = network_type
         self.use_llm = use_llm
+
+        # 随机种子和生成器 (issue #307)
+        self.seed = seed if seed is not None else 42
+        self._rng = np.random.RandomState(self.seed)
         self.llm_config = llm_config or LLMConfig()
 
         # 增强版数学模型参数
@@ -385,7 +390,7 @@ class SimulationEngine:
             if affected_mask[i]:
                 # 影响力越高的节点，受冲击影响越大（更敏感）
                 sensitivity = 0.5 + 0.5 * influence[i]
-                shift = shift_direction * impact_strength * sensitivity * np.random.uniform(0.5, 1.5)
+                shift = shift_direction * impact_strength * sensitivity * self._rng.uniform(0.5, 1.5)
                 opinions[i] = np.clip(opinions[i] + shift, -1, 1)
                 impact_values[i] = shift
 
@@ -614,23 +619,23 @@ class SimulationEngine:
 
         # 相信负面信念 (opinion < 0 为误信)
         if n_rumor > 0:
-            opinions[:n_rumor] = np.random.uniform(
+            opinions[:n_rumor] = self._rng.uniform(
                 self.opinion_range_rumor_low, self.opinion_range_rumor_high, n_rumor)
 
         # 相信正面信念 (opinion > 0 为正确认知)
         start = n_rumor
         end = start + n_truth
         if n_truth > 0:
-            opinions[start:end] = np.random.uniform(
+            opinions[start:end] = self._rng.uniform(
                 self.opinion_range_truth_low, self.opinion_range_truth_high, n_truth)
 
         # 不确定 (接近0)
         if n_neutral > 0:
             r = self.opinion_range_neutral_radius
-            opinions[end:] = np.random.uniform(-r, r, n_neutral)
+            opinions[end:] = self._rng.uniform(-r, r, n_neutral)
 
         # 随机打乱
-        np.random.shuffle(opinions)
+        self._rng.shuffle(opinions)
 
         # 应用到群体
         self.population.opinions = opinions
@@ -658,10 +663,10 @@ class SimulationEngine:
 
         for i, agent in enumerate(self.llm_population.agents):
             if i < n_rumor:
-                agent.opinion = np.random.uniform(
+                agent.opinion = self._rng.uniform(
                     self.opinion_range_rumor_low, self.opinion_range_rumor_high)
             elif i < n_rumor + n_truth:
-                agent.opinion = np.random.uniform(
+                agent.opinion = self._rng.uniform(
                     self.opinion_range_truth_low, self.opinion_range_truth_high)
             else:
                 r = self.opinion_range_neutral_radius
@@ -773,7 +778,7 @@ class SimulationEngine:
 
         # 随机扰动
         for agent in pop.agents:
-            noise = np.random.normal(0, 0.01)
+            noise = self._rng.normal(0, 0.01)
             agent.opinion = np.clip(agent.opinion + noise, -1, 1)
 
     def _math_step(self):
