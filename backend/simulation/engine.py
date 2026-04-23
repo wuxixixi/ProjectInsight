@@ -73,7 +73,21 @@ class SimulationEngine:
         debunk_credibility: Optional[float] = None,
         # v3.0 新增参数
         use_v3: bool = True,
-        v3_replay_db: Optional[str] = None
+        v3_replay_db: Optional[str] = None,
+        # 初始分布系数参数 (issue #283)
+        news_base_negative_spread: float = 0.3,
+        news_negative_boost: float = 0.15,
+        news_positive_penalty: float = 0.05,
+        news_entity_factor_per_entity: float = 0.015,
+        news_entity_factor_max: float = 0.1,
+        news_min_spread: float = 0.1,
+        news_max_spread: float = 0.6,
+        # 观点范围参数 (issue #289)
+        opinion_range_rumor_low: float = -0.8,
+        opinion_range_rumor_high: float = -0.2,
+        opinion_range_truth_low: float = 0.2,
+        opinion_range_truth_high: float = 0.8,
+        opinion_range_neutral_radius: float = 0.05
     ):
         # 处理兼容参数：优先使用新参数名，旧参数名作为别名
         if debunk_delay is not None:
@@ -161,6 +175,21 @@ class SimulationEngine:
                 enable_replay=bool(v3_replay_db),
                 replay_db_path=v3_replay_db
             )
+
+        # 初始分布系数参数
+        self.news_base_negative_spread = news_base_negative_spread
+        self.news_negative_boost = news_negative_boost
+        self.news_positive_penalty = news_positive_penalty
+        self.news_entity_factor_per_entity = news_entity_factor_per_entity
+        self.news_entity_factor_max = news_entity_factor_max
+        self.news_min_spread = news_min_spread
+        self.news_max_spread = news_max_spread
+        # 观点范围参数
+        self.opinion_range_rumor_low = opinion_range_rumor_low
+        self.opinion_range_rumor_high = opinion_range_rumor_high
+        self.opinion_range_truth_low = opinion_range_truth_low
+        self.opinion_range_truth_high = opinion_range_truth_high
+        self.opinion_range_neutral_radius = opinion_range_neutral_radius
 
     def set_progress_callback(self, callback: Callable):
         """设置进度回调函数"""
@@ -431,33 +460,31 @@ class SimulationEngine:
             entity_count: 实体数量
         """
         # 基础误信率
-        base_negative_spread = 0.3
+        base_negative_spread = self.news_base_negative_spread
 
         # 情感影响
         if sentiment == "负面":
-            # 负面新闻更容易引发误信
-            negative_boost = 0.15
+            negative_boost = self.news_negative_boost
         elif sentiment == "正面":
-            negative_boost = -0.05
+            negative_boost = -self.news_negative_boost * 0.33  # 正面情感约1/3反向抵消
         else:
             negative_boost = 0.0
 
         # 可信度影响
         if credibility == "低可信":
-            # 低可信度新闻，正面信念率低
-            positive_penalty = 0.05
+            positive_penalty = self.news_positive_penalty
         elif credibility == "高可信":
-            positive_penalty = -0.03
+            positive_penalty = -self.news_positive_penalty * 0.6  # 高可信约60%反向
         else:
             positive_penalty = 0.0
 
-        # 实体影响：涉及实体越多，关注度越高，误信率可能越高
-        entity_factor = min(0.1, entity_count * 0.015)
+        # 实体影响
+        entity_factor = min(self.news_entity_factor_max, entity_count * self.news_entity_factor_per_entity)
 
         # 计算最终初始误信率
         self.initial_negative_spread = np.clip(
             base_negative_spread + negative_boost + positive_penalty + entity_factor,
-            0.1, 0.6
+            self.news_min_spread, self.news_max_spread
         )
 
         logger.info(f"根据新闻设置初始分布: 情感={sentiment}, 可信度={credibility}, "
@@ -585,19 +612,22 @@ class SimulationEngine:
         # 生成观点值
         opinions = np.zeros(n)
 
-        # 相信负面信念: -0.8 ~ -0.2 (opinion < 0 为误信)
+        # 相信负面信念 (opinion < 0 为误信)
         if n_rumor > 0:
-            opinions[:n_rumor] = np.random.uniform(-0.8, -0.2, n_rumor)
+            opinions[:n_rumor] = np.random.uniform(
+                self.opinion_range_rumor_low, self.opinion_range_rumor_high, n_rumor)
 
-        # 相信正面信念: 0.2 ~ 0.8 (opinion > 0 为正确认知)
+        # 相信正面信念 (opinion > 0 为正确认知)
         start = n_rumor
         end = start + n_truth
         if n_truth > 0:
-            opinions[start:end] = np.random.uniform(0.2, 0.8, n_truth)
+            opinions[start:end] = np.random.uniform(
+                self.opinion_range_truth_low, self.opinion_range_truth_high, n_truth)
 
-        # 不确定: -0.05 ~ 0.05 (接近0)
+        # 不确定 (接近0)
         if n_neutral > 0:
-            opinions[end:] = np.random.uniform(-0.05, 0.05, n_neutral)
+            r = self.opinion_range_neutral_radius
+            opinions[end:] = np.random.uniform(-r, r, n_neutral)
 
         # 随机打乱
         np.random.shuffle(opinions)
@@ -628,11 +658,14 @@ class SimulationEngine:
 
         for i, agent in enumerate(self.llm_population.agents):
             if i < n_rumor:
-                agent.opinion = np.random.uniform(-0.8, -0.2)
+                agent.opinion = np.random.uniform(
+                    self.opinion_range_rumor_low, self.opinion_range_rumor_high)
             elif i < n_rumor + n_truth:
-                agent.opinion = np.random.uniform(0.2, 0.8)
+                agent.opinion = np.random.uniform(
+                    self.opinion_range_truth_low, self.opinion_range_truth_high)
             else:
-                agent.opinion = np.random.uniform(-0.05, 0.05)
+                r = self.opinion_range_neutral_radius
+                agent.opinion = np.random.uniform(-r, r)
 
     async def async_step(self) -> SimulationState:
         """
