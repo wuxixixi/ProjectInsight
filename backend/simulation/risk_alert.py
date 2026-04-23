@@ -257,25 +257,43 @@ class RiskAlertEngine:
         return alerts
     
     def _check_rising_trend(
-        self, 
-        history: List[Dict], 
-        metric: str, 
-        threshold: float
+        self,
+        history: List[Dict],
+        metric: str,
+        threshold: float,
+        window: int = 5
     ) -> bool:
-        """检查上升趋势"""
+        """
+        检查上升趋势（基于线性回归斜率）
+
+        Args:
+            history: 历史数据
+            metric: 指标名
+            threshold: 斜率阈值
+            window: 回归窗口大小
+        """
         if len(history) < 3:
             return False
-        
-        recent = [h.get(metric, 0) for h in history[-3:]]
-        if len(recent) < 3:
+
+        # 取最近 window 个数据点
+        data = [h.get(metric, 0) for h in history[-window:]]
+        n = len(data)
+        if n < 3:
             return False
-        
-        # 检查连续上升且总变化超过阈值
-        if recent[0] < recent[1] < recent[2]:
-            change = recent[2] - recent[0]
-            return change > threshold
-        
-        return False
+
+        # 线性回归: y = slope * x + intercept
+        x_mean = (n - 1) / 2.0
+        y_mean = sum(data) / n
+        numerator = sum((i - x_mean) * (data[i] - y_mean) for i in range(n))
+        denominator = sum((i - x_mean) ** 2 for i in range(n))
+
+        if denominator == 0:
+            return False
+
+        slope = numerator / denominator
+
+        # 斜率为正且超过阈值则判定为上升趋势
+        return slope > threshold
     
     def _check_prediction_risks(self, prediction: Dict, now: str) -> List[Alert]:
         """基于预测的风险检查"""

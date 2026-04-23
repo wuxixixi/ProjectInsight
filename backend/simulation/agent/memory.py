@@ -284,20 +284,65 @@ class AgentMemory:
     def retrieve_relevant(self, query: str, limit: int = 5) -> List[Dict]:
         """
         检索相关记忆
-        
+
         Args:
-            query: 查询关键词（简化实现，返回最近记录）
+            query: 查询关键词
             limit: 返回数量限制
-        
+
         Returns:
             相关记忆列表
         """
-        # 简化实现: 返回最近的短时记忆
-        recent = list(self.short_term)[-limit:]
-        return [
-            e if isinstance(e, dict) else e.dict() 
-            for e in recent
-        ]
+        results = []
+        query_lower = query.lower() if query else ""
+
+        # 1. 搜索短时记忆
+        for event in reversed(list(self.short_term)):
+            if len(results) >= limit:
+                break
+            event_dict = event.dict() if hasattr(event, 'dict') else event
+
+            # 检查内容字段是否匹配查询
+            content = str(event_dict.get('content', '')).lower()
+            source = str(event_dict.get('source', '')).lower()
+            reasoning = str(event_dict.get('reasoning', '')).lower()
+
+            if query_lower and (query_lower in content or query_lower in source or query_lower in reasoning):
+                results.append(event_dict)
+            elif not query_lower:
+                # 无查询时返回最近的记录
+                results.append(event_dict)
+
+        # 2. 如果短时记忆不足，从长时记忆补充
+        if len(results) < limit and query_lower:
+            with self._db_lock:
+                # 搜索 exposure_log
+                cursor = self.conn.execute("""
+                    SELECT * FROM exposure_log
+                    WHERE agent_id = ? AND (
+                        LOWER(content) LIKE ? OR
+                        LOWER(source) LIKE ?
+                    )
+                    ORDER BY step DESC
+                    LIMIT ?
+                """, (self.agent_id, f'%{query_lower}%', f'%{query_lower}%', limit - len(results)))
+                for row in cursor.fetchall():
+                    results.append(dict(row))
+
+                # 搜索 cognition_log 的 reasoning
+                if len(results) < limit:
+                    cursor = self.conn.execute("""
+                        SELECT * FROM cognition_log
+                        WHERE agent_id = ? AND (
+                            LOWER(reasoning) LIKE ? OR
+                            LOWER(skill_name) LIKE ?
+                        )
+                        ORDER BY step DESC
+                        LIMIT ?
+                    """, (self.agent_id, f'%{query_lower}%', f'%{query_lower}%', limit - len(results)))
+                    for row in cursor.fetchall():
+                        results.append(dict(row))
+
+        return results[:limit]
     
     def get_statistics(self) -> Dict[str, Any]:
         """获取记忆统计信息"""
