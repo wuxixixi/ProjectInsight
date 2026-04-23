@@ -4,7 +4,7 @@
 import os
 from typing import Optional, Dict, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .llm.client import LLMConfig
 from .constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
@@ -19,13 +19,13 @@ class StartRequest(BaseModel):
     # 推演模式
     mode: str = "sandbox"  # sandbox(沙盘) / news(新闻)
 
-    # 基础参数
-    cocoon_strength: float = 0.5
-    debunk_delay: int = 10                              # 兼容旧参数名
-    response_delay: Optional[int] = None                # 权威回应延迟（新参数名，优先于 debunk_delay）
-    population_size: int = 200
-    initial_rumor_spread: float = 0.3                   # 兼容旧参数名
-    initial_negative_spread: Optional[float] = None    # 初始负面信念传播率（新参数名，优先）
+    # 基础参数（issue #827: 添加参数范围验证）
+    cocoon_strength: float = Field(default=0.5, ge=0.0, le=1.0)
+    debunk_delay: int = Field(default=10, ge=0)                     # 兼容旧参数名
+    response_delay: Optional[int] = Field(default=None, ge=0)       # 权威回应延迟（新参数名，优先于 debunk_delay）
+    population_size: int = Field(default=200, ge=10, le=2000)
+    initial_rumor_spread: float = Field(default=0.3, ge=0.0, le=1.0)  # 兼容旧参数名
+    initial_negative_spread: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # 初始负面信念传播率（新参数名，优先）
     network_type: str = "small_world"
     use_llm: bool = True
 
@@ -40,14 +40,14 @@ class StartRequest(BaseModel):
     num_communities: int = 8          # 私域社群数量
     public_m: int = 3                 # 公域网络 BA 模型参数
 
-    # 增强版数学模型参数
-    debunk_credibility: float = 0.7       # 兼容旧参数名
-    response_credibility: Optional[float] = None  # 权威回应来源可信度（新参数名，优先） [0, 1]
-    authority_factor: float = 0.5        # 权威影响力系数 [0, 1]
-    backfire_strength: float = 0.3       # 逆火效应强度 [0, 1]
-    silence_threshold: float = 0.3       # 沉默阈值 [0, 1]
-    polarization_factor: float = 0.3     # 群体极化系数 [0, 1]
-    echo_chamber_factor: float = 0.2     # 回音室效应系数 [0, 1]
+    # 增强版数学模型参数（issue #827: 添加范围验证）
+    debunk_credibility: float = Field(default=0.7, ge=0.0, le=1.0)       # 兼容旧参数名
+    response_credibility: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # 权威回应来源可信度（新参数名，优先） [0, 1]
+    authority_factor: float = Field(default=0.5, ge=0.0, le=1.0)        # 权威影响力系数 [0, 1]
+    backfire_strength: float = Field(default=0.3, ge=0.0, le=1.0)       # 逆火效应强度 [0, 1]
+    silence_threshold: float = Field(default=0.3, ge=0.0, le=1.0)       # 沉默阈值 [0, 1]
+    polarization_factor: float = Field(default=0.3, ge=0.0, le=1.0)     # 群体极化系数 [0, 1]
+    echo_chamber_factor: float = Field(default=0.2, ge=0.0, le=1.0)     # 回音室效应系数 [0, 1]
 
     # Phase 3: 新闻模式专用参数
     init_distribution: Optional[Dict[str, float]] = None

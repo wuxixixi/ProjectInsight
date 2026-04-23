@@ -89,6 +89,8 @@ class PersonAgent(AgentBase):
     
     # 观点变化约束因子（issue #837: 参数化硬编码值）
     opinion_max_change_factor: float = 0.3
+    # 社会影响系数（issue #838: 与 opinion_max_change_factor 分离）
+    social_influence_coeff: float = 0.3
 
     def __init__(
         self,
@@ -320,7 +322,7 @@ class PersonAgent(AgentBase):
         # 简单的社交影响模型
         if peer_opinions:
             avg_peer = sum(peer_opinions) / len(peer_opinions)
-            delta = (avg_peer - current) * self.profile.susceptibility * self.opinion_max_change_factor
+            delta = (avg_peer - current) * self.profile.susceptibility * self.social_influence_coeff
             max_change = self.opinion_max_change_factor * (1 - self.belief_state.belief_strength)
             delta = max(-max_change, min(max_change, delta))
             new_opinion = current + delta

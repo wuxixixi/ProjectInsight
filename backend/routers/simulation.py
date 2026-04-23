@@ -163,8 +163,15 @@ async def step_simulation():
             status_code=400
         )
 
-    s = state.engine.step()
-    return JSONResponse(content=s.to_dict())
+    try:
+        s = state.engine.step()
+        return JSONResponse(content=s.to_dict())
+    except Exception as e:
+        logger.error(f"推演步骤错误: {e}")
+        return JSONResponse(
+            content={"error": f"推演步骤失败: {str(e)}"},
+            status_code=500
+        )
 
 
 @router.get("/simulation/state")
@@ -174,8 +181,9 @@ async def get_state():
         return JSONResponse(content={"error": "未初始化"}, status_code=400)
 
     state_dict = state.engine.current_state.to_dict()
-    # 附加引擎级别数据
-    state_dict["event_pool"] = getattr(state.engine, "event_pool", [])
+    # 附加引擎级别数据（限制 event_pool 大小，issue #834）
+    event_pool = getattr(state.engine, "event_pool", [])
+    state_dict["event_pool"] = event_pool[-50:] if len(event_pool) > 50 else event_pool
     return JSONResponse(content=state_dict)
 
 
