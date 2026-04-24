@@ -56,7 +56,8 @@ app.add_middleware(
     allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    # Issue #1256: 添加更多常用请求头
+    allow_headers=["Content-Type", "Authorization", "Accept", "Accept-Encoding", "X-Requested-With", "X-Request-ID"],
 )
 
 # 启动时检查 CORS 安全配置
@@ -180,8 +181,29 @@ async def websocket_simulation(websocket: WebSocket):
                 break
 
     try:
+        # Issue #1255: 添加消息速率限制
+        from collections import deque
+        message_timestamps: deque = deque(maxlen=100)  # 记录最近100条消息时间戳
+        rate_limit = int(os.getenv("WS_RATE_LIMIT", "60"))  # 每分钟最大消息数
+        rate_window = 60  # 1分钟窗口
+        
         while True:
             data = await websocket.receive_text()
+            import time
+            current_time = time.time()
+            message_timestamps.append(current_time)
+            
+            # 清理超过窗口的消息
+            cutoff_time = current_time - rate_window
+            while message_timestamps and message_timestamps[0] < cutoff_time:
+                message_timestamps.popleft()
+            
+            # 检查速率限制
+            if len(message_timestamps) > rate_limit:
+                logger.warning(f"WebSocket消息速率超限: {len(message_timestamps)}/{rate_window}s")
+                await websocket.send_json({"type": "error", "message": f"Rate limit: max {rate_limit} messages per minute"})
+                continue
+            
             # issue #736: 添加 JSON 解析和类型校验
             try:
                 msg = json.loads(data)
