@@ -2,15 +2,18 @@
 """上传项目文件到服务器"""
 import paramiko
 import os
-from pathlib import Path
 
-SERVER_HOST = '101.34.62.149'
-SERVER_USER = 'root'
-SERVER_PASS = '412410'
-REMOTE_DIR = '/root/ProjectInsight'
-LOCAL_DIR = 'D:/ProjectInsight'
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SERVER_HOST = os.environ.get("UPLOAD_SERVER_HOST", "101.34.62.149")
+SERVER_USER = os.environ.get("UPLOAD_SERVER_USER", "root")
+SERVER_PASS = os.environ.get("UPLOAD_SERVER_PASSWORD", "")
+REMOTE_DIR = os.environ.get("UPLOAD_REMOTE_DIR", "/root/ProjectInsight")
+LOCAL_DIR = os.environ.get("UPLOAD_LOCAL_DIR", PROJECT_ROOT)
 
 def main():
+    if not SERVER_PASS:
+        raise RuntimeError("UPLOAD_SERVER_PASSWORD is not set")
+
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(SERVER_HOST, username=SERVER_USER, password=SERVER_PASS, timeout=60)

@@ -2,7 +2,10 @@
 setlocal
 REM GitHub Auto Fix scheduled task entrypoint
 
-cd /d H:\ProjectInsight
+set "PROJECT_ROOT=%~dp0.."
+for %%I in ("%PROJECT_ROOT%") do set "PROJECT_ROOT=%%~fI"
+
+cd /d "%PROJECT_ROOT%"
 
 if "%GITHUB_TOKEN%"=="" (
   echo [%date% %time%] GITHUB_TOKEN is not set.>> logs\auto_fix.log
@@ -26,5 +29,5 @@ set AUTO_MERGE=0
 set DRY_RUN=0
 set DEPLOY_ON_SUCCESS=1
 
-python auto_fix_issues.py >> logs\auto_fix.log 2>&1
+python ops\auto_fix_issues.py >> logs\auto_fix.log 2>&1
 endlocal

@@ -5,7 +5,7 @@ Registers an hourly Windows Scheduled Task for ProjectInsight auto-fix.
 #>
 
 param(
-    [string]$RunnerPath = "H:\ProjectInsight\run_auto_fix.bat",
+    [string]$RunnerPath = "H:\ProjectInsight\ops\run_auto_fix.bat",
     [string]$TaskName = "ProjectInsight-AutoFix"
 )
 

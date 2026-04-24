@@ -22,10 +22,11 @@ from github import Github
 from github.GithubException import GithubException
 
 
-LOG_DIR = Path(__file__).resolve().parent / "logs"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = LOG_DIR / "auto_fix.log"
-WORK_ROOT = Path(__file__).resolve().parent / ".auto_fix_work"
+WORK_ROOT = PROJECT_ROOT / ".auto_fix_work"
 WORK_ROOT.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(

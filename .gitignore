@@ -41,10 +41,13 @@ ENV/
 htmlcov/
 .tox/
 .hypothesis/
+tests/manual/__pycache__/
 
 # 日志和报告（生成的）
 reports/*.md
 *.log
+logs/auto_fix_summary.json
+.auto_fix_work/
 
 # 前端
 frontend/node_modules/
@@ -60,6 +63,14 @@ Thumbs.db
 .env.local
 *.pem
 *.key
+
+# Local runtime data
+data/*.db
+state.json
+init_result.json
+kg_check.json
+kg_debug.json
+gh_open.json
 
 # Claude Code
 .claude/
