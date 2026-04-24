@@ -219,12 +219,16 @@ class AlgorithmEnv(EnvBase):
             else:
                 pool = self._content_pool["neutral"]
         else:
-            # 低概率推荐多元内容
-            pool = self._content_pool["neutral"] + self._rng.choice([
-                self._content_pool["negative"],
-                self._content_pool["positive"]
-            ])
-        
+            # 低概率推荐多元内容：合并全部三类内容，而不是
+            # neutral + choice([negative, positive]) —— 原逻辑只保留
+            # negative / positive 其中一类，导致分布偏向某一侧，与
+            # "多元" 的语义相悖 (issue #1711)。
+            pool = (
+                self._content_pool["neutral"]
+                + self._content_pool["negative"]
+                + self._content_pool["positive"]
+            )
+
         return self._rng.choice(pool)
     
     def _record_exposure(self, agent_id: int, content: str, alignment: float):
