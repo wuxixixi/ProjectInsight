@@ -1740,6 +1740,7 @@
 <script>
 import * as echarts from 'echarts'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const API_BASE = window.location.origin
 const WS_BASE = `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`
@@ -2032,7 +2033,7 @@ export default {
     },
     renderedIntelligence() {
       if (!this.intelligenceContent) return ''
-      return marked(this.intelligenceContent)
+      return DOMPurify.sanitize(marked(this.intelligenceContent))
     },
     // 待注入事件（推演未开始时注入的事件）
     pendingEvents() {
@@ -2583,7 +2584,7 @@ export default {
         const response = await fetch(API_BASE + '/api/docs/usage')
         const data = await response.json()
         if (data.success && data.content) {
-          this.usageContent = marked(data.content)
+          this.usageContent = DOMPurify.sanitize(marked(data.content))
         }
       } catch (error) {
         console.error('获取使用说明失败:', error)
