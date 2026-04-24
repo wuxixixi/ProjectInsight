@@ -1,6 +1,7 @@
 """
 事件注入路由
 """
+import html
 import logging
 from datetime import datetime, timezone
 
@@ -13,6 +14,30 @@ from ..helpers import AirdropRequest, ParseRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/event", tags=["event"])
+
+
+def _sanitize_dict_values(d: dict, max_depth: int = 5) -> dict:
+    """递归消毒字典中的字符串值，防止 XSS"""
+    if max_depth <= 0:
+        return d
+    result = {}
+    for k, v in d.items():
+        if isinstance(v, str):
+            # 转义 HTML 并限制长度
+            sanitized = html.escape(v)
+            result[k] = sanitized[:500] if len(sanitized) > 500 else sanitized
+        elif isinstance(v, dict):
+            result[k] = _sanitize_dict_values(v, max_depth - 1)
+        elif isinstance(v, list):
+            result[k] = [
+                _sanitize_dict_values(item, max_depth - 1) if isinstance(item, dict)
+                else html.escape(item) if isinstance(item, str)
+                else item
+                for item in v
+            ]
+        else:
+            result[k] = v
+    return result
 
 
 @router.post("/parse")
@@ -104,6 +129,9 @@ async def airdrop_event(req: AirdropRequest):
 
         # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
         logger.info(f"[管线阶段2] 封装结构化事件消息...")
+
+        # 消毒 LLM 输出的知识图谱（不可信输入）
+        knowledge_graph = _sanitize_dict_values(knowledge_graph)
 
         # 用户选择的可信度优先于自动解析的
         final_credibility = req.credibility if req.credibility != "不确定" else knowledge_graph.get("credibility_hint", "不确定")

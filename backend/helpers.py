@@ -2,9 +2,11 @@
 辅助函数与 Pydantic 模型定义
 """
 import os
+import html
+import re
 from typing import Optional, Dict, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .llm.client import LLMConfig
 from .constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
@@ -72,6 +74,39 @@ class AirdropRequest(BaseModel):
     source: str = "public"  # 来源 (public/private)
     skip_parse: bool = False  # 跳过知识图谱解析（快速注入模式）
     credibility: str = "不确定"  # 新闻可信度 (高可信/低可信/不确定)
+
+    @field_validator('content')
+    @classmethod
+    def sanitize_content(cls, v: str) -> str:
+        """消毒内容：转义HTML实体、限制长度、移除控制字符"""
+        if not v or not v.strip():
+            raise ValueError('content cannot be empty')
+        # 移除控制字符（保留换行和制表符）
+        v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
+        # 转义 HTML 实体防止 XSS
+        v = html.escape(v)
+        # 限制最大长度 10000 字符
+        if len(v) > 10000:
+            v = v[:10000] + '...'
+        return v
+
+    @field_validator('source')
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        """验证来源必须在白名单内"""
+        allowed = {'public', 'private'}
+        if v not in allowed:
+            raise ValueError(f'source must be one of {allowed}')
+        return v
+
+    @field_validator('credibility')
+    @classmethod
+    def validate_credibility(cls, v: str) -> str:
+        """验证可信度必须在白名单内"""
+        allowed = {'高可信', '低可信', '不确定'}
+        if v not in allowed:
+            raise ValueError(f'credibility must be one of {allowed}')
+        return v
 
 
 # ==================== 辅助函数 ====================
