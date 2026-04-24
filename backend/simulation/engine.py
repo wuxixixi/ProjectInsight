@@ -909,25 +909,24 @@ class SimulationEngine:
             new_op = new_opinions[i]
             opinion_change = new_op - old_op
             neighbors = neighbors_list[i]
+            # 预先过滤无效邻居索引，防止越界
+            valid_neighbors = [n for n in neighbors if 0 <= n < len(old_opinions)]
 
             # 生成决策理由
             reasons = []
 
             # 1. 社交影响分析
-            if neighbors:
-                # 过滤无效的邻居索引，防止越界
-                valid_neighbors = [n for n in neighbors if 0 <= n < len(old_opinions)]
-                if valid_neighbors:
-                    neighbor_opinions = old_opinions[valid_neighbors]
-                    avg_neighbor_op = np.mean(neighbor_opinions)
-                    opinion_gap = avg_neighbor_op - old_op
+            if valid_neighbors:
+                neighbor_opinions = old_opinions[valid_neighbors]
+                avg_neighbor_op = np.mean(neighbor_opinions)
+                opinion_gap = avg_neighbor_op - old_op
 
-                    if abs(opinion_gap) > 0.1:
-                        direction = "正面信念" if opinion_gap > 0 else "负面信念"
-                        reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
+                if abs(opinion_gap) > 0.1:
+                    direction = "正面信念" if opinion_gap > 0 else "负面信念"
+                    reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
 
                 # 检查意见领袖影响
-                influencer_neighbors = [n for n in neighbors if n in influencer_ids]
+                influencer_neighbors = [n for n in valid_neighbors if n in influencer_ids]
                 if influencer_neighbors:
                     reasons.append(f"受{len(influencer_neighbors)}位意见领袖影响")
 
@@ -982,8 +981,8 @@ class SimulationEngine:
                 "conviction": float(pop.conviction[i]),
                 "is_silent": bool(is_silent[i]),
                 "perceived_climate": {
-                    "neighbor_count": len(neighbors),
-                    "avg_neighbor_opinion": float(np.mean(old_opinions[neighbors])) if neighbors else 0.0
+                    "neighbor_count": len(valid_neighbors) if neighbors else 0,
+                    "avg_neighbor_opinion": float(np.mean(old_opinions[valid_neighbors])) if valid_neighbors else 0.0
                 }
             }
 
