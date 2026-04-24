@@ -603,31 +603,31 @@ class SimulationEngine:
         dist = self.init_distribution
         n = self.population_size
 
-        believe_rumor = dist.get("believe_rumor", 0)
-        believe_truth = dist.get("believe_truth", 0)
-        neutral = dist.get("neutral", 1 - believe_rumor - believe_truth)
+        believe_negative = dist.get("believe_negative", dist.get("believe_rumor", 0))
+        believe_positive = dist.get("believe_positive", dist.get("believe_truth", 0))
+        neutral = dist.get("neutral", 1 - believe_negative - believe_positive)
 
         # 计算各群体数量
-        n_rumor = int(n * believe_rumor)
-        n_truth = int(n * believe_truth)
-        n_neutral = n - n_rumor - n_truth
+        n_negative = int(n * believe_negative)
+        n_positive = int(n * believe_positive)
+        n_neutral = n - n_negative - n_positive
 
-        logger.info(f"应用真实分布锚定: 误信={n_rumor}, 正面信念={n_truth}, 中立={n_neutral}")
+        logger.info(f"应用真实分布锚定: 误信={n_negative}, 正面信念={n_positive}, 中立={n_neutral}")
 
         # 生成观点值
         opinions = np.zeros(n)
 
         # 相信负面信念 (opinion < 0 为误信)
-        if n_rumor > 0:
-            opinions[:n_rumor] = self._rng.uniform(
-                self.opinion_range_rumor_low, self.opinion_range_rumor_high, n_rumor)
+        if n_negative > 0:
+            opinions[:n_negative] = self._rng.uniform(
+                self.opinion_range_rumor_low, self.opinion_range_rumor_high, n_negative)
 
         # 相信正面信念 (opinion > 0 为正确认知)
-        start = n_rumor
-        end = start + n_truth
-        if n_truth > 0:
+        start = n_negative
+        end = start + n_positive
+        if n_positive > 0:
             opinions[start:end] = self._rng.uniform(
-                self.opinion_range_truth_low, self.opinion_range_truth_high, n_truth)
+                self.opinion_range_truth_low, self.opinion_range_truth_high, n_positive)
 
         # 不确定 (接近0)
         if n_neutral > 0:
@@ -653,19 +653,19 @@ class SimulationEngine:
         dist = self.init_distribution
         n = self.population_size
 
-        believe_rumor = dist.get("believe_rumor", 0)
-        believe_truth = dist.get("believe_truth", 0)
+        believe_negative = dist.get("believe_negative", dist.get("believe_rumor", 0))
+        believe_positive = dist.get("believe_positive", dist.get("believe_truth", 0))
 
-        n_rumor = int(n * believe_rumor)
-        n_truth = int(n * believe_truth)
+        n_negative = int(n * believe_negative)
+        n_positive = int(n * believe_positive)
 
-        logger.info(f"LLM模式应用真实分布锚定: 误信={n_rumor}, 正面信念={n_truth}")
+        logger.info(f"LLM模式应用真实分布锚定: 误信={n_negative}, 正面信念={n_positive}")
 
         for i, agent in enumerate(self.llm_population.agents):
-            if i < n_rumor:
+            if i < n_negative:
                 agent.opinion = self._rng.uniform(
                     self.opinion_range_rumor_low, self.opinion_range_rumor_high)
-            elif i < n_rumor + n_truth:
+            elif i < n_negative + n_positive:
                 agent.opinion = self._rng.uniform(
                     self.opinion_range_truth_low, self.opinion_range_truth_high)
             else:
@@ -909,25 +909,24 @@ class SimulationEngine:
             new_op = new_opinions[i]
             opinion_change = new_op - old_op
             neighbors = neighbors_list[i]
+            # 过滤无效的邻居索引，防止越界
+            valid_neighbors = [n for n in neighbors if 0 <= n < len(old_opinions)]
 
             # 生成决策理由
             reasons = []
 
             # 1. 社交影响分析
-            if neighbors:
-                # 过滤无效的邻居索引，防止越界
-                valid_neighbors = [n for n in neighbors if 0 <= n < len(old_opinions)]
-                if valid_neighbors:
-                    neighbor_opinions = old_opinions[valid_neighbors]
-                    avg_neighbor_op = np.mean(neighbor_opinions)
-                    opinion_gap = avg_neighbor_op - old_op
+            if valid_neighbors:
+                neighbor_opinions = old_opinions[valid_neighbors]
+                avg_neighbor_op = np.mean(neighbor_opinions)
+                opinion_gap = avg_neighbor_op - old_op
 
-                    if abs(opinion_gap) > 0.1:
-                        direction = "正面信念" if opinion_gap > 0 else "负面信念"
-                        reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
+                if abs(opinion_gap) > 0.1:
+                    direction = "正面信念" if opinion_gap > 0 else "负面信念"
+                    reasons.append(f"邻居平均观点偏向{direction}(差距{abs(opinion_gap):.2f})")
 
                 # 检查意见领袖影响
-                influencer_neighbors = [n for n in neighbors if n in influencer_ids]
+                influencer_neighbors = [n for n in valid_neighbors if n in influencer_ids]
                 if influencer_neighbors:
                     reasons.append(f"受{len(influencer_neighbors)}位意见领袖影响")
 
@@ -982,8 +981,8 @@ class SimulationEngine:
                 "conviction": float(pop.conviction[i]),
                 "is_silent": bool(is_silent[i]),
                 "perceived_climate": {
-                    "neighbor_count": len(neighbors),
-                    "avg_neighbor_opinion": float(np.mean(old_opinions[neighbors])) if neighbors else 0.0
+                    "neighbor_count": len(valid_neighbors),
+                    "avg_neighbor_opinion": float(np.mean(old_opinions[valid_neighbors])) if valid_neighbors else 0.0
                 }
             }
 
@@ -1016,8 +1015,8 @@ class SimulationEngine:
             belief_strengths = pop.belief_strength
             # 三个互斥类别：拒绝/中立/相信
             reject_mask = opinions < OPINION_THRESHOLD_NEGATIVE
-            uncertain_mask = np.abs(opinions) <= min(abs(OPINION_THRESHOLD_NEGATIVE), OPINION_THRESHOLD_POSITIVE)
             believe_mask = opinions > OPINION_THRESHOLD_POSITIVE
+            uncertain_mask = ~(reject_mask | believe_mask)
 
             believe_rate = float(np.mean(believe_mask))
             reject_rate = float(np.mean(reject_mask))

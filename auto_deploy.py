@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""自动部署脚本 - 本地 + 腾讯云 + 院服务器2"""
+"""自动部署脚本 - 本地 + 腾讯云 + 院服务器2
+
+安全注意: 使用环境变量配置密码
+"""
 import subprocess
 import sys
 import time
@@ -7,9 +10,10 @@ from datetime import datetime
 import paramiko
 import os
 
+# 使用环境变量读取密码
 SERVERS = [
-    {"host": "101.34.62.149", "user": "ubuntu", "password": "Wuxi,62047720", "remote_dir": "/home/ubuntu/ProjectInsight", "name": "腾讯云"},
-    {"host": "172.16.128.44", "user": "dev", "password": "dev@sass.", "remote_dir": "/home/dev/ProjectInsight", "name": "院内2"},
+    {"host": "101.34.62.149", "user": "ubuntu", "password": os.environ.get("TENANT_CLOUD_PASSWORD", ""), "remote_dir": "/home/ubuntu/ProjectInsight", "name": "腾讯云"},
+    {"host": "172.16.128.44", "user": "dev", "password": os.environ.get("YANYUAN_PASSWORD", ""), "remote_dir": "/home/dev/ProjectInsight", "name": "院内2"},
 ]
 
 

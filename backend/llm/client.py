@@ -184,8 +184,8 @@ class LLMClient:
         payload = {
             "model": self.config.model,
             "messages": messages,
-            "temperature": temperature or self.config.temperature,
-            "max_tokens": max_tokens or self.config.max_tokens
+            "temperature": temperature if temperature is not None else self.config.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens
         }
 
         self._request_count += 1
