@@ -612,22 +612,22 @@ class SimulationEngine:
         n_positive = int(n * believe_positive)
         n_neutral = n - n_negative - n_positive
 
-        logger.info(f"应用真实分布锚定: 误信={n_rumor}, 正面信念={n_truth}, 中立={n_neutral}")
+        logger.info(f"应用真实分布锚定: 误信={n_negative}, 正面信念={n_positive}, 中立={n_neutral}")
 
         # 生成观点值
         opinions = np.zeros(n)
 
         # 相信负面信念 (opinion < 0 为误信)
-        if n_rumor > 0:
-            opinions[:n_rumor] = self._rng.uniform(
-                self.opinion_range_rumor_low, self.opinion_range_rumor_high, n_rumor)
+        if n_negative > 0:
+            opinions[:n_negative] = self._rng.uniform(
+                self.opinion_range_rumor_low, self.opinion_range_rumor_high, n_negative)
 
         # 相信正面信念 (opinion > 0 为正确认知)
-        start = n_rumor
-        end = start + n_truth
-        if n_truth > 0:
+        start = n_negative
+        end = start + n_positive
+        if n_positive > 0:
             opinions[start:end] = self._rng.uniform(
-                self.opinion_range_truth_low, self.opinion_range_truth_high, n_truth)
+                self.opinion_range_truth_low, self.opinion_range_truth_high, n_positive)
 
         # 不确定 (接近0)
         if n_neutral > 0:
@@ -653,19 +653,19 @@ class SimulationEngine:
         dist = self.init_distribution
         n = self.population_size
 
-        believe_rumor = dist.get("believe_rumor", 0)
-        believe_truth = dist.get("believe_truth", 0)
+        believe_negative = dist.get("believe_negative", dist.get("believe_rumor", 0))
+        believe_positive = dist.get("believe_positive", dist.get("believe_truth", 0))
 
-        n_rumor = int(n * believe_rumor)
-        n_truth = int(n * believe_truth)
+        n_negative = int(n * believe_negative)
+        n_positive = int(n * believe_positive)
 
-        logger.info(f"LLM模式应用真实分布锚定: 误信={n_rumor}, 正面信念={n_truth}")
+        logger.info(f"LLM模式应用真实分布锚定: 误信={n_negative}, 正面信念={n_positive}")
 
         for i, agent in enumerate(self.llm_population.agents):
-            if i < n_rumor:
+            if i < n_negative:
                 agent.opinion = self._rng.uniform(
                     self.opinion_range_rumor_low, self.opinion_range_rumor_high)
-            elif i < n_rumor + n_truth:
+            elif i < n_negative + n_positive:
                 agent.opinion = self._rng.uniform(
                     self.opinion_range_truth_low, self.opinion_range_truth_high)
             else:
