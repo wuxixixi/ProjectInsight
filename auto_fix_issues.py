@@ -1,248 +1,396 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-auto_fix_issues.py
-
-Conservative automation scaffold:
-- Select up to N open issues from wuxixixi/ProjectInsight
-- For each issue, create a branch and a placeholder fix file (under fixes/)
-- Create a PR (draft by default), clone the PR branch locally and run pytest
-- If tests pass and AUTO_MERGE=1, merge the PR and run local deploy.py
-
-Security: reads GITHUB_TOKEN from environment variable; never writes tokens to disk.
-
-Usage:
-  - Set environment variable GITHUB_TOKEN (securely). Example (Windows PowerShell):
-      setx GITHUB_TOKEN "<token>"
-    Then log out/in or set in the scheduled task environment.
-  - Optional env vars:
-      AUTO_FIX_MAX_ISSUES (default 5)
-      AUTO_MERGE (0/1, default 0)
-      DRY_RUN (0/1, default 1)  # if 1, actions are logged but not merged/deployed
-      PROJECT_ROOT (path to local repo for deploy.py; default uses current repo root)
-
-Note: This script is intentionally conservative. To enable more aggressive auto-patching, extend attempt_patch_for_issue().
+Hourly GitHub issue auto-fix runner for ProjectInsight.
 """
 
+from __future__ import annotations
+
+import json
+import logging
 import os
+import random
+import shutil
+import subprocess
 import sys
 import time
-import logging
-import random
-import tempfile
-import subprocess
-from datetime import datetime
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
 
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
-log = logging.getLogger('auto_fix')
-
-try:
-    from github import Github
-    from github.GithubException import GithubException
-except Exception:
-    log.error("Missing dependency 'PyGithub'. Install with: pip install PyGithub")
-    sys.exit(2)
-
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-if not GITHUB_TOKEN:
-    log.error("GITHUB_TOKEN not set. Export your GitHub personal access token as environment variable GITHUB_TOKEN.")
-    log.error("Example (PowerShell): setx GITHUB_TOKEN \"<token>\"")
-    sys.exit(2)
-
-OWNER = os.getenv('GITHUB_OWNER', 'wuxixixi')
-REPO_NAME = os.getenv('GITHUB_REPO', 'ProjectInsight')
-MAX_ISSUES = int(os.getenv('AUTO_FIX_MAX_ISSUES', '5'))
-AUTO_MERGE = os.getenv('AUTO_MERGE', '0') in ('1','true','True')
-DRY_RUN = os.getenv('DRY_RUN', '1') in ('1','true','True')
-PROJECT_ROOT = os.getenv('PROJECT_ROOT', os.path.abspath(os.path.dirname(__file__)))
-
-# Conservative patcher placeholder - extend for real auto-fixes
-
-def attempt_patch_for_issue(local_repo_path, issue):
-    """Placeholder: do NOT modify production code unless you add safe logic here.
-    Currently returns False to indicate no automatic code change was attempted.
-    """
-    log.info("No automatic patch implemented for issue #%s; creating placeholder file instead.", issue.number)
-    return False
+from github import Github
+from github.GithubException import GithubException
 
 
-def select_issues(repo, max_issues):
-    issues = repo.get_issues(state='open')
-    candidates = []
-    for issue in issues:
-        # skip pull requests
-        if getattr(issue, 'pull_request', None):
+LOG_DIR = Path(__file__).resolve().parent / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_PATH = LOG_DIR / "auto_fix.log"
+WORK_ROOT = Path(__file__).resolve().parent / ".auto_fix_work"
+WORK_ROOT.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s: %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_PATH, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+log = logging.getLogger("auto_fix")
+
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+GITHUB_OWNER = os.getenv("GITHUB_OWNER", "wuxixixi").strip()
+GITHUB_REPO = os.getenv("GITHUB_REPO", "ProjectInsight").strip()
+AUTO_FIX_MAX_ISSUES = int(os.getenv("AUTO_FIX_MAX_ISSUES", "5"))
+AUTO_FIX_TOP_POOL = int(os.getenv("AUTO_FIX_TOP_POOL", "15"))
+AUTO_MERGE = os.getenv("AUTO_MERGE", "0").lower() in {"1", "true", "yes"}
+DRY_RUN = os.getenv("DRY_RUN", "0").lower() in {"1", "true", "yes"}
+DEPLOY_ON_SUCCESS = os.getenv("DEPLOY_ON_SUCCESS", "1").lower() in {"1", "true", "yes"}
+PYTHON_BIN = os.getenv("PYTHON_BIN", sys.executable)
+CODEX_BIN = os.getenv("CODEX_BIN", "codex")
+DEFAULT_BRANCH = os.getenv("DEFAULT_BRANCH", "").strip()
+PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "GIT_HTTP_PROXY",
+    "GIT_HTTPS_PROXY",
+)
+
+
+@dataclass
+class IssueCandidate:
+    number: int
+    title: str
+    body: str
+    html_url: str
+    labels: list[str]
+    score: float
+
+
+def run(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    check: bool = True,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+    for key in PROXY_ENV_KEYS:
+        env.pop(key, None)
+    log.info("Run: %s", " ".join(args))
+    result = subprocess.run(
+        args,
+        cwd=str(cwd) if cwd else None,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=check,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.stdout:
+        log.info("stdout:\n%s", result.stdout[-4000:])
+    if result.stderr:
+        log.warning("stderr:\n%s", result.stderr[-4000:])
+    return result
+
+
+def git(args: list[str], *, cwd: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return run(["git", "-c", f"safe.directory={cwd.as_posix()}", *args], cwd=cwd, check=check)
+
+
+def score_issue(issue) -> float:
+    labels = [label.name.lower() for label in issue.labels]
+    score = 0.0
+    score += min(issue.comments, 20) * 1.5
+    score += sum(4 for label in labels if any(key in label for key in ("bug", "critical", "security", "high")))
+    score += sum(2 for label in labels if any(key in label for key in ("backend", "frontend", "api", "regression")))
+    score += min((time.time() - issue.created_at.timestamp()) / 86400.0, 10.0)
+    if issue.assignees:
+        score += 1
+    return score
+
+
+def collect_candidates(repo) -> list[IssueCandidate]:
+    items: list[IssueCandidate] = []
+    for issue in repo.get_issues(state="open", sort="updated", direction="desc"):
+        if getattr(issue, "pull_request", None):
             continue
-        candidates.append(issue)
-        if len(candidates) >= 100:
+        items.append(
+            IssueCandidate(
+                number=issue.number,
+                title=issue.title,
+                body=issue.body or "",
+                html_url=issue.html_url,
+                labels=[label.name for label in issue.labels],
+                score=score_issue(issue),
+            )
+        )
+        if len(items) >= 50:
             break
+    return items
+
+
+def choose_issues(candidates: list[IssueCandidate]) -> list[IssueCandidate]:
     if not candidates:
         return []
-    chosen = random.sample(candidates, min(len(candidates), max_issues))
-    return chosen
+    ranked = sorted(candidates, key=lambda item: item.score, reverse=True)
+    pool = ranked[: max(1, min(len(ranked), AUTO_FIX_TOP_POOL))]
+    return random.sample(pool, min(AUTO_FIX_MAX_ISSUES, len(pool)))
 
 
-def create_branch(repo, base_branch, branch_name):
-    try:
-        src_ref = repo.get_git_ref(f"heads/{base_branch}")
-        sha = src_ref.object.sha
-        repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=sha)
-        log.info("Created branch %s from %s", branch_name, base_branch)
-        return True
-    except GithubException as e:
-        log.error("Failed to create branch %s: %s", branch_name, e)
-        return False
+def clone_repo(temp_root: Path) -> Path:
+    repo_dir = temp_root / GITHUB_REPO
+    clone_url = f"https://x-access-token:{GITHUB_TOKEN}@github.com/{GITHUB_OWNER}/{GITHUB_REPO}.git"
+    run(["git", "clone", clone_url, str(repo_dir)])
+    return repo_dir
 
 
-def create_placeholder_file(repo, branch_name, issue):
-    path = f"fixes/auto_fix_issue_{issue.number}.md"
-    content = (
-        f"# Auto-fix for issue #{issue.number}: {issue.title}\n\n"
-        f"Issue URL: {issue.html_url}\n\n"
-        f"Issue body:\n{issue.body or '---'}\n\n"
-        "Proposed fix (placeholder):\n"
-        "This file was created automatically as a conservative starting point for developers.\n"
-        "Review and replace with a real code change if appropriate.\n"
-        f"Generated at {datetime.utcnow().isoformat()}Z\n"
+def detect_default_branch(repo_dir: Path) -> str:
+    if DEFAULT_BRANCH:
+        return DEFAULT_BRANCH
+    result = git(["symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo_dir)
+    return result.stdout.strip().split("/")[-1]
+
+
+def prepare_branch(repo_dir: Path, issue_number: int) -> str:
+    default_branch = detect_default_branch(repo_dir)
+    branch = f"auto-fix/issue-{issue_number}-{int(time.time())}"
+    git(["config", "user.name", "ProjectInsight Auto Fix Bot"], cwd=repo_dir)
+    git(["config", "user.email", "autofix@projectinsight.local"], cwd=repo_dir)
+    git(["checkout", default_branch], cwd=repo_dir)
+    git(["pull", "--ff-only", "origin", default_branch], cwd=repo_dir)
+    git(["checkout", "-b", branch], cwd=repo_dir)
+    return branch
+
+
+def build_prompt(issue: IssueCandidate) -> str:
+    payload = {
+        "number": issue.number,
+        "title": issue.title,
+        "url": issue.html_url,
+        "labels": issue.labels,
+        "body": issue.body[:12000],
+    }
+    return (
+        "Fix this GitHub issue in the current repository.\n"
+        "Constraints:\n"
+        "- Make a real code fix, not a placeholder.\n"
+        "- Keep the change minimal and safe.\n"
+        "- After editing, run targeted validation, then run pytest -q.\n"
+        "- If frontend files changed or are affected, run npm run build in frontend.\n"
+        "- Stop if no safe fix is possible.\n\n"
+        f"Issue:\n{json.dumps(payload, ensure_ascii=False, indent=2)}\n"
     )
-    commit_message = f"Auto-fix: placeholder for issue #{issue.number}"
-    try:
-        repo.create_file(path, commit_message, content, branch=branch_name)
-        log.info("Created placeholder file %s on branch %s", path, branch_name)
-        return path
-    except GithubException as e:
-        # If file exists, update it
-        try:
-            existing = repo.get_contents(path, ref=branch_name)
-            repo.update_file(path, commit_message, content, existing.sha, branch=branch_name)
-            log.info("Updated existing placeholder file %s on branch %s", path, branch_name)
-            return path
-        except Exception as e2:
-            log.exception("Failed to create or update placeholder file: %s", e2)
-            return None
 
 
-def create_pr(repo, branch_name, issue):
-    title = f"Auto-fix: #{issue.number} {issue.title}"
-    body = (
-        f"Automated conservative attempt to address issue #{issue.number}.\n\n"
-        f"Issue: {issue.html_url}\n\n"
-        "This PR contains a placeholder file describing the issue and suggested next steps.\n"
-        "A local test run was performed and results are in the build logs.\n"
-        "If AUTO_MERGE=1 and tests pass, this PR may be merged automatically.\n"
+def run_codex_fix(repo_dir: Path, issue: IssueCandidate) -> bool:
+    result = run(
+        [
+            CODEX_BIN,
+            "exec",
+            "--skip-git-repo-check",
+            "--full-auto",
+            "--output-last-message",
+            str(repo_dir / "codex_last_message.txt"),
+            build_prompt(issue),
+        ],
+        cwd=repo_dir,
+        check=False,
     )
-    draft = not AUTO_MERGE
-    try:
-        pr = repo.create_pull(title=title, body=body, head=branch_name, base=repo.default_branch, draft=draft)
-        log.info("Created PR #%s for issue #%s", pr.number, issue.number)
-        return pr
-    except GithubException as e:
-        log.exception("Failed to create PR for branch %s: %s", branch_name, e)
-        return None
+    return result.returncode == 0
 
 
-def run_tests_in_clone(owner, repo_name, branch_name):
-    tmp = tempfile.TemporaryDirectory()
-    path = tmp.name
-    clone_url = f"https://github.com/{owner}/{repo_name}.git"
-    log.info("Cloning %s into %s", clone_url, path)
-    try:
-        subprocess.run(["git", "clone", clone_url, path], check=True)
-    except Exception as e:
-        log.exception("git clone failed: %s", e)
-        tmp.cleanup()
-        return False, None
-    try:
-        # fetch branch and checkout
-        subprocess.run(["git", "fetch", "origin", branch_name], cwd=path, check=True)
-        subprocess.run(["git", "checkout", "-b", branch_name, f"origin/{branch_name}"], cwd=path, check=True)
-    except Exception as e:
-        log.exception("Failed to checkout branch %s: %s", branch_name, e)
-        tmp.cleanup()
-        return False, None
-    # Run pytest if present
-    try:
-        rc = subprocess.run([sys.executable, "-m", "pytest", "-q"], cwd=path)
-        success = (rc.returncode == 0)
-        log.info("pytest return code: %s", rc.returncode)
-        return success, path
-    except Exception as e:
-        log.exception("Failed to run tests: %s", e)
-        tmp.cleanup()
-        return False, None
+def has_changes(repo_dir: Path) -> bool:
+    status = git(["status", "--short"], cwd=repo_dir).stdout.strip()
+    return bool(status)
 
 
-def merge_pr_if_allowed(pr):
-    try:
-        if DRY_RUN:
-            log.info("DRY_RUN is enabled; skipping merge of PR #%s", pr.number)
-            return False
-        if AUTO_MERGE:
-            result = pr.merge()
-            log.info("Merged PR #%s: %s", pr.number, result)
-            return True
-        log.info("AUTO_MERGE disabled; leaving PR #%s as draft/for-review", pr.number)
-        return False
-    except Exception as e:
-        log.exception("Failed to merge PR #%s: %s", pr.number, e)
-        return False
+def validate(repo_dir: Path) -> tuple[bool, list[str]]:
+    failures: list[str] = []
+    tests = run([PYTHON_BIN, "-m", "pytest", "-q"], cwd=repo_dir, check=False)
+    if tests.returncode != 0:
+        failures.append("pytest -q failed")
+
+    frontend_dir = repo_dir / "frontend"
+    if frontend_dir.exists() and (frontend_dir / "package.json").exists():
+        build = run(["npm", "run", "build"], cwd=frontend_dir, check=False)
+        if build.returncode != 0:
+            failures.append("npm run build failed")
+
+    return len(failures) == 0, failures
 
 
-def run_deploy():
-    deploy_py = os.path.join(PROJECT_ROOT, 'deploy.py')
-    if not os.path.exists(deploy_py):
-        log.warning("deploy.py not found at %s; skipping deploy", deploy_py)
-        return False
+def commit_and_push(repo_dir: Path, issue: IssueCandidate, branch: str) -> bool:
     if DRY_RUN:
-        log.info("DRY_RUN enabled; skipping actual deploy run of %s", deploy_py)
-        return False
-    try:
-        subprocess.run([sys.executable, deploy_py], check=True)
-        log.info("Deploy script ran successfully")
         return True
-    except Exception as e:
-        log.exception("Deploy script failed: %s", e)
+    git(["add", "-A"], cwd=repo_dir)
+    commit = git(["commit", "-m", f"fix: resolve issue #{issue.number}"], cwd=repo_dir, check=False)
+    combined = f"{commit.stdout}\n{commit.stderr}".lower()
+    if commit.returncode != 0 and "nothing to commit" in combined:
         return False
+    if commit.returncode != 0:
+        raise RuntimeError(commit.stderr or commit.stdout)
+    git(["push", "-u", "origin", branch], cwd=repo_dir)
+    return True
 
 
-def main():
-    g = Github(GITHUB_TOKEN)
-    try:
-        repo = g.get_repo(f"{OWNER}/{REPO_NAME}")
-    except Exception as e:
-        log.exception("Failed to access repo %s/%s: %s", OWNER, REPO_NAME, e)
-        sys.exit(1)
+def create_pr(repo_dir: Path, base_branch: str, issue: IssueCandidate, branch: str, failures: Iterable[str]) -> str | None:
+    if DRY_RUN:
+        return None
+    body = [
+        f"Fixes #{issue.number}",
+        "",
+        f"Issue: {issue.html_url}",
+        "",
+        "Validation:",
+    ]
+    if failures:
+        body.extend(f"- {item}" for item in failures)
+    else:
+        body.extend(["- pytest -q", "- npm run build"])
 
-    issues = select_issues(repo, MAX_ISSUES)
-    if not issues:
-        log.info("No candidate issues found. Exiting.")
+    result = run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--title",
+            f"fix: issue #{issue.number} {issue.title}",
+            "--body",
+            "\n".join(body),
+            "--base",
+            base_branch,
+            "--head",
+            branch,
+        ],
+        cwd=repo_dir,
+        check=False,
+        extra_env={"GITHUB_TOKEN": GITHUB_TOKEN},
+    )
+    if result.returncode != 0:
+        return None
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return lines[-1] if lines else None
+
+
+def maybe_merge(repo_dir: Path, branch: str) -> None:
+    if DRY_RUN or not AUTO_MERGE:
         return
+    run(
+        ["gh", "pr", "merge", branch, "--merge", "--auto"],
+        cwd=repo_dir,
+        check=False,
+        extra_env={"GITHUB_TOKEN": GITHUB_TOKEN},
+    )
 
-    for issue in issues:
+
+def deploy_local(repo_dir: Path) -> bool:
+    if not DEPLOY_ON_SUCCESS:
+        return False
+    deploy_script = repo_dir / "deploy.py"
+    if not deploy_script.exists():
+        return False
+    result = run([PYTHON_BIN, str(deploy_script)], cwd=repo_dir, check=False)
+    return result.returncode == 0
+
+
+def process_issue(issue: IssueCandidate) -> dict[str, object]:
+    temp_dir = WORK_ROOT / f"issue-{issue.number}-{int(time.time())}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        repo_dir = clone_repo(temp_dir)
+        base_branch = detect_default_branch(repo_dir)
+        branch = prepare_branch(repo_dir, issue.number)
+
+        summary: dict[str, object] = {
+            "issue": issue.number,
+            "branch": branch,
+            "fixed": False,
+            "validated": False,
+            "pr_url": None,
+            "deployed": False,
+            "errors": [],
+        }
+
+        if not run_codex_fix(repo_dir, issue):
+            summary["errors"] = ["codex fix attempt failed"]
+            return summary
+
+        if not has_changes(repo_dir):
+            summary["errors"] = ["no code changes produced"]
+            return summary
+
+        valid, failures = validate(repo_dir)
+        summary["fixed"] = True
+        summary["validated"] = valid
+        summary["errors"] = failures
+        if not valid:
+            return summary
+
+        if not commit_and_push(repo_dir, issue, branch):
+            summary["errors"] = ["nothing to commit after validation"]
+            return summary
+
+        summary["pr_url"] = create_pr(repo_dir, base_branch, issue, branch, failures)
+        maybe_merge(repo_dir, branch)
+        summary["deployed"] = deploy_local(repo_dir)
+        return summary
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def main() -> int:
+    for key in PROXY_ENV_KEYS:
+        os.environ.pop(key, None)
+
+    if not GITHUB_TOKEN:
+        log.error("GITHUB_TOKEN is not set.")
+        return 2
+
+    try:
+        gh = Github(GITHUB_TOKEN)
+        repo = gh.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+    except GithubException as exc:
+        log.error("Failed to access %s/%s: %s", GITHUB_OWNER, GITHUB_REPO, exc)
+        return 1
+
+    candidates = collect_candidates(repo)
+    selected = choose_issues(candidates)
+    if not selected:
+        log.info("No issues selected.")
+        return 0
+
+    log.info("Selected issues: %s", ", ".join(f"#{item.number}" for item in selected))
+    summaries: list[dict[str, object]] = []
+    for issue in selected:
         try:
-            timestamp = int(time.time())
-            branch_name = f"auto-fix/issue-{issue.number}-{timestamp}"
-            created = create_branch(repo, repo.default_branch, branch_name)
-            if not created:
-                continue
-            placeholder_path = create_placeholder_file(repo, branch_name, issue)
-            pr = create_pr(repo, branch_name, issue)
-            if not pr:
-                continue
+            summaries.append(process_issue(issue))
+        except Exception as exc:
+            log.exception("Issue #%s failed: %s", issue.number, exc)
+            summaries.append(
+                {
+                    "issue": issue.number,
+                    "fixed": False,
+                    "validated": False,
+                    "pr_url": None,
+                    "deployed": False,
+                    "errors": [str(exc)],
+                }
+            )
 
-            # Clone and run tests locally against the PR branch
-            tests_ok, clone_path = run_tests_in_clone(OWNER, REPO_NAME, branch_name)
-            if tests_ok:
-                log.info("Tests passed for branch %s", branch_name)
-                # optionally merge
-                merged = merge_pr_if_allowed(pr)
-                if merged:
-                    run_deploy()
-            else:
-                log.info("Tests failed or couldn't run for branch %s; leaving PR for manual review", branch_name)
+    summary_path = LOG_DIR / "auto_fix_summary.json"
+    summary_path.write_text(json.dumps(summaries, ensure_ascii=False, indent=2), encoding="utf-8")
+    validated_count = sum(1 for item in summaries if item.get("validated"))
+    log.info("Validated %s/%s issue attempts. Summary saved to %s", validated_count, len(summaries), summary_path)
+    return 0
 
-        except Exception as e:
-            log.exception("Error processing issue #%s: %s", getattr(issue, 'number', 'unknown'), e)
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    sys.exit(main())
