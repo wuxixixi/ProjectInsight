@@ -1082,11 +1082,11 @@ class SimulationEngine:
         if self.use_v3 and self.v3:
             v3_stats = self.v3.get_statistics()
             
-            # 为每个 Agent 添加 v3 字段
-            for agent_dict in agents:
-                agent_id = agent_dict.get('id', 0)
-                v3_fields = self.v3.get_agent_v3_fields(agent_id)
-                agent_dict.update(v3_fields)
+            # 为每个 Agent 添加 v3 字段（创建新字典避免修改原数据）
+            agents = [
+                {**agent_dict, **self.v3.get_agent_v3_fields(agent_dict.get('id', 0))}
+                for agent_dict in agents
+            ]
 
         return SimulationState(
             step=self.step_count,
