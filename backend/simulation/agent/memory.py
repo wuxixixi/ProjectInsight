@@ -16,10 +16,30 @@ import sqlite3
 import json
 import logging
 import threading
+import tempfile
 
 from .belief_state import BeliefState, ExposureEvent
 
 logger = logging.getLogger(__name__)
+
+
+def _default_memory_db_path() -> Path:
+    """Resolve a writable default SQLite path for local runs."""
+    env_dir = Path(tempfile.gettempdir())
+    configured = Path(str(Path.cwd()))  # placeholder for type narrowing
+    configured_value = None
+    try:
+        import os
+        configured_value = os.getenv("PROJECTINSIGHT_DATA_DIR", "").strip()
+    except Exception:
+        configured_value = ""
+    if configured_value:
+        configured = Path(configured_value)
+        env_dir = configured
+    else:
+        env_dir = Path(tempfile.gettempdir()) / "ProjectInsight" / "data"
+    env_dir.mkdir(parents=True, exist_ok=True)
+    return env_dir / "memory.db"
 
 
 class AgentMemory:
@@ -54,7 +74,7 @@ class AgentMemory:
         
         # 长时记忆: SQLite 持久化
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent.parent / "data" / "memory.db"
+            db_path = _default_memory_db_path()
         self.db_path = Path(db_path)
         self._init_db()
         
