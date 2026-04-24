@@ -15,6 +15,7 @@ from typing import Optional
 from .. import state
 from ..simulation.analyst_agent import generate_intelligence_report, AnalystAgent, DataSampler
 from ..llm.client import LLMConfig
+from ..helpers import OpenReportRequest
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,12 @@ def _sort_reports(reports: list, sort: str, order: str) -> list:
 
 
 @router.post("/open")
-async def open_report(data: dict):
-    """使用系统默认应用打开报告文件"""
-    report_path = data.get("path", "").replace("/", os.sep).replace("\\", os.sep)
+async def open_report(data: OpenReportRequest):
+    """使用系统默认应用打开报告文件
+    
+    Issue #1257: 使用Pydantic模型验证参数
+    """
+    report_path = data.path.replace("/", os.sep).replace("\\", os.sep)
 
     if not report_path or not os.path.exists(report_path):
         return JSONResponse(content={"success": False, "error": f"报告文件不存在: {report_path}"}, status_code=404)

@@ -1,0 +1,12 @@
+[
+  {
+    "issue": 1209,
+    "fixed": false,
+    "validated": false,
+    "pr_url": null,
+    "deployed": false,
+    "errors": [
+      "Command '['git', 'clone', 'https://x-access-token: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@github.com/wuxixixi/ProjectInsight.git', 'H:\\\\ProjectInsight\\\\.auto_fix_work\\\\issue-1209-1777000042\\\\ProjectInsight']' returned non-zero exit status 128."
+    ]
+  }
+]

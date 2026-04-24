@@ -74,6 +74,11 @@ class AirdropRequest(BaseModel):
     credibility: str = "不确定"  # 新闻可信度 (高可信/低可信/不确定)
 
 
+class OpenReportRequest(BaseModel):
+    """Issue #1257: 打开报告请求参数"""
+    path: str = Field(..., min_length=1, description="报告文件路径")
+
+
 # ==================== 辅助函数 ====================
 
 def _is_local_llm_runtime(llm_config: LLMConfig) -> bool:
