@@ -2338,8 +2338,12 @@ export default {
         }
 
         this.ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data)
-          this.handleMessage(msg)
+          try {
+            const msg = JSON.parse(event.data)
+            this.handleMessage(msg)
+          } catch (e) {
+            console.error('WebSocket message parse error:', e, event.data)
+          }
         }
       } catch (e) {
         console.error('WebSocket 创建失败:', e)
