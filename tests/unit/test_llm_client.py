@@ -62,43 +62,39 @@ class TestLLMClientInit:
 
 
 class TestLLMClientChatJson:
-    """测试 LLM 客户端 JSON 解析功能"""
+    """测试 LLM 客户端 JSON 解析功能
+    
+    Issue #1254: 修复测试使用实际方法而非手动实现
+    """
 
     def test_parse_json_response(self):
-        """测试 JSON 响应解析"""
+        """测试 JSON 响应解析 - 使用实际方法"""
         client = LLMClient()
-
-        # 直接测试 JSON 解析逻辑
         content = '{"new_opinion": 0.5, "reasoning": "test"}'
 
-        # 模拟解析
-        result = json.loads(content)
+        # Issue #1254: 使用实际方法而非 json.loads
+        result = client._parse_json_content(content)
 
         assert result["new_opinion"] == 0.5
         assert result["reasoning"] == "test"
 
     def test_parse_json_with_markdown_block(self):
-        """测试带 Markdown 代码块的 JSON 解析"""
+        """测试带 Markdown 代码块的 JSON 解析 - 使用实际方法"""
+        client = LLMClient()
         content = '```json\n{"new_opinion": 0.3}\n```'
 
-        # 处理可能的 markdown 代码块
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-
-        result = json.loads(content.strip())
+        # Issue #1254: 使用实际方法
+        result = client._parse_json_content(content)
 
         assert result["new_opinion"] == 0.3
 
     def test_parse_json_with_simple_block(self):
-        """测试带简单代码块的 JSON 解析"""
+        """测试带简单代码块的 JSON 解析 - 使用实际方法"""
+        client = LLMClient()
         content = '```\n{"new_opinion": -0.2}\n```'
 
-        if "```" in content:
-            content = content.split("```")[1].split("```")[0]
-
-        result = json.loads(content.strip())
+        # Issue #1254: 使用实际方法
+        result = client._parse_json_content(content)
 
         assert result["new_opinion"] == -0.2
 
