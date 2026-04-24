@@ -17,6 +17,7 @@ def reset_global_state():
     """每个测试前重置全局状态，避免测试间污染
     
     Issue #1246: 移除 autouse=True，改为显式请求
+    Issue #1268: 添加 AgentMemory 和 ReplayWriter 重置
     """
     from backend.simulation.persona import clear_agent_snapshots
     from backend import state
@@ -59,8 +60,23 @@ def reset_global_state():
     except ImportError:
         pass
 
+    # Issue #1268: 重置 AgentMemory 全局实例
+    try:
+        from backend.simulation.agent.memory import AgentMemory
+        AgentMemory._instances = {}
+    except ImportError:
+        pass
+
+    # Issue #1268: 重置 ReplayWriter
+    try:
+        from backend.simulation.storage.replay_writer import ReplayWriter
+        ReplayWriter._instance = None
+    except ImportError:
+        pass
+
     yield
 
+    # 清理阶段
     clear_agent_snapshots()
     state.reset_state()
     backend.llm.client._llm_client = None
@@ -70,3 +86,17 @@ def reset_global_state():
     PersonAgent.social_influence_coeff = 0.3
     PersonAgent.silence_fear_threshold = 0.6
     PersonAgent.silence_delta_threshold = 0.1
+
+    # 清理 AgentMemory
+    try:
+        from backend.simulation.agent.memory import AgentMemory
+        AgentMemory._instances = {}
+    except ImportError:
+        pass
+
+    # 清理 ReplayWriter
+    try:
+        from backend.simulation.storage.replay_writer import ReplayWriter
+        ReplayWriter._instance = None
+    except ImportError:
+        pass
