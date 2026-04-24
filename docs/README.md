@@ -137,7 +137,7 @@ npm run dev
 - [推演机制详解](simulation.md) - 核心算法与模型解释
 - [指标解释](metrics.md) - 各指标的含意与计算方式
 - [API 接口文档](api.md) - 后端接口说明
-- [双模式设计](dual_mode_design.md) - 沙盘/新闻模式设计方案
+- [v3.0 设计方案](design.md) - 心理学模型、双层网络、知识驱动演化设计
 - [部署指南](deployment.md) - 生产环境部署配置
 - [语义重构映射](refactor_mapping.md) - 字段命名映射与兼容策略
 
