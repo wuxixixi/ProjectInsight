@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
 设置 frp 内网穿透 - 使用国内镜像加速
+
+安全注意: 使用环境变量配置密码
 """
 import paramiko
-import time
+import os
 
-# 服务器配置
+# 服务器配置 - 使用环境变量
 TENCENT_SERVER = {
     "host": "101.34.62.149",
     "user": "ubuntu",
-    "password": "Wuxi,62047720",
+    "password": os.environ.get("TENANT_CLOUD_PASSWORD", ""),
 }
 
 CAMPUS_SERVER = {
     "host": "172.16.128.44",
     "user": "dev",
-    "password": "dev@sass.",
+    "password": os.environ.get("YANYUAN_PASSWORD", ""),
 }
 
 FRP_VERSION = "0.61.1"

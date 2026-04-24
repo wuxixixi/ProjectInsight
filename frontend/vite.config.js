@@ -23,14 +23,35 @@ export default defineConfig(({ mode }) => ({
     }
   },
   build: {
+    // 生产优化配置 (Issue #1248)
+    minify: 'terser',
+    sourcemap: false,
+    terserOptions: {
+      compress: {
+        drop_console: mode === 'production',
+        drop_debugger: mode === 'production'
+      }
+    },
     rollupOptions: {
       output: {
+        // Gzip 压缩文件
         manualChunks: {
           vendor: ['vue'],
           echarts: ['echarts'],
-          markdown: ['marked']
+          markdown: ['marked'],
+          d3: ['d3']
         }
       }
-    }
+    },
+    // 开启 CSS code splitting
+    cssCodeSplit: true,
+    // 启用源码映射用于调试
+    sourceMap: false,
+    // 块大小警告阈值
+    chunkSizeWarningLimit: 1000
+  },
+  // 开发环境配置
+  optimizeDeps: {
+    include: ['vue', 'echarts', 'd3', 'marked']
   }
 }))

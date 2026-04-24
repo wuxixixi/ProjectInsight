@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Deep-probe LLM models: verify if different model names return different responses."""
 import paramiko
+import os
 import json
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('172.16.128.44', username='dev', password='dev@sass.', timeout=10)
+# Issue #1249: 使用环境变量
+client.connect('172.16.128.44', username='dev', password=os.environ.get("YANYUAN_PASSWORD", ""), timeout=10)
 
-API_KEY = 'R61XwviRggmoTdDGHmH3tA0BQN7TToYwdPk61m9Y8Gs'
+API_KEY = os.environ.get("LLM_API_KEY", "")
 BASE = 'http://10.17.2.29:31277'
 
 # 1. 验证 DeepSeek-V3.2 vs qwen2.5-72b-instruct 是否真是不同模型

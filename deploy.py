@@ -1,29 +1,48 @@
 #!/usr/bin/env python3
 """
 部署脚本 - 将项目部署到多台服务器
+
+安全注意: 密码应通过环境变量或 .env 文件配置，不要硬编码在代码中。
+使用部署脚本前请先配置环境变量:
+  export TENANT_CLOUD_PASSWORD="your_password"
+  export YANYUAN_PASSWORD="your_password"
 """
-import paramiko
 import os
+import paramiko
 import sys
 from pathlib import Path
 
-# 多服务器配置
+# 服务器配置 - 优先从环境变量读取密码
+# Issue #1249: 修复明文密码问题，使用环境变量
 SERVERS = [
     {
         "host": "101.34.62.149",
         "user": "ubuntu",
-        "password": "Wuxi,62047720",
+        "password": os.environ.get("TENANT_CLOUD_PASSWORD", ""),
         "remote_dir": "/home/ubuntu/ProjectInsight",
         "name": "腾讯云服务器"
     },
     {
         "host": "172.16.128.44",
         "user": "dev",
-        "password": "dev@sass.",
+        "password": os.environ.get("YANYUAN_PASSWORD", ""),
         "remote_dir": "/home/dev/ProjectInsight",
         "name": "院服务器2"
     }
 ]
+
+# 验证密码配置
+def validate_config():
+    """验证所有服务器密码都已配置"""
+    missing = []
+    for i, server in enumerate(SERVERS):
+        if not server.get("password"):
+            missing.append(server["name"])
+    if missing:
+        print(f"警告: 以下服务器密码未配置: {', '.join(missing)}")
+        print("请设置环境变量 TENANT_CLOUD_PASSWORD 和 YANYUAN_PASSWORD")
+        return False
+    return True
 
 def create_ssh_client(host, user, password):
     """创建SSH连接"""
