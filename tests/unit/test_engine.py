@@ -320,8 +320,8 @@ class TestProgressCallback:
 
         # 记录回调调用
         callback_calls = []
-        async def track_callback(step, total):
-            callback_calls.append((step, total))
+        async def track_callback(current, total, agent_id, opinion):
+            callback_calls.append((current, total, agent_id, opinion))
 
         engine.set_progress_callback(track_callback)
 
