@@ -2499,28 +2499,29 @@ export default {
     },
 
     resetSimulation() {
-      // 重置推演状态，允许重新开始
-      this.hasStopped = false
-      this.currentStep = 0
-      this.animatedStep = 0
-      this.prediction = null
-      this.riskAlerts = null
-      this.trendHistory = {
-        steps: [],
-        rumorRates: [],
-        truthRates: [],
-        avgOpinions: [],
-        polarization: [],
-        silenceRates: [],
-        publicRumorRates: [],
-        privateRumorRates: []
+      // 重置所有推演状态到初始值，使用 data() 工厂确保完整重置
+      const initialData = this.$options.data()
+      // 保留连接和UI配置状态
+      const preserveKeys = [
+        'isConnected', 'ws', 'wsReconnectCount', 'wsMaxReconnectAttempts',
+        'showHelp', 'showInfoPanel', 'highlightedInfoItem', 'expandedGroups',
+        'cocoonStrength', 'debunkDelay', 'initialRumorSpread', 'useLLM',
+        'simulationMode', 'initDistRumor', 'initDistTruth',
+        'populationSize', 'networkType', 'maxConcurrent', 'connectionPoolSize',
+        'timeout', 'maxRetries', 'maxSteps', 'autoInterval', 'useDualNetwork',
+        'showV3Charts', 'activeNetworkTab', 'airdropSource', 'airdropCredibility',
+        'showSettingsDrawer', 'showMathModelDrawer', 'showUsageDrawer'
+      ]
+      const preserved = {}
+      for (const key of preserveKeys) {
+        if (key in this.$data) {
+          preserved[key] = this.$data[key]
+        }
       }
-      this.publicEdges = []
-      this.privateEdges = []
-      this.publicRumorRate = 0
-      this.privateRumorRate = 0
-      this.numCommunities = 0
-      this.numInfluencers = 0
+      // 批量重置所有数据
+      Object.assign(this.$data, initialData)
+      // 恢复需要保留的状态
+      Object.assign(this.$data, preserved)
       // 重新标记所有事件为待注入
       this.eventLogs.forEach(log => {
         log.pending = true
