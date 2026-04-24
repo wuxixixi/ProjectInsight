@@ -1,5 +1,7 @@
 """
 信息茧房推演系统测试配置
+
+Issue #1246: 改进测试隔离和重置逻辑
 """
 import pytest
 import sys
@@ -10,9 +12,12 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def reset_global_state():
-    """每个测试前重置全局状态，避免测试间污染"""
+    """每个测试前重置全局状态，避免测试间污染
+    
+    Issue #1246: 移除 autouse=True，改为显式请求
+    """
     from backend.simulation.persona import clear_agent_snapshots
     from backend import state
 
@@ -38,6 +43,21 @@ def reset_global_state():
     # issue #1148: 重置沉默阈值类变量
     PersonAgent.silence_fear_threshold = 0.6
     PersonAgent.silence_delta_threshold = 0.1
+
+    # Issue #1246: 重置 Intervention._next_id
+    try:
+        from backend.simulation.env.truth_env import Intervention
+        Intervention._next_id = 0
+    except ImportError:
+        pass
+
+    # Issue #1246: 重置 TruthEnv._rng
+    try:
+        from backend.simulation.env.truth_env import TruthEnv
+        if hasattr(TruthEnv, '_rng'):
+            TruthEnv._rng = None
+    except ImportError:
+        pass
 
     yield
 
