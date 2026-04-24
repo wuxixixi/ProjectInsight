@@ -14,8 +14,21 @@ from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 import logging
+import tempfile
 
 logger = logging.getLogger(__name__)
+
+
+def _default_replay_db_path() -> Path:
+    """Resolve a writable default SQLite path for local runs."""
+    try:
+        import os
+        configured = os.getenv("PROJECTINSIGHT_DATA_DIR", "").strip()
+    except Exception:
+        configured = ""
+    data_dir = Path(configured) if configured else (Path(tempfile.gettempdir()) / "ProjectInsight" / "data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir / "replay.db"
 
 
 class ReplayWriter:
@@ -34,7 +47,7 @@ class ReplayWriter:
 
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent.parent / "data" / "replay.db"
+            db_path = _default_replay_db_path()
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
