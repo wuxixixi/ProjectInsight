@@ -43,11 +43,28 @@ class TestPersonaConfig:
     def test_get_persona_weights_unknown(self):
         """测试获取未知人设配置（返回默认）"""
         from backend.config.persona_config import get_persona_weights
-        
+
         weights = get_persona_weights("未知类型")
         assert weights.authority_acceptance == 0.7  # 默认值
         assert weights.persona_type == "未知类型"
-    
+
+    def test_get_persona_weights_does_not_reverse_match(self):
+        """测试短输入不会反向误匹配更长人设名称"""
+        from backend.config.persona_config import get_persona_weights
+
+        weights = get_persona_weights("理性")
+        assert weights.authority_acceptance == 0.7
+        assert weights.persona_type == "理性"
+
+    def test_persona_weights_validate_ranges(self):
+        """测试人设权重必须位于 [0, 1]"""
+        from backend.config.persona_config import PersonaWeights
+
+        with pytest.raises(ValueError, match="authority_acceptance"):
+            PersonaWeights(authority_acceptance=1.1)
+        with pytest.raises(ValueError, match="social_influence"):
+            PersonaWeights(social_influence=-0.1)
+
     def test_get_all_persona_types(self):
         """测试获取所有人设类型"""
         from backend.config.persona_config import get_all_persona_types

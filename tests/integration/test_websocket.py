@@ -11,7 +11,7 @@ from backend.app import app
 
 
 @pytest.fixture
-def client():
+def client(reset_global_state):
     """创建测试客户端"""
     return TestClient(app)
 

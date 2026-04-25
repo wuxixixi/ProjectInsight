@@ -8,12 +8,14 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import state
+from .constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 from .helpers import calculate_max_concurrent, _state_to_dict
 from .routers import simulation as sim_router
 from .routers import report as report_router
@@ -122,9 +124,9 @@ async def websocket_simulation(websocket: WebSocket):
 
                 # 根据观点值判断立场
                 if agent_opinion is not None:
-                    if agent_opinion < -0.3:
+                    if agent_opinion < OPINION_THRESHOLD_NEGATIVE:
                         stance = "误信"
-                    elif agent_opinion > 0.3:
+                    elif agent_opinion > OPINION_THRESHOLD_POSITIVE:
                         stance = "正确认知"
                     else:
                         stance = "中立"
@@ -189,7 +191,6 @@ async def websocket_simulation(websocket: WebSocket):
         
         while True:
             data = await websocket.receive_text()
-            import time
             current_time = time.time()
             message_timestamps.append(current_time)
             

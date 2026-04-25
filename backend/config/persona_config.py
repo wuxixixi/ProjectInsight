@@ -35,6 +35,18 @@ class PersonaWeights:
     # 人设类型名称
     persona_type: str = "默认"
 
+    def __post_init__(self) -> None:
+        for field_name in (
+            "authority_acceptance",
+            "misbelief_susceptibility",
+            "positive_belief_acceptance",
+            "opinion_stability",
+            "social_influence",
+        ):
+            value = getattr(self, field_name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{field_name} must be in [0, 1], got {value}")
+
     # ---- 兼容属性访问器 ----
     # 旧字段名 rumor_susceptibility / truth_acceptance 仍可通过属性访问
 
@@ -147,17 +159,16 @@ def get_persona_weights(persona_type: str) -> PersonaWeights:
     if persona_type in PERSONA_CONFIGS:
         return PERSONA_CONFIGS[persona_type]
     
-    # 模糊匹配（限制最小匹配长度，避免单字误匹配，issue #852）
+    # 优先做精确 token/子串匹配；不把较短输入反向匹配到更长 key，避免“非理性派”命中“理性派”。
     min_match_len = 2
     if len(persona_type) >= min_match_len:
         for key, weights in PERSONA_CONFIGS.items():
-            if (len(key) >= min_match_len and (key in persona_type or persona_type in key)):
+            if len(key) >= min_match_len and key in persona_type:
                 logger.debug(f"人设权重模糊匹配: '{persona_type}' → '{key}'")
                 return weights
-    
+
     # 返回默认配置
     return PersonaWeights(persona_type=persona_type)
-
 
 def get_all_persona_types() -> list:
     """获取所有预定义人设类型"""

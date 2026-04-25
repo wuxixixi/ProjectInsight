@@ -45,8 +45,6 @@ export default defineConfig(({ mode }) => ({
     },
     // 开启 CSS code splitting
     cssCodeSplit: true,
-    // 启用源码映射用于调试
-    sourceMap: false,
     // 块大小警告阈值
     chunkSizeWarningLimit: 1000
   },
