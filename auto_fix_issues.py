@@ -27,14 +27,24 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_PATH = LOG_DIR / "auto_fix.log"
 WORK_ROOT = Path(__file__).resolve().parent / ".auto_fix_work"
 WORK_ROOT.mkdir(parents=True, exist_ok=True)
+REPORT_DIR = Path(__file__).resolve().parent / "reports" / "auto_fix"
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def build_log_handlers() -> list[logging.Handler]:
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    try:
+        handlers.append(logging.FileHandler(LOG_PATH, encoding="utf-8"))
+    except PermissionError:
+        fallback = LOG_DIR / f"auto_fix_{time.strftime('%Y%m%d_%H%M%S')}.log"
+        handlers.append(logging.FileHandler(fallback, encoding="utf-8"))
+    return handlers
+
 
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] %(levelname)s: %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_PATH, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
+    handlers=build_log_handlers(),
 )
 log = logging.getLogger("auto_fix")
 
@@ -69,6 +79,79 @@ class IssueCandidate:
     html_url: str
     labels: list[str]
     score: float
+
+
+def now_stamp() -> str:
+    return time.strftime("%Y%m%d-%H%M%S")
+
+
+def write_run_report(summaries: list[dict[str, object]], selected: list[IssueCandidate]) -> tuple[Path, Path]:
+    stamp = now_stamp()
+    json_path = REPORT_DIR / f"auto_fix_run_{stamp}.json"
+    md_path = REPORT_DIR / f"auto_fix_run_{stamp}.md"
+
+    selected_map = {issue.number: issue for issue in selected}
+    payload = {
+        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "owner": GITHUB_OWNER,
+        "repo": GITHUB_REPO,
+        "max_issues": AUTO_FIX_MAX_ISSUES,
+        "selected_issues": [
+            {
+                "number": issue.number,
+                "title": issue.title,
+                "url": issue.html_url,
+                "labels": issue.labels,
+                "score": issue.score,
+            }
+            for issue in selected
+        ],
+        "results": summaries,
+    }
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    total = len(summaries)
+    fixed = sum(1 for item in summaries if item.get("fixed"))
+    validated = sum(1 for item in summaries if item.get("validated"))
+    deployed = sum(1 for item in summaries if item.get("deployed"))
+
+    lines = [
+        "# Auto Fix Run Report",
+        "",
+        f"- Time: {payload['generated_at']}",
+        f"- Repo: {GITHUB_OWNER}/{GITHUB_REPO}",
+        f"- Selected: {total}",
+        f"- Fixed: {fixed}",
+        f"- Validated: {validated}",
+        f"- Deployed: {deployed}",
+        "",
+        "## Issue Results",
+        "",
+    ]
+
+    for item in summaries:
+        issue_number = int(item["issue"])
+        issue = selected_map.get(issue_number)
+        title = issue.title if issue else ""
+        lines.append(f"### #{issue_number} {title}".rstrip())
+        if issue:
+            lines.append(f"- URL: {issue.html_url}")
+            lines.append(f"- Score: {issue.score:.1f}")
+        lines.append(f"- Branch: {item.get('branch', '')}")
+        lines.append(f"- Fixed: {item.get('fixed')}")
+        lines.append(f"- Validated: {item.get('validated')}")
+        lines.append(f"- Deployed: {item.get('deployed')}")
+        pr_url = item.get("pr_url")
+        lines.append(f"- PR: {pr_url if pr_url else 'N/A'}")
+        errors = item.get("errors") or []
+        if errors:
+            lines.append(f"- Errors: {'; '.join(str(err) for err in errors)}")
+        else:
+            lines.append("- Errors: None")
+        lines.append("")
+
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+    return json_path, md_path
 
 
 def run(
@@ -387,8 +470,16 @@ def main() -> int:
 
     summary_path = LOG_DIR / "auto_fix_summary.json"
     summary_path.write_text(json.dumps(summaries, ensure_ascii=False, indent=2), encoding="utf-8")
+    report_json, report_md = write_run_report(summaries, selected)
     validated_count = sum(1 for item in summaries if item.get("validated"))
-    log.info("Validated %s/%s issue attempts. Summary saved to %s", validated_count, len(summaries), summary_path)
+    log.info(
+        "Validated %s/%s issue attempts. Summary saved to %s. Reports: %s, %s",
+        validated_count,
+        len(summaries),
+        summary_path,
+        report_json,
+        report_md,
+    )
     return 0
 
 

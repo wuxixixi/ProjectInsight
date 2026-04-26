@@ -26,5 +26,5 @@ set AUTO_MERGE=0
 set DRY_RUN=0
 set DEPLOY_ON_SUCCESS=1
 
-python auto_fix_issues.py >> logs\auto_fix.log 2>&1
+python auto_fix_issues.py >> logs\auto_fix_runner.log 2>&1
 endlocal
