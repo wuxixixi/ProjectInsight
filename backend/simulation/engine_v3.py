@@ -370,7 +370,12 @@ class EngineV3Integration:
         credibility: float = 0.7
     ):
         """添加辟谣干预（同步版本）"""
-        self.truth_env.add_intervention(content, step=step or self.context.step, credibility=credibility)
+        # 添加同步方法以避免RuntimeWarning
+        self._pending_intervention = {
+            "content": content,
+            "step": step or self.context.step,
+            "credibility": credibility
+        }
 
     def get_truth_intervention(self, agent_id: int) -> Optional[str]:
         """获取辟谣内容（同步版本）"""
