@@ -8,6 +8,7 @@ Phase 2 单元测试：预测模型和风险预警引擎
 4. 干预建议生成
 """
 
+from collections import deque
 import pytest
 import numpy as np
 from backend.simulation.prediction import (
@@ -212,7 +213,8 @@ class TestRiskAlertEngine:
         engine = RiskAlertEngine()
         
         assert len(engine.rules) > 0
-        assert engine.alert_history == []
+        # alert_history 是 deque 类型
+        assert engine.alert_history == deque()
     
     def test_check_critical_negative_belief(self):
         """测试检测关键负面信念风险"""
@@ -322,7 +324,8 @@ class TestRiskAlertEngine:
         assert len(recent) <= 2
 
         engine.clear_history()
-        assert len(engine.alert_history) == 0
+        # clear_history() 创建新的空 deque
+        assert engine.alert_history == deque()
     
     def test_global_engine(self):
         """测试全局引擎实例"""

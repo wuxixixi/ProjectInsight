@@ -376,8 +376,11 @@ class RiskAlertEngine:
     
     def get_recent_alerts(self, count: int = 5) -> List[Dict]:
         """获取最近的预警"""
-        recent = self.alert_history[-count:] if self.alert_history else []
-        return [a.to_dict() for a in recent]
+        if not self.alert_history:
+            return []
+        # deque不支持切片，需要转list
+        recent_list = list(self.alert_history)
+        return [a.to_dict() for a in recent_list[-count:]]
     
     def clear_history(self):
         """清空预警历史"""
