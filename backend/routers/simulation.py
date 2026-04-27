@@ -1,6 +1,7 @@
 """
 推演相关路由
 """
+import inspect
 import logging
 import os
 
@@ -22,6 +23,15 @@ from ..llm.client import LLMConfig
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["simulation"])
+
+
+async def _maybe_set_news(engine, content: str, source: str) -> None:
+    """Support both sync and async engine.set_news implementations."""
+    if not hasattr(engine, "set_news"):
+        return
+    result = engine.set_news(content, source, parse_graph=False)
+    if inspect.isawaitable(result):
+        await result
 
 
 @router.post("/simulation/start")
@@ -120,8 +130,11 @@ async def start_simulation(params: StartRequest):
             logger.info(f"知识驱动演化已启用")
 
         # 如果引擎支持设置新闻
-        if hasattr(state.engine, 'set_news'):
-            state.engine.set_news(state.pending_event_content, state.pending_event_source or "public", parse_graph=False)
+        await _maybe_set_news(
+            state.engine,
+            state.pending_event_content,
+            state.pending_event_source or "public",
+        )
 
         # 广播事件（触发事件冲击）
         target_scope = "all"

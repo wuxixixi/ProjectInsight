@@ -2655,7 +2655,7 @@ export default {
 
         // 创建带超时的 fetch 请求（快速模式5秒，完整解析180秒）
         const controller = new AbortController()
-        const timeout = this.airdropSkipParse ? 5000 : 180000
+        const timeout = this.airdropSkipParse ? 5000 : 60000
         const timeoutId = setTimeout(() => controller.abort(), timeout)
 
         const response = await fetch(
@@ -2751,7 +2751,9 @@ export default {
       } catch (error) {
         console.error('注入事件失败:', error)
         if (error.name === 'AbortError') {
-          this.airdropError = '请求超时（120秒），请检查后端服务是否正常'
+          this.airdropError = this.airdropSkipParse
+            ? '请求超时（5秒），快速注入未完成，请检查后端服务'
+            : '请求超时（60秒），新闻解析已自动降级前请检查后端或LLM配置'
         } else {
           this.airdropError = '网络错误: ' + error.message
         }

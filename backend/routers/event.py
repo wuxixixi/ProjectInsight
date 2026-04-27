@@ -1,6 +1,7 @@
 """
 事件注入路由
 """
+import inspect
 import logging
 from datetime import datetime, timezone
 
@@ -13,6 +14,15 @@ from ..helpers import AirdropRequest, ParseRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/event", tags=["event"])
+
+
+async def _maybe_set_news(engine, content: str, source: str) -> None:
+    """Support both sync and async engine.set_news implementations."""
+    if not hasattr(engine, "set_news"):
+        return
+    result = engine.set_news(content, source, parse_graph=False)
+    if inspect.isawaitable(result):
+        await result
 
 
 @router.post("/parse")
@@ -156,8 +166,7 @@ async def airdrop_event(req: AirdropRequest):
         entity_count = len(knowledge_graph.get('entities', []))
 
         # 更新引擎的新闻和图谱
-        if hasattr(state.engine, 'set_news'):
-            state.engine.set_news(req.content, req.source, parse_graph=False)
+        await _maybe_set_news(state.engine, req.content, req.source)
 
         # 更新引擎的知识图谱（融合模式）
         entities = knowledge_graph.get('entities', [])
