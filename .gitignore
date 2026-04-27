@@ -44,7 +44,10 @@ htmlcov/
 
 # 日志和报告（生成的）
 reports/*.md
+reports/auto_fix/
 *.log
+logs/auto_fix_summary.json
+temp_issue*_clean.json
 
 # 前端
 frontend/node_modules/

@@ -230,6 +230,7 @@ class EngineV3Integration:
 
         # 推进辟谣环境
         self.truth_env.advance_step(step)
+        self.context.truth_intervention_active = bool(self.truth_env._published)
 
     def process_agent_step(
         self,
@@ -371,15 +372,16 @@ class EngineV3Integration:
     ):
         """添加辟谣干预（同步版本）"""
         # 添加同步方法以避免RuntimeWarning
-        self._pending_intervention = {
-            "content": content,
-            "step": step or self.context.step,
-            "credibility": credibility
-        }
+        self.truth_env.add_intervention_sync(
+            content=content,
+            step=step or self.context.step,
+            credibility=credibility
+        )
+        self.context.truth_intervention_active = bool(self.truth_env._published)
 
     def get_truth_intervention(self, agent_id: int) -> Optional[str]:
         """获取辟谣内容（同步版本）"""
-        return self.truth_env.get_intervention(agent_id)
+        return self.truth_env.get_intervention_sync(agent_id)
     
     # ==================== 工具方法 ====================
     

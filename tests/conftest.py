@@ -1,102 +1,52 @@
 """
-信息茧房推演系统测试配置
-
-Issue #1246: 改进测试隔离和重置逻辑
+ProjectInsight test configuration.
 """
-import pytest
 import sys
 from pathlib import Path
 
-# 添加项目根目录到 Python 路径
+import pytest
+
+# Add project root to Python path.
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
 @pytest.fixture
 def reset_global_state():
-    """每个测试前重置全局状态，避免测试间污染
-    
-    Issue #1246: 移除 autouse=True，改为显式请求
-    Issue #1268: 添加 AgentMemory 和 ReplayWriter 重置
-    """
-    from backend.simulation.persona import clear_agent_snapshots
+    """Reset mutable global state between tests."""
     from backend import state
+    import backend.llm.client
+    from backend.simulation.graph_parser_agent import reset_graph_parser
+    from backend.simulation.persona import clear_agent_snapshots
+    from backend.simulation.risk_alert import reset_risk_engine
+    from backend.simulation.agent.person_agent import PersonAgent
 
     clear_agent_snapshots()
     state.reset_state()
-
-    # 重置 LLM 客户端全局实例
-    import backend.llm.client
     backend.llm.client._llm_client = None
-
-    # 重置 GraphParserAgent 全局单例
-    from backend.simulation.graph_parser_agent import reset_graph_parser
     reset_graph_parser()
-
-    # 重置 RiskAlertEngine 全局实例
-    from backend.simulation.risk_alert import reset_risk_engine
     reset_risk_engine()
 
-    # issue #1076: 重置 PersonAgent 类变量
-    from backend.simulation.agent.person_agent import PersonAgent
     PersonAgent.opinion_max_change_factor = 0.3
     PersonAgent.social_influence_coeff = 0.3
-    # issue #1148: 重置沉默阈值类变量
     PersonAgent.silence_fear_threshold = 0.6
     PersonAgent.silence_delta_threshold = 0.1
 
-    # Issue #1246: 重置 Intervention._next_id
     try:
         from backend.simulation.env.truth_env import Intervention
         Intervention._next_id = 0
     except ImportError:
         pass
 
-    # Issue #1246: 重置 TruthEnv._rng
-    try:
-        from backend.simulation.env.truth_env import TruthEnv
-        if hasattr(TruthEnv, '_rng'):
-            TruthEnv._rng = None
-    except ImportError:
-        pass
-
-    # Issue #1268: 重置 AgentMemory 全局实例
-    try:
-        from backend.simulation.agent.memory import AgentMemory
-        AgentMemory._instances = {}
-    except ImportError:
-        pass
-
-    # Issue #1268: 重置 ReplayWriter
-    try:
-        from backend.simulation.storage.replay_writer import ReplayWriter
-        ReplayWriter._instance = None
-    except ImportError:
-        pass
-
     yield
 
-    # 清理阶段
     clear_agent_snapshots()
     state.reset_state()
     backend.llm.client._llm_client = None
     reset_graph_parser()
     reset_risk_engine()
+
     PersonAgent.opinion_max_change_factor = 0.3
     PersonAgent.social_influence_coeff = 0.3
     PersonAgent.silence_fear_threshold = 0.6
     PersonAgent.silence_delta_threshold = 0.1
-
-    # 清理 AgentMemory
-    try:
-        from backend.simulation.agent.memory import AgentMemory
-        AgentMemory._instances = {}
-    except ImportError:
-        pass
-
-    # 清理 ReplayWriter
-    try:
-        from backend.simulation.storage.replay_writer import ReplayWriter
-        ReplayWriter._instance = None
-    except ImportError:
-        pass

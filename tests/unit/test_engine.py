@@ -220,6 +220,25 @@ class TestAuthoritativeResponse:
             # 平均变化应该为正 (向正向移动)
             assert np.mean(opinion_changes) > 0
 
+    def test_v3_truth_intervention_is_published_and_readable(self):
+        """Ensure the v3 truth intervention path still works in sync mode."""
+        engine = SimulationEngine(
+            population_size=20,
+            response_delay=1,
+            use_llm=False,
+            use_v3=True
+        )
+        engine.initialize()
+
+        engine.step()
+
+        assert engine.v3 is not None
+        assert engine.v3.context.truth_intervention_active is True
+        assert len(engine.v3.truth_env._published) == 1
+
+        intervention = engine.v3.get_truth_intervention(0)
+        assert intervention == "官方权威回应"
+
 
 class TestStateComputation:
     """测试状态计算"""
