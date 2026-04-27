@@ -1,41 +1,94 @@
-ProjectInsight 自动修复任务说明
+# ProjectInsight Auto Fix
 
-概览
+`auto_fix_issues.py` is a local maintenance script for selecting open GitHub issues,
+attempting real fixes in a temporary clone, validating them, and optionally creating PRs.
+`register_schtask.ps1` registers a Windows scheduled task to run it hourly.
 
-本项目包含一个保守的自动修复脚本 auto_fix_issues.py 和一个帮助注册 Windows 计划任务的脚本 register_schtask.ps1。脚本会：
-- 每小时选取最多 5 个 open issues（随机）
-- 为每个 issue 在远端分支创建一个占位修复文件（fixes/auto_fix_issue_<num>.md）并提交
-- 创建 PR（默认为 draft）
-- 在临时目录克隆仓库、检出 PR 分支并运行 pytest；若测试通过且 AUTO_MERGE=1 则尝试合并并运行本地 deploy.py
+## Current Behavior
 
-安全与安装
+The script currently does the following:
 
-1) 不要把 Token 写入仓库。将你的 GitHub Personal Access Token 设为本机环境变量：
-   在 PowerShell（以管理员身份）运行：
-     setx GITHUB_TOKEN "<your_token>" /M
-   或为当前用户运行（不带 /M）。
+- Fetches open issues from `wuxixixi/ProjectInsight`
+- Scores and randomly selects issues from the top candidate pool
+- Clones the repository into a temporary working directory
+- Creates a dedicated branch per issue
+- Calls `codex exec --full-auto` with the issue payload
+- Runs validation:
+  - `pytest -q`
+  - `npm run build` in `frontend/` if that directory exists
+- Pushes the branch and creates a PR when validation passes
+- Optionally attempts merge and local deployment
+- Writes summary and per-run reports under `logs/` and `reports/auto_fix/`
 
-2) 安装必要依赖：
-   pip install PyGithub
+This is not a placeholder PR generator anymore.
 
-3) 可选环境变量：
-   - GITHUB_OWNER（默认 wuxixixi）
-   - GITHUB_REPO（默认 ProjectInsight）
-   - AUTO_FIX_MAX_ISSUES（默认 5）
-   - AUTO_MERGE（0/1，默认 0）
-   - DRY_RUN（0/1，默认 1；1 表示只是演练，不会自动合并或部署）
-   - PROJECT_ROOT（部署脚本 deploy.py 所在目录，默认为仓库根）
+## Required Setup
 
-4) 注册计划任务（在本机运行）：
-   - 编辑 register_schtask.ps1，确保 $PythonPath 与当前 Python 可执行文件路径一致
-   - 以管理员身份打开 PowerShell，运行：
-       .\register_schtask.ps1
+1. Set `GITHUB_TOKEN` in the local environment.
 
-5) 首次运行（建议手动）：
-   - 手动执行： python auto_fix_issues.py
-   - 检查输出日志、PR 链接与测试结果
+PowerShell for the current user:
 
-注意
+```powershell
+setx GITHUB_TOKEN "<your_token>"
+```
 
-- 默认为保守模式：脚本不会自动修改源码，只会生成占位文件并创建 PR。若需要自动补丁逻辑，需要扩展 attempt_patch_for_issue()。
-- 如果你希望在云端使用 GitHub Actions 而不是本地计划任务，请说明（注意：云端无法直接部署到本地，需使用自托管 runner）。
+2. Install required Python dependencies.
+
+```powershell
+pip install -r requirements.txt
+```
+
+3. Ensure these tools are available in `PATH` when you use the full workflow:
+
+- `git`
+- `python`
+- `codex`
+- `gh`
+- `npm`
+
+## Main Environment Variables
+
+- `GITHUB_OWNER`: defaults to `wuxixixi`
+- `GITHUB_REPO`: defaults to `ProjectInsight`
+- `AUTO_FIX_MAX_ISSUES`: max selected issues per run, default `5`
+- `AUTO_FIX_TOP_POOL`: candidate pool size before random selection, default `15`
+- `AUTO_MERGE`: `1` to allow merge attempts after PR creation
+- `DRY_RUN`: `1` to skip push and PR creation
+- `DEPLOY_ON_SUCCESS`: `1` to run local deployment when validation passes
+- `PYTHON_BIN`: Python executable path override
+- `CODEX_BIN`: Codex executable path override
+- `DEFAULT_BRANCH`: override default branch detection
+
+## Manual Run
+
+```powershell
+python auto_fix_issues.py
+```
+
+Outputs:
+
+- `logs/auto_fix.log`
+- `logs/auto_fix_summary.json`
+- `reports/auto_fix/auto_fix_run_*.json`
+- `reports/auto_fix/auto_fix_run_*.md`
+
+## Scheduled Task
+
+Register the Windows task:
+
+```powershell
+.\register_schtask.ps1
+```
+
+The current task registration uses:
+
+- hourly repetition
+- restart on failure
+- ignore overlapping runs
+- two-hour execution limit
+
+## Notes
+
+- The script clears proxy-related environment variables before network operations.
+- Validation failure stops PR creation for that issue.
+- Generated logs and reports are local artifacts and should not be committed.
