@@ -22,6 +22,9 @@ NEED_LEVELS = [
     "cognitive"       # 认知需求
 ]
 
+# 默认需求层次索引（issue #2228）
+DEFAULT_NEED_LEVEL_INDEX = 2  # 'love' 社交需求
+
 
 @SkillLoader.register("needs")
 class NeedsSkill(SkillBase):
@@ -165,7 +168,7 @@ class NeedsSkill(SkillBase):
         closed_need = context.belief_state.get("cognitive_closed_need", 0.5)
 
         # 综合动机：需求权重 × 需求层次 + 闭合需求
-        level_index = NEED_LEVELS.index(dominant) if dominant in NEED_LEVELS else 2
+        level_index = NEED_LEVELS.index(dominant) if dominant in NEED_LEVELS else DEFAULT_NEED_LEVEL_INDEX
         level_factor = (level_index + 1) / len(NEED_LEVELS)
 
         motivation = level_factor * level_weight + closed_need * (1 - level_weight)
