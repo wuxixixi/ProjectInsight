@@ -65,6 +65,9 @@ class PredictionConfig:
     # 历史数据最小长度（少于此时不做预测）
     min_history_length: int = field(default_factory=lambda: _get_env_int("PREDICTION_MIN_HISTORY", 3))
 
+    # 随机种子（用于可复现性，issue #2244）
+    seed: int = field(default_factory=lambda: _get_env_int("PREDICTION_SEED", 42))
+
 
 @dataclass
 class PredictionInterval:
@@ -96,6 +99,9 @@ class MonteCarloPredictor:
 
     def __init__(self, config: PredictionConfig = None):
         self.config = config or PredictionConfig()
+
+        # 实例级随机生成器 (issue #2244: 确保可复现性)
+        self._rng = np.random.default_rng(self.config.seed)
 
         # 存储历史数据
         self.history: List[Dict] = []
@@ -193,8 +199,8 @@ class MonteCarloPredictor:
             # 随机游走模型
             value = current_value
             for _ in range(self.config.forecast_steps):
-                # 趋势 + 随机波动
-                noise = np.random.normal(0, volatility)
+                # 趋势 + 随机波动 (issue #2244: 使用实例级RNG)
+                noise = self._rng.normal(0, volatility)
                 change = trend + noise
                 value = np.clip(value + change, 0, 1)
             final_values.append(value)
