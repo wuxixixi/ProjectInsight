@@ -37,8 +37,8 @@ class Message(BaseModel):
     Agent 间通信的基本单位
     """
     
-    # 基本信息
-    id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    # 基本信息 (issue #2222: 使用12字符UUID降低碰撞风险)
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())[:12])
     message_type: MessageType = MessageType.P2P
     
     # 发送接收
