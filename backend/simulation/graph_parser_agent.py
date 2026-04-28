@@ -9,7 +9,7 @@ import logging
 import os
 import re
 import threading
-import urllib.request
+import aiohttp
 from urllib.parse import urlparse
 from typing import Dict, List, Any, Optional
 from ..llm.client import LLMClient, LLMConfig
@@ -113,7 +113,7 @@ class GraphParserAgent:
         if not news_content or not news_content.strip():
             return self._get_empty_graph()
 
-        if not self._llm_is_available():
+        if not await self._llm_is_available_async():
             logger.warning("LLM config unavailable for graph parsing, fallback to default graph")
             return self._get_enhanced_default_graph(news_content)
 
@@ -189,6 +189,32 @@ class GraphParserAgent:
                     "error_type": type(e).__name__
                 }
 
+    async def _probe_base_url_async(self, base_url: str) -> bool:
+        """Async probe to check if base URL is reachable (non-blocking)."""
+        try:
+            parsed = urlparse(base_url)
+            if not parsed.scheme or not parsed.netloc:
+                return False
+            probe_url = f"{parsed.scheme}://{parsed.netloc}"
+            timeout = aiohttp.ClientTimeout(total=1.5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.head(probe_url) as resp:
+                    return resp.status < 500
+        except Exception:
+            return False
+
+    async def _llm_is_available_async(self) -> bool:
+        """Async version: Avoid long parser waits when no LLM endpoint is configured locally."""
+        base_url = (self.llm_config.base_url or "").strip()
+        api_key = (self.llm_config.api_key or "").strip()
+        if not base_url:
+            return False
+        if "localhost" in base_url or "127.0.0.1" in base_url or "::1" in base_url:
+            return True
+        if not (api_key or os.getenv("OPENAI_API_KEY", "").strip()):
+            return False
+        return await self._probe_base_url_async(base_url)
+
     def _llm_is_available(self) -> bool:
         """Avoid long parser waits when no LLM endpoint is configured locally."""
         base_url = (self.llm_config.base_url or "").strip()
@@ -202,12 +228,13 @@ class GraphParserAgent:
         return self._probe_base_url(base_url)
 
     def _probe_base_url(self, base_url: str) -> bool:
-        """Use a tiny blocking probe to avoid waiting a full request timeout on dead endpoints."""
+        """Blocking probe (kept for backwards compatibility, prefer async version)."""
         try:
             parsed = urlparse(base_url)
             if not parsed.scheme or not parsed.netloc:
                 return False
             probe_url = f"{parsed.scheme}://{parsed.netloc}"
+            import urllib.request
             request = urllib.request.Request(probe_url, method="HEAD")
             with urllib.request.urlopen(request, timeout=1.5) as response:
                 return response.status < 500
