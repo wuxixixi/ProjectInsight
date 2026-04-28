@@ -123,11 +123,11 @@ async def websocket_simulation(websocket: WebSocket):
                 # 根据观点值判断立场
                 if agent_opinion is not None:
                     if agent_opinion < -0.3:
-                        stance = "误信"
+                        stance = "misled"
                     elif agent_opinion > 0.3:
-                        stance = "正确认知"
+                        stance = "correct"
                     else:
-                        stance = "中立"
+                        stance = "neutral"
                     progress_data["agent_stance"] = stance
 
             progress_data["message"] = f"正在推演 Agent {step}/{total}" + (f" (ID:{agent_id})" if agent_id is not None else "")
