@@ -136,7 +136,7 @@ class LLMAgent:
         self.last_decision_snapshot: Optional[Dict] = None
 
         # === 沉默的螺旋属性 ===
-        _rng = np.random.RandomState(agent_id + 1000)
+        _rng = np.random.default_rng(agent_id + 1000)
         self.fear_of_isolation = float(_rng.beta(2, 2))
         self.conviction = float(_rng.beta(2, 2))
         self.is_silent = False
@@ -660,21 +660,24 @@ class LLMAgentPopulationDual:
         # 消息路由器
         self.message_router = MessageRouter(self.dual_network)
 
+        # 实例级 RNG（确保可重现性）
+        self._rng = np.random.default_rng(42)
+
         # 初始化观点分布：负面信念 / 中立 / 正面信念 三段
         opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
-        neutral_count = int(size * np.random.uniform(0.15, 0.25))
+        neutral_count = int(size * self._rng.uniform(0.15, 0.25))
         neutral_count = min(neutral_count, size - negative_believers)
         positive_believers = size - negative_believers - neutral_count
 
-        opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
-        opinions[negative_believers:negative_believers + neutral_count] = np.random.uniform(-0.05, 0.05, neutral_count)
-        opinions[negative_believers + neutral_count:] = np.random.uniform(0.1, 0.5, positive_believers)
+        opinions[:negative_believers] = self._rng.uniform(-0.8, -0.2, negative_believers)
+        opinions[negative_believers:negative_believers + neutral_count] = self._rng.uniform(-0.05, 0.05, neutral_count)
+        opinions[negative_believers + neutral_count:] = self._rng.uniform(0.1, 0.5, positive_believers)
 
         # 初始化属性
-        belief_strengths = np.random.beta(2, 2, size)
-        influences = np.clip(np.random.exponential(0.5, size), 0.1, 1.0)
-        susceptibilities = np.random.beta(2, 5, size)
+        belief_strengths = self._rng.beta(2, 2, size)
+        influences = np.clip(self._rng.exponential(0.5, size), 0.1, 1.0)
+        susceptibilities = self._rng.beta(2, 5, size)
 
         # 创建 Agent 实例
         self.agents: List[LLMAgent] = []
