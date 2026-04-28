@@ -7,6 +7,7 @@ import aiohttp
 import json
 import os
 import re
+import threading  # issue #2249: 使用正常导入
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 import logging
@@ -434,7 +435,7 @@ class LLMClient:
 
 # 全局客户端实例
 _llm_client: Optional[LLMClient] = None
-_llm_client_lock = __import__('threading').Lock()
+_llm_client_lock = threading.Lock()  # issue #2249: 使用正常导入
 
 
 def get_llm_client(config: Optional[LLMConfig] = None) -> LLMClient:
