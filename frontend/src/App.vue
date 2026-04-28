@@ -238,6 +238,19 @@
           <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning" />
         </div>
 
+        <div class="param-item">
+          <div class="param-header">
+            <span class="param-label">人口画像</span>
+          </div>
+          <select v-model="populationProfile" :disabled="isRunning" class="network-select">
+            <option value="theory">理论人设</option>
+            <option value="shass_news_institute">新闻所现实组织</option>
+          </select>
+          <p class="param-desc">
+            {{ populationProfile === 'shass_news_institute' ? '从本地名单导入匿名现实组织画像，后端自动使用实际人数' : '使用系统内置理论人设分布' }}
+          </p>
+        </div>
+
         <!-- 双层网络开关 -->
         <div class="param-item">
           <div class="param-header">
@@ -1734,6 +1747,14 @@
         </div>
       </div>
     </div>
+
+    <!-- Toast 通知组件 -->
+    <transition name="toast-fade">
+      <div v-if="toastMessage" :class="['toast-container', toastType]">
+        <span class="toast-icon">{{ toastType === 'error' ? '❌' : toastType === 'success' ? '✅' : 'ℹ️' }}</span>
+        <span class="toast-message">{{ toastMessage }}</span>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -1755,6 +1776,11 @@ export default {
       ws: null,
       wsReconnectCount: 0,
       wsMaxReconnectAttempts: 5,
+
+      // Toast 通知状态
+      toastMessage: '',
+      toastType: 'info',  // 'error' | 'success' | 'info'
+      toastTimer: null,
 
       // UI状态
       showHelp: true,  // 帮助说明默认展开
@@ -1780,6 +1806,7 @@ export default {
 
       // Agent参数
       populationSize: 200,
+      populationProfile: 'theory',
       networkType: 'small_world',
 
       // LLM并发参数（留空则自动计算）
@@ -2205,12 +2232,18 @@ export default {
   },
 
   mounted() {
+    this._timeoutIds = []
     this.initCharts()
     this.connectWebSocket()
     window.addEventListener('resize', this.handleResize)
   },
 
   beforeUnmount() {
+    // 清理所有 setTimeout
+    if (this._timeoutIds) {
+      this._timeoutIds.forEach(id => clearTimeout(id))
+      this._timeoutIds = []
+    }
     this.disconnectWebSocket()
     window.removeEventListener('resize', this.handleResize)
     this.opinionChartInstance?.dispose()
@@ -2220,7 +2253,29 @@ export default {
     this.behaviorDistChartInstance?.dispose()
   },
 
+  // 辅助方法：安全的 setTimeout，自动跟踪 ID
+  _setTimeout(fn, ms) {
+    const id = setTimeout(fn, ms)
+    if (!this._timeoutIds) this._timeoutIds = []
+    this._timeoutIds.push(id)
+    return id
+  },
+
   methods: {
+    // ==================== Toast 通知 ====================
+    showToast(message, type = 'info', duration = 4000) {
+      // 清除之前的定时器
+      if (this.toastTimer) {
+        clearTimeout(this.toastTimer)
+      }
+      this.toastMessage = message
+      this.toastType = type
+      this.toastTimer = this._setTimeout(() => {
+        this.toastMessage = ''
+        this.toastTimer = null
+      }, duration)
+    },
+
     // ==================== UI 辅助方法 ====================
 
     toggleGroup(group) {
@@ -2266,7 +2321,7 @@ export default {
         }
       })
       // 3秒后取消高亮
-      setTimeout(() => {
+      this._setTimeout(() => {
         this.highlightedInfoItem = null
       }, 3000)
     },
@@ -2321,14 +2376,14 @@ export default {
           if (this.wsReconnectCount < this.wsMaxReconnectAttempts) {
             this.wsReconnectCount++
             console.log(`WebSocket 重连尝试 ${this.wsReconnectCount}/${this.wsMaxReconnectAttempts}`)
-            setTimeout(() => {
+            this._setTimeout(() => {
               if (!this.isConnected) {
                 this.connectWebSocket()
               }
             }, 3000)
           } else {
             console.error('WebSocket 重连次数已达上限，停止重连')
-            alert('WebSocket 连接失败，请刷新页面重试')
+            this.showToast('WebSocket 连接失败，请刷新页面重试', 'error', 8000)
           }
         }
 
@@ -2379,7 +2434,7 @@ export default {
           break
         case 'error':
           console.error('服务端错误:', msg.message)
-          alert('错误: ' + msg.message)
+          this.showToast('错误: ' + msg.message, 'error', 6000)
           this.isRunning = false
           break
         case 'report':
@@ -2448,6 +2503,7 @@ export default {
           initial_rumor_spread: this.initialRumorSpread,
           use_llm: this.useLLM,
           population_size: this.populationSize,
+          population_profile: this.populationProfile,
           network_type: this.networkType,
           max_steps: this.maxSteps,
           max_concurrent: this.maxConcurrent,
@@ -2466,7 +2522,7 @@ export default {
         }
       })
 
-      setTimeout(() => {
+      this._setTimeout(() => {
         if (this.isRunning) {
           const interval = this.useLLM ? this.autoInterval : 500
           this.sendAction('auto', { interval })
@@ -2717,7 +2773,7 @@ export default {
           })
 
           // 短暂延迟后关闭弹窗
-          setTimeout(() => {
+          this._setTimeout(() => {
             this.showEventAirdrop = false
             this.airdropContent = ''
             this.airdropLoading = false
@@ -2983,11 +3039,11 @@ export default {
         })
         const data = await response.json()
         if (!data.success) {
-          alert('打开报告失败: ' + (data.error || '未知错误'))
+          this.showToast('打开报告失败: ' + (data.error || '未知错误'), 'error')
         }
       } catch (error) {
         console.error('打开报告失败:', error)
-        alert('打开报告失败: ' + error.message)
+        this.showToast('打开报告失败: ' + error.message, 'error')
       }
     },
 
@@ -3241,7 +3297,7 @@ export default {
           
           // 全选：使用延时确保图例状态已更新
           if (visibleCount === legendData.length) {
-            setTimeout(() => {
+            this._setTimeout(() => {
               legendData.forEach(name => {
                 this.chartModalInstance.dispatchAction({ type: 'legendSelect', name: name })
               })
@@ -3249,7 +3305,7 @@ export default {
           }
           // 反选（全不选）
           else if (visibleCount === 0) {
-            setTimeout(() => {
+            this._setTimeout(() => {
               legendData.forEach(name => {
                 this.chartModalInstance.dispatchAction({ type: 'legendUnSelect', name: name })
               })
@@ -8895,4 +8951,59 @@ export default {
 }
 
 /* 预测预警区：只保留上面的定义，此处不重复 */
+
+/* ==================== Toast 通知样式 ==================== */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  padding: 12px 24px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  max-width: 80vw;
+}
+
+.toast-container.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.toast-container.success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+
+.toast-container.info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
+}
+
+.toast-icon {
+  font-size: 16px;
+}
+
+.toast-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -20px);
+}
 </style>
