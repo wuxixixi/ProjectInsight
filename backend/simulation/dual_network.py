@@ -32,7 +32,7 @@ class DualLayerNetwork:
         self.intra_community_prob = intra_community_prob
         self.inter_community_prob = inter_community_prob
         self.seed = seed
-        self._rng = np.random.RandomState(seed)
+        self._rng = np.random.default_rng(seed)
 
         # 构建双层网络
         self.public_graph = self._build_public_network()
