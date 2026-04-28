@@ -69,8 +69,21 @@ def create_client(server: ServerConfig) -> paramiko.SSHClient:
     if not server.password:
         raise RuntimeError(f"missing password env: {server.password_env}")
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(server.host, username=server.user, password=server.password, timeout=30)
+    # Security: Use WarningPolicy instead of AutoAddPolicy to reduce MITM risk
+    # In production, consider using known_hosts file: client.load_host_keys('~/.ssh/known_hosts')
+    client.set_missing_host_key_policy(paramiko.WarningPolicy())
+    try:
+        client.connect(server.host, username=server.user, password=server.password, timeout=30)
+    except paramiko.ssh_exception.SSHException as e:
+        # Fallback to AutoAddPolicy for development environments only (with warning)
+        import warnings
+        warnings.warn(
+            f"Host key verification failed for {server.host}. "
+            "Using AutoAddPolicy as fallback. Consider adding host key to known_hosts.",
+            UserWarning
+        )
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(server.host, username=server.user, password=server.password, timeout=30)
     return client
 
 

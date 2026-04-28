@@ -335,7 +335,7 @@ class SimulationEngineDual:
         for i in range(len(opinions)):
             if affected_mask[i]:
                 sensitivity = 0.5 + 0.5 * influence[i]
-                shift = shift_direction * impact_strength * sensitivity * np.random.uniform(0.5, 1.5)
+                shift = shift_direction * impact_strength * sensitivity * self._rng.uniform(0.5, 1.5)
                 opinions[i] = np.clip(opinions[i] + shift, -1, 1)
                 impact_values[i] = shift
 
@@ -559,7 +559,7 @@ class SimulationEngineDual:
 
         # 随机扰动
         for agent in pop.agents:
-            noise = np.random.normal(0, 0.01)
+            noise = self._rng.normal(0, 0.01)
             agent.opinion = np.clip(agent.opinion + noise, -1, 1)
 
     def _math_step(self):
@@ -770,8 +770,7 @@ class SimulationEngineDual:
         权威回应效果现在由增强版数学模型在 compute_step 中统一处理，
         包括逆火效应。这里只标记权威回应已发布。
         """
-        self.responded = True
-        self.debunked = True  # 兼容
+        self.responded = True  # debunked 属性通过 @property 自动生效
         logger.info(f"Step {self.step_count}: 发布权威回应")
 
     def _compute_state(self) -> SimulationState:
