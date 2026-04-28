@@ -25,10 +25,14 @@ class AgentPopulation:
         size: int = 200,
         initial_negative_spread: float = 0.3,
         initial_rumor_spread: float = None,  # 兼容旧参数名
-        network_type: str = "small_world"
+        network_type: str = "small_world",
+        seed: int = 42  # issue #2256: 随机种子确保可复现性
     ):
         self.size = size
         self.network_type = network_type
+
+        # 实例级随机生成器 (issue #2256: 确保可复现性)
+        self._rng = np.random.default_rng(seed)
 
         # 兼容旧参数名
         if initial_rumor_spread is not None:
@@ -40,33 +44,33 @@ class AgentPopulation:
         # |opinion| < 0.1 为中立，opinion < -0.1 为误信，opinion > 0.1 为正确认知
         self.opinions = np.zeros(size)
         negative_believers = int(size * initial_negative_spread)
-        # 中立人群约占 15%~25%，从剩余人群中分配
-        neutral_count = int(size * np.random.uniform(0.15, 0.25))
+        # 中立人群约占 15%~25%，从剩余人群中分配 (issue #2256: 使用实例级RNG)
+        neutral_count = int(size * self._rng.uniform(0.15, 0.25))
         neutral_count = min(neutral_count, size - negative_believers)
         positive_believers = size - negative_believers - neutral_count
 
         # 负面信念者：opinion 在 [-0.8, -0.2]
-        self.opinions[:negative_believers] = np.random.uniform(-0.8, -0.2, negative_believers)
+        self.opinions[:negative_believers] = self._rng.uniform(-0.8, -0.2, negative_believers)
         # 中立人群：opinion 在 [-0.05, 0.05]
-        self.opinions[negative_believers:negative_believers + neutral_count] = np.random.uniform(-0.05, 0.05, neutral_count)
+        self.opinions[negative_believers:negative_believers + neutral_count] = self._rng.uniform(-0.05, 0.05, neutral_count)
         # 正面信念者：opinion 在 [0.1, 0.5]
-        self.opinions[negative_believers + neutral_count:] = np.random.uniform(0.1, 0.5, positive_believers)
+        self.opinions[negative_believers + neutral_count:] = self._rng.uniform(0.1, 0.5, positive_believers)
 
         # 信念强度 - 越强越难改变观点
-        self.belief_strength = np.random.beta(2, 2, size)  # 集中在中等
+        self.belief_strength = self._rng.beta(2, 2, size)  # 集中在中等
 
         # 影响力 - 决定传播能力
-        self.influence = np.random.exponential(0.5, size)
+        self.influence = self._rng.exponential(0.5, size)
         self.influence = np.clip(self.influence, 0.1, 1.0)
 
         # 易感性 - 决定被影响的程度
-        self.susceptibility = np.random.beta(2, 5, size)  # 多数人不易被影响
+        self.susceptibility = self._rng.beta(2, 5, size)  # 多数人不易被影响
 
         # 孤立恐惧感 - 用于沉默的螺旋机制
-        self.fear_of_isolation = np.random.beta(2, 2, size)
+        self.fear_of_isolation = self._rng.beta(2, 2, size)
 
         # 初始信念强度 - 用于沉默的螺旋机制
-        self.conviction = np.random.beta(2, 2, size)
+        self.conviction = self._rng.beta(2, 2, size)
 
         # 沉默状态
         self.is_silent = np.zeros(size, dtype=bool)
