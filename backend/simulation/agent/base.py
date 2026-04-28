@@ -290,7 +290,7 @@ class MathModelAgent(AgentBase):
             "new_opinion": new_opinion,
             "delta": delta,
             "is_silent": is_silent,
-            "action": "沉默" if is_silent else "观望"
+            "action": "silence" if is_silent else "observe"
         }
     
     async def act(self, decision: Dict[str, Any]) -> Dict[str, Any]:
