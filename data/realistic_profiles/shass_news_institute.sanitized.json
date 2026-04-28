@@ -1,0 +1,850 @@
+{
+  "profile_id": "shass_news_institute",
+  "display_name": "上海社会科学院新闻研究所现实组织画像",
+  "source_path": "E:\\wuxi_xws\\名单\\251231 新闻所在职人员名单.xlsx",
+  "warnings": [
+    "Excluded retired/non-active personnel by name: 1",
+    "Sensitive columns were detected and excluded: Email, 健康状况, 公民身份号码, 出生日期, 婚姻状况, 户口所在地, 手机, 联系地址, 血型"
+  ],
+  "cache_path": "data\\realistic_profiles\\shass_news_institute.sanitized.json",
+  "generated_at": "2026-04-28T00:46:36.457976+00:00",
+  "agents": [
+    {
+      "agent_id": 0,
+      "role_label": "资深研究员 / 管理职责 / 哲学",
+      "department": "所长室",
+      "specialty": "哲学",
+      "title": "研究员",
+      "seniority_label": "资深",
+      "community_id": 4,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"张雪魁\" \"上海社会科学院\" 新闻 论文",
+        "\"张雪魁\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张雪魁\" \"哲学\" 论文"
+      ],
+      "opinion": 0.08191814616855558,
+      "belief_strength": 0.7143688192542078,
+      "influence": 0.8276666666666667,
+      "susceptibility": 0.2561666666666667,
+      "fear_of_isolation": 0.6464965328814289,
+      "conviction": 0.5997834019097901,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "资深研究员 / 管理职责 / 哲学。专业背景：哲学；学历/学位：研究生毕业经济学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "资深研究员 / 管理职责 / 哲学",
+        "specialty": "哲学",
+        "seniority": "资深",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 1,
+      "role_label": "资深研究员 / 管理职责 / 新闻学",
+      "department": "所长室",
+      "specialty": "新闻学",
+      "title": "研究员",
+      "seniority_label": "资深",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"戴丽娜\" \"上海社会科学院\" 新闻 论文",
+        "\"戴丽娜\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"戴丽娜\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.0723744931975384,
+      "belief_strength": 0.6556964837560052,
+      "influence": 0.8021666666666667,
+      "susceptibility": 0.2689166666666667,
+      "fear_of_isolation": 0.5966325408531803,
+      "conviction": 0.7136928220887419,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "资深研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "资深研究员 / 管理职责 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "资深",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 2,
+      "role_label": "中坚科研人员 / 管理职责 / 情报学",
+      "department": "办公室",
+      "specialty": "情报学",
+      "title": "经济师",
+      "seniority_label": "中坚",
+      "community_id": 4,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"吴曦\" \"上海社会科学院\" 新闻 论文",
+        "\"吴曦\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"吴曦\" \"情报学\" 论文"
+      ],
+      "opinion": 0.005459147010791209,
+      "belief_strength": 0.6253074162247021,
+      "influence": 0.6836904761904762,
+      "susceptibility": 0.40815476190476196,
+      "fear_of_isolation": 0.5999873979349458,
+      "conviction": 0.5595915432808592,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚科研人员 / 管理职责 / 情报学。专业背景：情报学；学历/学位：研究生毕业管理学硕士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚科研人员 / 管理职责 / 情报学",
+        "specialty": "情报学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 3,
+      "role_label": "中坚科研人员 / 管理职责 / 会计",
+      "department": "办公室",
+      "specialty": "会计",
+      "title": "管理人员",
+      "seniority_label": "中坚",
+      "community_id": 4,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"廖建碧\" \"上海社会科学院\" 新闻 论文",
+        "\"廖建碧\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"廖建碧\" \"会计\" 论文"
+      ],
+      "opinion": -0.07115518771122288,
+      "belief_strength": 0.6504574457268367,
+      "influence": 0.6884761904761905,
+      "susceptibility": 0.4057619047619048,
+      "fear_of_isolation": 0.6650052488194996,
+      "conviction": 0.6478260242641237,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚科研人员 / 管理职责 / 会计。专业背景：会计；学历/学位：大学毕业无学位。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚科研人员 / 管理职责 / 会计",
+        "specialty": "会计",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 4,
+      "role_label": "青年科研人员 / 管理职责 / 学术秘书",
+      "department": "办公室",
+      "specialty": "学术秘书",
+      "title": "研究实习员",
+      "seniority_label": "青年",
+      "community_id": 4,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"杨文婧\" \"上海社会科学院\" 新闻 论文",
+        "\"杨文婧\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"杨文婧\" \"学术秘书\" 论文"
+      ],
+      "opinion": -0.13966500652046185,
+      "belief_strength": 0.6442276418652308,
+      "influence": 0.6002380952380952,
+      "susceptibility": 0.44988095238095244,
+      "fear_of_isolation": 0.5423018676675708,
+      "conviction": 0.6357112177585498,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年科研人员 / 管理职责 / 学术秘书。专业背景：学术秘书；学历/学位：研究生毕业经济学硕士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年科研人员 / 管理职责 / 学术秘书",
+        "specialty": "学术秘书",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 5,
+      "role_label": "中坚研究员 / 管理职责 / 新闻学",
+      "department": "互联网治理研究中心",
+      "specialty": "新闻学",
+      "title": "副研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"方师师\" \"上海社会科学院\" 新闻 论文",
+        "\"方师师\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"方师师\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.11162231827993785,
+      "belief_strength": 0.5676641047841238,
+      "influence": 0.7036904761904762,
+      "susceptibility": 0.31815476190476194,
+      "fear_of_isolation": 0.6772393216865175,
+      "conviction": 0.6487412796874161,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 管理职责 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 6,
+      "role_label": "青年研究员 / 互联网治理",
+      "department": "互联网治理研究中心",
+      "specialty": "互联网治理",
+      "title": "副研究员",
+      "seniority_label": "青年",
+      "community_id": 0,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"万旋傲\" \"上海社会科学院\" 新闻 论文",
+        "\"万旋傲\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"万旋傲\" \"互联网治理\" 论文"
+      ],
+      "opinion": -0.09761356665533492,
+      "belief_strength": 0.5666429862799568,
+      "influence": 0.45371428571428574,
+      "susceptibility": 0.36814285714285716,
+      "fear_of_isolation": 0.49141269494511386,
+      "conviction": 0.5770668524036163,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 互联网治理。专业背景：互联网治理；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 互联网治理",
+        "specialty": "互联网治理",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 7,
+      "role_label": "中坚研究员 / 互联网治理",
+      "department": "互联网治理研究中心",
+      "specialty": "互联网治理",
+      "title": "助理研究员",
+      "seniority_label": "中坚",
+      "community_id": 0,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"卢垚\" \"上海社会科学院\" 新闻 论文",
+        "\"卢垚\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"卢垚\" \"互联网治理\" 论文"
+      ],
+      "opinion": -0.032127225222555594,
+      "belief_strength": 0.6227147103180175,
+      "influence": 0.4989523809523809,
+      "susceptibility": 0.34552380952380957,
+      "fear_of_isolation": 0.4752406827843189,
+      "conviction": 0.5702697733448107,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 互联网治理。专业背景：互联网治理；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 互联网治理",
+        "specialty": "互联网治理",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 8,
+      "role_label": "青年研究员 / 互联网治理",
+      "department": "互联网治理研究中心",
+      "specialty": "互联网治理",
+      "title": "助理研究员",
+      "seniority_label": "青年",
+      "community_id": 0,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"唐巧盈\" \"上海社会科学院\" 新闻 论文",
+        "\"唐巧盈\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"唐巧盈\" \"互联网治理\" 论文"
+      ],
+      "opinion": -0.10057674246034914,
+      "belief_strength": 0.6143623914654327,
+      "influence": 0.42923809523809525,
+      "susceptibility": 0.38038095238095243,
+      "fear_of_isolation": 0.5175134968635869,
+      "conviction": 0.5509926490448723,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 互联网治理。专业背景：互联网治理；学历/学位：研究生毕业法学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 互联网治理",
+        "specialty": "互联网治理",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 9,
+      "role_label": "资深研究员 / 管理职责 / 新闻学",
+      "department": "新媒体研究中心",
+      "specialty": "新闻学",
+      "title": "副研究员",
+      "seniority_label": "资深",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"王蔚\" \"上海社会科学院\" 新闻 论文",
+        "\"王蔚\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王蔚\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.07832810827735258,
+      "belief_strength": 0.6878882035277809,
+      "influence": 0.8074285714285715,
+      "susceptibility": 0.2662857142857143,
+      "fear_of_isolation": 0.6373915383051226,
+      "conviction": 0.784333866818759,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "资深研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "资深研究员 / 管理职责 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "资深",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 10,
+      "role_label": "中坚研究员 / 新闻学",
+      "department": "新媒体研究中心",
+      "specialty": "新闻学",
+      "title": "副研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"王月\" \"上海社会科学院\" 新闻 论文",
+        "\"王月\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王月\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.05651574382887534,
+      "belief_strength": 0.6258005239221194,
+      "influence": 0.5425714285714286,
+      "susceptibility": 0.32371428571428573,
+      "fear_of_isolation": 0.5092345954184999,
+      "conviction": 0.5158744896114424,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 11,
+      "role_label": "中坚研究员 / 传播学",
+      "department": "新媒体研究中心",
+      "specialty": "传播学",
+      "title": "助理研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"童希\" \"上海社会科学院\" 新闻 论文",
+        "\"童希\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"童希\" \"传播学\" 论文"
+      ],
+      "opinion": 0.055774407694651716,
+      "belief_strength": 0.5790348446076258,
+      "influence": 0.4913571428571428,
+      "susceptibility": 0.3493214285714286,
+      "fear_of_isolation": 0.37493617397354273,
+      "conviction": 0.5959531127915411,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 传播学",
+        "specialty": "传播学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 12,
+      "role_label": "青年研究员 / 传播学",
+      "department": "新媒体研究中心",
+      "specialty": "传播学",
+      "title": "副研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"王理\" \"上海社会科学院\" 新闻 论文",
+        "\"王理\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王理\" \"传播学\" 论文"
+      ],
+      "opinion": -0.12851605818753517,
+      "belief_strength": 0.64526667612372,
+      "influence": 0.4637857142857143,
+      "susceptibility": 0.3631071428571429,
+      "fear_of_isolation": 0.49484110408412085,
+      "conviction": 0.500860474623436,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 传播学",
+        "specialty": "传播学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 13,
+      "role_label": "中坚研究员 / 管理职责 / 新闻学",
+      "department": "新闻学研究中心",
+      "specialty": "新闻学",
+      "title": "研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"吕鹏\" \"上海社会科学院\" 新闻 论文",
+        "\"吕鹏\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"吕鹏\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.15929349709894625,
+      "belief_strength": 0.6913750804216299,
+      "influence": 0.7526428571428572,
+      "susceptibility": 0.29367857142857146,
+      "fear_of_isolation": 0.630822978164017,
+      "conviction": 0.6203469944520914,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 管理职责 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 14,
+      "role_label": "中坚研究员 / 新闻学",
+      "department": "新闻学研究中心",
+      "specialty": "新闻学",
+      "title": "副研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"孟晖\" \"上海社会科学院\" 新闻 论文",
+        "\"孟晖\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"孟晖\" \"新闻学\" 论文"
+      ],
+      "opinion": -0.09702981510077235,
+      "belief_strength": 0.6528991448332994,
+      "influence": 0.5884285714285714,
+      "susceptibility": 0.3007857142857143,
+      "fear_of_isolation": 0.571490632923956,
+      "conviction": 0.6834413357806095,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 15,
+      "role_label": "中坚研究员 / 新闻学",
+      "department": "新闻学研究中心",
+      "specialty": "新闻学",
+      "title": "助理研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"张新璐\" \"上海社会科学院\" 新闻 论文",
+        "\"张新璐\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张新璐\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.09203888900513134,
+      "belief_strength": 0.5394151679253629,
+      "influence": 0.4888095238095238,
+      "susceptibility": 0.3505952380952381,
+      "fear_of_isolation": 0.40740190357480766,
+      "conviction": 0.6285102613656286,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 16,
+      "role_label": "青年研究员 / 传播学",
+      "department": "新闻学研究中心",
+      "specialty": "传播学",
+      "title": "助理研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"钟媛\" \"上海社会科学院\" 新闻 论文",
+        "\"钟媛\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"钟媛\" \"传播学\" 论文"
+      ],
+      "opinion": -0.017871937376409155,
+      "belief_strength": 0.553088650795303,
+      "influence": 0.40476190476190477,
+      "susceptibility": 0.39261904761904765,
+      "fear_of_isolation": 0.4863463799610295,
+      "conviction": 0.4642243267123995,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 传播学",
+        "specialty": "传播学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 17,
+      "role_label": "资深研究员 / 管理职责 / 传播学",
+      "department": "传播学研究中心",
+      "specialty": "传播学",
+      "title": "研究员",
+      "seniority_label": "资深",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"李敬\" \"上海社会科学院\" 新闻 论文",
+        "\"李敬\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"李敬\" \"传播学\" 论文"
+      ],
+      "opinion": -0.09947785250402673,
+      "belief_strength": 0.6549487823450212,
+      "influence": 0.7882857142857144,
+      "susceptibility": 0.27585714285714286,
+      "fear_of_isolation": 0.5816709263096974,
+      "conviction": 0.5040187988673118,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "资深研究员 / 管理职责 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "资深研究员 / 管理职责 / 传播学",
+        "specialty": "传播学",
+        "seniority": "资深",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 18,
+      "role_label": "中坚研究员 / 新闻学",
+      "department": "传播学研究中心",
+      "specialty": "新闻学",
+      "title": "副研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"董倩\" \"上海社会科学院\" 新闻 论文",
+        "\"董倩\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"董倩\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.0013775944245063099,
+      "belief_strength": 0.6892640218382502,
+      "influence": 0.5490952380952381,
+      "susceptibility": 0.320452380952381,
+      "fear_of_isolation": 0.527481464525819,
+      "conviction": 0.596670741729407,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 19,
+      "role_label": "青年研究员 / 传播学",
+      "department": "传播学研究中心",
+      "specialty": "传播学",
+      "title": "副研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"徐生权\" \"上海社会科学院\" 新闻 论文",
+        "\"徐生权\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"徐生权\" \"传播学\" 论文"
+      ],
+      "opinion": -0.01282480328171241,
+      "belief_strength": 0.5606448343284071,
+      "influence": 0.4601904761904762,
+      "susceptibility": 0.3649047619047619,
+      "fear_of_isolation": 0.43393837601599,
+      "conviction": 0.5689238015871027,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 传播学",
+        "specialty": "传播学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 20,
+      "role_label": "青年研究员 / 传播学",
+      "department": "传播学研究中心",
+      "specialty": "传播学",
+      "title": "助理研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"张早早\" \"上海社会科学院\" 新闻 论文",
+        "\"张早早\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张早早\" \"传播学\" 论文"
+      ],
+      "opinion": -0.04915749640021035,
+      "belief_strength": 0.5167457722356185,
+      "influence": 0.4446904761904762,
+      "susceptibility": 0.37265476190476193,
+      "fear_of_isolation": 0.5443711648300292,
+      "conviction": 0.5519159555792572,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 传播学",
+        "specialty": "传播学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 21,
+      "role_label": "青年研究员 / 传播学",
+      "department": "传播学研究中心",
+      "specialty": "传播学",
+      "title": "助理研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"李喆\" \"上海社会科学院\" 新闻 论文",
+        "\"李喆\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"李喆\" \"传播学\" 论文"
+      ],
+      "opinion": 0.06803585150558845,
+      "belief_strength": 0.578741583196844,
+      "influence": 0.4125,
+      "susceptibility": 0.38875000000000004,
+      "fear_of_isolation": 0.47071882823784383,
+      "conviction": 0.5479085371776268,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 传播学",
+        "specialty": "传播学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 22,
+      "role_label": "中坚研究员 / 管理职责 / 新闻学",
+      "department": "舆论学研究中心",
+      "specialty": "新闻学",
+      "title": "助理研究员",
+      "seniority_label": "中坚",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"同心\" \"上海社会科学院\" 新闻 论文",
+        "\"同心\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"同心\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.08495845807693318,
+      "belief_strength": 0.5717147243895796,
+      "influence": 0.6906190476190476,
+      "susceptibility": 0.32469047619047625,
+      "fear_of_isolation": 0.6387060828046053,
+      "conviction": 0.5909843433070368,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 管理职责 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 23,
+      "role_label": "青年科研人员 / 哲学",
+      "department": "舆论学研究中心",
+      "specialty": "哲学",
+      "title": "编辑",
+      "seniority_label": "青年",
+      "community_id": 4,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"郭欣\" \"上海社会科学院\" 新闻 论文",
+        "\"郭欣\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"郭欣\" \"哲学\" 论文"
+      ],
+      "opinion": 0.10537005833600721,
+      "belief_strength": 0.5224233010507203,
+      "influence": 0.34071428571428575,
+      "susceptibility": 0.5046428571428572,
+      "fear_of_isolation": 0.542284117713448,
+      "conviction": 0.49441218008203897,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年科研人员 / 哲学。专业背景：哲学；学历/学位：研究生毕业哲学硕士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年科研人员 / 哲学",
+        "specialty": "哲学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 24,
+      "role_label": "中坚研究员 / 舆论学",
+      "department": "舆论学研究中心",
+      "specialty": "舆论学",
+      "title": "助理研究员",
+      "seniority_label": "中坚",
+      "community_id": 4,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"张卓\" \"上海社会科学院\" 新闻 论文",
+        "\"张卓\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张卓\" \"舆论学\" 论文"
+      ],
+      "opinion": 0.029056654248891117,
+      "belief_strength": 0.5696981262828804,
+      "influence": 0.4775,
+      "susceptibility": 0.35625,
+      "fear_of_isolation": 0.5540630447018431,
+      "conviction": 0.5870540175398435,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "中坚研究员 / 舆论学。专业背景：舆论学；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 舆论学",
+        "specialty": "舆论学",
+        "seniority": "中坚",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 25,
+      "role_label": "青年研究员 / 管理职责 / 新闻学",
+      "department": "舆论学研究中心",
+      "specialty": "新闻学",
+      "title": "副研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": true,
+      "public_evidence": [],
+      "search_queries": [
+        "\"王震宇\" \"上海社会科学院\" 新闻 论文",
+        "\"王震宇\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王震宇\" \"新闻学\" 论文"
+      ],
+      "opinion": 0.08144980584634062,
+      "belief_strength": 0.48252177502262933,
+      "influence": 0.615452380952381,
+      "susceptibility": 0.36227380952380955,
+      "fear_of_isolation": 0.5178391187329929,
+      "conviction": 0.5508411586073753,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 管理职责 / 新闻学",
+        "specialty": "新闻学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    },
+    {
+      "agent_id": 26,
+      "role_label": "青年研究员 / 新闻传播学",
+      "department": "舆论学研究中心",
+      "specialty": "新闻传播学",
+      "title": "助理研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [],
+      "search_queries": [
+        "\"谢添\" \"上海社会科学院\" 新闻 论文",
+        "\"谢添\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"谢添\" \"新闻传播学\" 论文"
+      ],
+      "opinion": -0.08238019827632423,
+      "belief_strength": 0.5334672062117916,
+      "influence": 0.41907142857142854,
+      "susceptibility": 0.38546428571428576,
+      "fear_of_isolation": 0.4129954600595118,
+      "conviction": 0.5030797901579653,
+      "persona": {
+        "type": "现实组织画像",
+        "desc": "青年研究员 / 新闻传播学。专业背景：新闻传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 新闻传播学",
+        "specialty": "新闻传播学",
+        "seniority": "青年",
+        "privacy_note": "anonymized; no ID card, phone, address, health, marriage, or contact fields used"
+      }
+    }
+  ]
+}

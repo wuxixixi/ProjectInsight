@@ -1,0 +1,501 @@
+{
+  "profile_id": "shass_news_institute",
+  "status": "pending_review",
+  "generated_at": "2026-04-28T00:46:35.255130+00:00",
+  "policy": "Search results are evidence candidates only. Review manually before attaching to profiles.",
+  "agents": [
+    {
+      "agent_id": 0,
+      "role_label": "资深研究员 / 管理职责 / 哲学",
+      "search_queries": [
+        "\"张雪魁\" \"上海社会科学院\" 新闻 论文",
+        "\"张雪魁\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张雪魁\" \"哲学\" 论文"
+      ],
+      "candidates": [
+        {
+          "title": "加快经济基础重建：主流媒体系统性变革的紧迫任务张雪魁 - Scribd",
+          "url": "https://www.scribd.com/document/974922834/%E5%8A%A0%E5%BF%AB%E7%BB%8F%E6%B5%8E%E5%9F%BA%E7%A1%80%E9%87%8D%E5%BB%BA-%E4%B8%BB%E6%B5%81%E5%AA%92%E4%BD%93%E7%B3%BB%E7%BB%9F%E6%80%A7%E5%8F%98%E9%9D%A9%E7%9A%84%E7%B4%A7%E8%BF%AB%E4%BB%BB%E5%8A%A1-%E5%BC%A0%E9%9B%AA%E9%AD%81",
+          "content": "[ 作者简介] 张雪魁系上海社会科学院新闻研究所研究员，副所长。本文为国家哲学社会科学基金重大项目（项目号： 25@ZH019）的阶段性成果。 8 《 》2025 年第5 期马新观研究.",
+          "score": 0.8184036
+        },
+        {
+          "title": "张雪魁 - 上海社会科学院",
+          "url": "https://www.sass.org.cn/2020/0828/c1230a95489/page.htm",
+          "content": "出版专著《知识、不确定性与经济理论——主流经济理论的三个替代性假设》《古典承认问题的源与流——从康德到马克思》，发表学术论文近100篇，主持国家社科基金",
+          "score": 0.76596165
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 1,
+      "role_label": "资深研究员 / 管理职责 / 新闻学",
+      "search_queries": [
+        "\"戴丽娜\" \"上海社会科学院\" 新闻 论文",
+        "\"戴丽娜\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"戴丽娜\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 2,
+      "role_label": "中坚科研人员 / 管理职责 / 情报学",
+      "search_queries": [
+        "\"吴曦\" \"上海社会科学院\" 新闻 论文",
+        "\"吴曦\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"吴曦\" \"情报学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 3,
+      "role_label": "中坚科研人员 / 管理职责 / 会计",
+      "search_queries": [
+        "\"廖建碧\" \"上海社会科学院\" 新闻 论文",
+        "\"廖建碧\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"廖建碧\" \"会计\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 4,
+      "role_label": "青年科研人员 / 管理职责 / 学术秘书",
+      "search_queries": [
+        "\"杨文婧\" \"上海社会科学院\" 新闻 论文",
+        "\"杨文婧\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"杨文婧\" \"学术秘书\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 5,
+      "role_label": "中坚研究员 / 管理职责 / 新闻学",
+      "search_queries": [
+        "\"方师师\" \"上海社会科学院\" 新闻 论文",
+        "\"方师师\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"方师师\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 6,
+      "role_label": "青年研究员 / 互联网治理",
+      "search_queries": [
+        "\"万旋傲\" \"上海社会科学院\" 新闻 论文",
+        "\"万旋傲\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"万旋傲\" \"互联网治理\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 7,
+      "role_label": "中坚研究员 / 互联网治理",
+      "search_queries": [
+        "\"卢垚\" \"上海社会科学院\" 新闻 论文",
+        "\"卢垚\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"卢垚\" \"互联网治理\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 8,
+      "role_label": "青年研究员 / 互联网治理",
+      "search_queries": [
+        "\"唐巧盈\" \"上海社会科学院\" 新闻 论文",
+        "\"唐巧盈\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"唐巧盈\" \"互联网治理\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 9,
+      "role_label": "资深研究员 / 管理职责 / 新闻学",
+      "search_queries": [
+        "\"王蔚\" \"上海社会科学院\" 新闻 论文",
+        "\"王蔚\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王蔚\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 10,
+      "role_label": "中坚研究员 / 新闻学",
+      "search_queries": [
+        "\"王月\" \"上海社会科学院\" 新闻 论文",
+        "\"王月\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王月\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 11,
+      "role_label": "中坚研究员 / 传播学",
+      "search_queries": [
+        "\"童希\" \"上海社会科学院\" 新闻 论文",
+        "\"童希\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"童希\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 12,
+      "role_label": "青年研究员 / 传播学",
+      "search_queries": [
+        "\"王理\" \"上海社会科学院\" 新闻 论文",
+        "\"王理\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王理\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 13,
+      "role_label": "中坚研究员 / 管理职责 / 新闻学",
+      "search_queries": [
+        "\"吕鹏\" \"上海社会科学院\" 新闻 论文",
+        "\"吕鹏\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"吕鹏\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 14,
+      "role_label": "中坚研究员 / 新闻学",
+      "search_queries": [
+        "\"孟晖\" \"上海社会科学院\" 新闻 论文",
+        "\"孟晖\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"孟晖\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 15,
+      "role_label": "中坚研究员 / 新闻学",
+      "search_queries": [
+        "\"张新璐\" \"上海社会科学院\" 新闻 论文",
+        "\"张新璐\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张新璐\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 16,
+      "role_label": "青年研究员 / 传播学",
+      "search_queries": [
+        "\"钟媛\" \"上海社会科学院\" 新闻 论文",
+        "\"钟媛\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"钟媛\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 17,
+      "role_label": "资深研究员 / 管理职责 / 传播学",
+      "search_queries": [
+        "\"李敬\" \"上海社会科学院\" 新闻 论文",
+        "\"李敬\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"李敬\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 18,
+      "role_label": "中坚研究员 / 新闻学",
+      "search_queries": [
+        "\"董倩\" \"上海社会科学院\" 新闻 论文",
+        "\"董倩\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"董倩\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 19,
+      "role_label": "青年研究员 / 传播学",
+      "search_queries": [
+        "\"徐生权\" \"上海社会科学院\" 新闻 论文",
+        "\"徐生权\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"徐生权\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 20,
+      "role_label": "青年研究员 / 传播学",
+      "search_queries": [
+        "\"张早早\" \"上海社会科学院\" 新闻 论文",
+        "\"张早早\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张早早\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 21,
+      "role_label": "青年研究员 / 传播学",
+      "search_queries": [
+        "\"李喆\" \"上海社会科学院\" 新闻 论文",
+        "\"李喆\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"李喆\" \"传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 22,
+      "role_label": "中坚研究员 / 管理职责 / 新闻学",
+      "search_queries": [
+        "\"同心\" \"上海社会科学院\" 新闻 论文",
+        "\"同心\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"同心\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 23,
+      "role_label": "青年科研人员 / 哲学",
+      "search_queries": [
+        "\"郭欣\" \"上海社会科学院\" 新闻 论文",
+        "\"郭欣\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"郭欣\" \"哲学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 24,
+      "role_label": "中坚研究员 / 舆论学",
+      "search_queries": [
+        "\"张卓\" \"上海社会科学院\" 新闻 论文",
+        "\"张卓\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"张卓\" \"舆论学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 25,
+      "role_label": "青年研究员 / 管理职责 / 新闻学",
+      "search_queries": [
+        "\"王震宇\" \"上海社会科学院\" 新闻 论文",
+        "\"王震宇\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"王震宇\" \"新闻学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    },
+    {
+      "agent_id": 26,
+      "role_label": "青年研究员 / 新闻传播学",
+      "search_queries": [
+        "\"谢添\" \"上海社会科学院\" 新闻 论文",
+        "\"谢添\" \"Shanghai Academy of Social Sciences\" journalism",
+        "\"谢添\" \"新闻传播学\" 论文"
+      ],
+      "candidates": [
+        {
+          "type": "pending_search",
+          "title": "No public evidence attached until manual review",
+          "url": ""
+        }
+      ],
+      "approved": [],
+      "rejected": []
+    }
+  ]
+}
