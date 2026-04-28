@@ -62,7 +62,8 @@ def log(message: str) -> None:
 
 def run_local(args: list[str], cwd: Path | None = None) -> None:
     log(f"[local] {' '.join(args)}")
-    subprocess.run(args, cwd=cwd, check=True)
+    # On Windows, need shell=True to find npm in PATH
+    subprocess.run(args, cwd=cwd, check=True, shell=True)
 
 
 def create_client(server: ServerConfig) -> paramiko.SSHClient:
