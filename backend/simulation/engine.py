@@ -1313,3 +1313,28 @@ class SimulationEngine:
             recommendations.append("- 当前参数配置下舆论状况良好")
 
         return "\n".join(recommendations)
+
+    def close(self):
+        """
+        清理引擎资源 (issue #2241)
+
+        在推演结束时释放资源：
+        - 关闭 v3 Integration 的数据库连接
+        - 清理 LLM Client
+        - 关闭 Agent Memory 系统
+        """
+        # 关闭 v3 Integration
+        if self.v3:
+            self.v3.close()
+            self.v3 = None
+            logger.info("v3 Integration 已关闭")
+
+        # LLM Client 会自动在 async context manager 中关闭
+        # 这里只清理引用
+        self.llm_client = None
+
+        # 清理 Agent 群体引用
+        self.population = None
+        self.llm_population = None
+
+        logger.info("SimulationEngine 资源已清理")

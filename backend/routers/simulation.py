@@ -314,7 +314,9 @@ async def finish_simulation():
     report_path_safe = report_path.replace("\\", "/") if report_path else None
     report_filename = os.path.basename(report_path) if report_path else None
 
-    # 重置引擎状态，以便下次启动
+    # 重置引擎状态，以便下次启动 (issue #2241: 先清理资源)
+    if state.engine:
+        state.engine.close()
     state.engine = None
 
     return JSONResponse(content={
