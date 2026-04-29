@@ -23,6 +23,24 @@ from .belief_state import BeliefState, ExposureEvent
 logger = logging.getLogger(__name__)
 
 
+def _escape_like_pattern(pattern: str) -> str:
+    """Escape SQL LIKE special characters to prevent injection.
+
+    SQL LIKE uses % and _ as wildcards. This function escapes them
+    to treat them as literal characters.
+
+    Args:
+        pattern: The pattern string to escape
+
+    Returns:
+        Escaped pattern safe for LIKE queries
+    """
+    if not pattern:
+        return pattern
+    # Escape backslash first, then % and _
+    return pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _default_memory_db_path() -> Path:
     """Resolve a writable default SQLite path for local runs."""
     env_dir = Path(tempfile.gettempdir())
@@ -336,17 +354,20 @@ class AgentMemory:
 
         # 2. 如果短时记忆不足，从长时记忆补充
         if len(results) < limit and query_lower:
+            # Escape LIKE special characters to prevent injection
+            escaped_query = _escape_like_pattern(query_lower)
+            like_pattern = f'%{escaped_query}%'
             with self._db_lock:
                 # 搜索 exposure_log
                 cursor = self.conn.execute("""
                     SELECT * FROM exposure_log
                     WHERE agent_id = ? AND (
-                        LOWER(content) LIKE ? OR
-                        LOWER(source) LIKE ?
+                        LOWER(content) LIKE ? ESCAPE '\\\\' OR
+                        LOWER(source) LIKE ? ESCAPE '\\\\'
                     )
                     ORDER BY step DESC
                     LIMIT ?
-                """, (self.agent_id, f'%{query_lower}%', f'%{query_lower}%', limit - len(results)))
+                """, (self.agent_id, like_pattern, like_pattern, limit - len(results)))
                 for row in cursor.fetchall():
                     results.append(dict(row))
 
@@ -355,12 +376,12 @@ class AgentMemory:
                     cursor = self.conn.execute("""
                         SELECT * FROM cognition_log
                         WHERE agent_id = ? AND (
-                            LOWER(reasoning) LIKE ? OR
-                            LOWER(skill_name) LIKE ?
+                            LOWER(reasoning) LIKE ? ESCAPE '\\\\' OR
+                            LOWER(skill_name) LIKE ? ESCAPE '\\\\'
                         )
                         ORDER BY step DESC
                         LIMIT ?
-                    """, (self.agent_id, f'%{query_lower}%', f'%{query_lower}%', limit - len(results)))
+                    """, (self.agent_id, like_pattern, like_pattern, limit - len(results)))
                     for row in cursor.fetchall():
                         results.append(dict(row))
 
