@@ -388,5 +388,20 @@ async def websocket_simulation(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("WebSocket 断开")
         auto_mode = False
+        if auto_task:
+            auto_task.cancel()
+            try:
+                await auto_task
+            except asyncio.CancelledError:
+                pass
+            auto_task = None
     except Exception as e:
         logger.error(f"WebSocket 错误: {e}")
+        auto_mode = False
+        if auto_task:
+            auto_task.cancel()
+            try:
+                await auto_task
+            except asyncio.CancelledError:
+                pass
+            auto_task = None

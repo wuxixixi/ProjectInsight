@@ -13,18 +13,16 @@ logger = logging.getLogger(__name__)
 class Intervention:
     """Official intervention event."""
 
-    _next_id: int = 0
-
     def __init__(
         self,
         step: int,
         content: str,
         credibility: float = 0.7,
         reach: float = 1.0,
-        timing: str = "delayed"
+        timing: str = "delayed",
+        intervention_id: Optional[int] = None
     ):
-        Intervention._next_id += 1
-        self.id = Intervention._next_id
+        self.id = intervention_id if intervention_id is not None else 0
         self.step = step
         self.content = content
         self.credibility = credibility
@@ -63,6 +61,7 @@ class TruthEnv(EnvBase):
         self._exposure_tracking: Dict[int, set] = {}
         self._current_step = 0
         self._rng = np.random.default_rng(seed)
+        self._next_intervention_id: int = 0
 
     @property
     def name(self) -> str:
@@ -99,12 +98,14 @@ class TruthEnv(EnvBase):
         if step is None:
             step = self._current_step + self._response_delay
 
+        self._next_intervention_id += 1
         intervention = Intervention(
             step=step,
             content=content,
             credibility=credibility or self._default_credibility,
             reach=reach,
             timing=timing,
+            intervention_id=self._next_intervention_id,
         )
         self._interventions.append(intervention)
         if intervention.step <= self._current_step and intervention not in self._published:
@@ -182,6 +183,7 @@ class TruthEnv(EnvBase):
         self._published.clear()
         self._exposure_tracking.clear()
         self._current_step = 0
+        self._next_intervention_id = 0
 
     async def get_state(self) -> Dict[str, Any]:
         return {
