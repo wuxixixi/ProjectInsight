@@ -99,6 +99,9 @@ class AgentMemory:
         # 统计信息
         self._write_count = 0
         self._read_count = 0
+
+        # 连接状态标记
+        self._closed = False
     
     def _init_db(self):
         """初始化 SQLite 数据库"""
@@ -411,11 +414,14 @@ class AgentMemory:
     
     def close(self):
         """关闭数据库连接"""
+        if self._closed:
+            return
         # 先 flush 认知缓冲
         if self.cognition_buffer:
             self.flush_cognition(step=0)
 
         self.conn.close()
+        self._closed = True
 
     def __enter__(self):
         """上下文管理器入口"""
@@ -428,7 +434,8 @@ class AgentMemory:
 
     def __del__(self):
         """析构时关闭连接"""
-        try:
-            self.close()
-        except Exception:
-            pass
+        if not self._closed:
+            try:
+                self.close()
+            except Exception:
+                pass
