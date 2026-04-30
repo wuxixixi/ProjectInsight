@@ -17,6 +17,11 @@ from .dual_network import DualLayerNetwork
 from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
 from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionConfig
 from .graph_parser_agent import GraphParserAgent, get_graph_parser
+from .realistic_population import (
+    apply_realistic_profile_to_llm_population,
+    apply_realistic_profile_to_math_population,
+    load_realistic_population,
+)
 from ..models.schemas import SimulationState
 from ..llm.client import LLMClient, LLMConfig
 from ..constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
@@ -55,9 +60,26 @@ class SimulationEngineDual:
         silence_threshold: float = 0.3,
         polarization_factor: float = 0.3,
         echo_chamber_factor: float = 0.2,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
+        population_profile_id: Optional[str] = None,
+        realistic_profile_source_path: Optional[str] = None,
+        refresh_realistic_profile: bool = False,
+        include_public_enrichment: bool = False
     ):
         self.population_size = population_size
+        self.population_profile_id = population_profile_id
+        self.realistic_profile_source_path = realistic_profile_source_path
+        self.refresh_realistic_profile = refresh_realistic_profile
+        self.include_public_enrichment = include_public_enrichment
+        self.realistic_population_profile = None
+        if self.population_profile_id:
+            self.realistic_population_profile = load_realistic_population(
+                self.population_profile_id,
+                source_path=self.realistic_profile_source_path,
+                refresh_cache=self.refresh_realistic_profile,
+                include_public_enrichment=self.include_public_enrichment,
+            )
+            self.population_size = self.realistic_population_profile.size
         self.cocoon_strength = cocoon_strength
         # 兼容旧参数名：新属性名映射
         self.response_delay = debunk_delay
@@ -462,6 +484,7 @@ class SimulationEngineDual:
                 inter_community_prob=0.01
             )
             self.llm_client = LLMClient(self.llm_config)
+            self._apply_realistic_population_profile()
         else:
             # 数学模型模式 - 也创建双层网络用于统计
             self.population = AgentPopulation(
@@ -478,11 +501,26 @@ class SimulationEngineDual:
                 intra_community_prob=0.3,
                 inter_community_prob=0.01
             )
+            self._apply_realistic_population_profile()
 
         self.current_state = self._compute_state()
         self.history.append(self.current_state.to_dict())
 
         return self.current_state
+
+    def _apply_realistic_population_profile(self):
+        if not self.realistic_population_profile:
+            return
+        if self.use_llm and self.llm_population:
+            apply_realistic_profile_to_llm_population(
+                self.llm_population,
+                self.realistic_population_profile,
+            )
+        elif self.population:
+            apply_realistic_profile_to_math_population(
+                self.population,
+                self.realistic_population_profile,
+            )
 
     async def async_step(self) -> SimulationState:
         """
@@ -759,6 +797,11 @@ class SimulationEngineDual:
                     "avg_neighbor_opinion": float(np.mean(old_opinions[neighbors])) if neighbors else 0.0
                 }
             }
+
+            if hasattr(pop, "realistic_profiles") and i < len(pop.realistic_profiles):
+                snapshot["realistic_profile"] = pop.realistic_profiles[i]
+                if "persona" in pop.realistic_profiles[i]:
+                    snapshot["persona"] = pop.realistic_profiles[i]["persona"]
 
             # 保存到全局存储
             AGENT_DECISION_SNAPSHOTS[i] = snapshot

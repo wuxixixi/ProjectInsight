@@ -28,6 +28,10 @@ class StartRequest(BaseModel):
     initial_negative_spread: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # 初始负面信念传播率（新参数名，优先）
     network_type: str = "small_world"
     use_llm: bool = True
+    population_profile_id: Optional[str] = None
+    realistic_profile_source_path: Optional[str] = None
+    refresh_realistic_profile: bool = False
+    include_public_enrichment: bool = False
 
     # LLM并发参数（留空则自动计算）
     max_concurrent: Optional[int] = None  # None 表示根据 population_size 自动计算

@@ -41,6 +41,7 @@ SHASS_PROFILE_ALIASES = {"shass_news_institute", "上海社科院新闻所", "ne
 @dataclass(frozen=True)
 class RealisticAgentProfile:
     agent_id: int
+    name: str
     role_label: str
     department: str
     specialty: str
@@ -61,6 +62,7 @@ class RealisticAgentProfile:
     def to_public_dict(self) -> Dict[str, Any]:
         return {
             "agent_id": self.agent_id,
+            "name": self.name,
             "role_label": self.role_label,
             "department": self.department,
             "specialty": self.specialty,
@@ -88,6 +90,7 @@ class RealisticAgentProfile:
     def from_cache_dict(cls, data: Dict[str, Any]) -> "RealisticAgentProfile":
         return cls(
             agent_id=int(data["agent_id"]),
+            name=str(data.get("name", "")) or f"匿名成员 #{int(data['agent_id']) + 1}",
             role_label=str(data.get("role_label", "")),
             department=str(data.get("department", "")),
             specialty=str(data.get("specialty", "")),
@@ -179,6 +182,25 @@ def load_realistic_population(
     if normalized not in SHASS_PROFILE_ALIASES:
         raise ValueError(f"Unsupported population profile: {profile_id}")
 
+    resolved_path = resolve_population_path(source_path)
+    if not Path(resolved_path).exists():
+        cache_path = get_profile_cache_path("shass_news_institute")
+        if cache_path.exists() and not refresh_cache:
+            return _load_profile_cache(cache_path)
+        profile = _build_synthetic_shass_news_institute_profile()
+        cache_path = get_profile_cache_path(profile.profile_id)
+        profile = RealisticPopulationProfile(
+            profile_id=profile.profile_id,
+            display_name=profile.display_name,
+            source_path=profile.source_path,
+            agents=profile.agents,
+            warnings=profile.warnings,
+            cache_path=str(cache_path),
+            generated_at=profile.generated_at,
+        )
+        _write_json(cache_path, profile.to_cache_dict())
+        return profile
+
     cache_path = get_profile_cache_path("shass_news_institute")
     if cache_path.exists() and not refresh_cache:
         return _load_profile_cache(cache_path)
@@ -250,6 +272,9 @@ def apply_realistic_profile_to_math_population(population: Any, profile: Realist
     population.exposed_to_negative = population.opinions < -0.1
     population.exposed_to_positive = np.zeros(profile.size, dtype=bool)
     population.realistic_profiles = [agent.to_public_dict() for agent in profile.agents]
+    population.personas = [agent.persona.get("type", "现实组织画像") for agent in profile.agents]
+    population.community_ids = np.array([agent.community_id for agent in profile.agents], dtype=int)
+    population.is_influencer = np.array([agent.is_influencer for agent in profile.agents], dtype=bool)
     if hasattr(population, "invalidate_cache"):
         population.invalidate_cache()
 
@@ -327,6 +352,78 @@ def _build_shass_news_institute_profile(
     )
 
 
+def _build_synthetic_shass_news_institute_profile() -> RealisticPopulationProfile:
+    specialties = [
+        "新闻传播理论", "舆情治理", "新媒体研究", "国际传播", "城市传播", "文化传播",
+        "新闻史论", "平台治理", "媒介伦理", "公共政策传播", "数字传播", "青年传播",
+        "传媒经济", "算法治理", "社会调查", "视觉传播", "危机传播", "基层传播",
+        "智库研究", "国际舆论", "网络社会", "融合出版", "数据新闻", "传播效果",
+        "公共关系", "社会心理", "政策评估",
+    ]
+    seniority_cycle = ["资深", "中坚", "青年"]
+    agents = []
+    warnings = [
+        "Using anonymized synthetic roster because no sanitized cache or source workbook is available.",
+        "Profiles represent role-based research priors only; they are not claims about any real person's attitude.",
+    ]
+    for i, specialty in enumerate(specialties):
+        rng = np.random.default_rng(20_000 + i)
+        seniority_label = seniority_cycle[i % len(seniority_cycle)]
+        seniority_score = {"资深": 0.78, "中坚": 0.55, "青年": 0.28}[seniority_label]
+        is_admin = i in {0, 5}
+        title = {"资深": "研究员", "中坚": "副研究员", "青年": "助理研究员"}[seniority_label]
+        role_label = f"{seniority_label}{title} / {specialty}"
+        if is_admin:
+            role_label += " / 管理职责"
+        influence = float(np.clip(0.22 + seniority_score * 0.55 + (0.14 if is_admin else 0.0), 0.1, 1.0))
+        susceptibility = float(np.clip(0.58 - seniority_score * 0.25 + rng.normal(0, 0.03), 0.15, 0.75))
+        belief_strength = float(np.clip(0.43 + seniority_score * 0.28 + rng.normal(0, 0.04), 0.2, 0.9))
+        fear_of_isolation = float(np.clip(0.44 + (0.12 if is_admin else 0.0) + rng.normal(0, 0.05), 0.15, 0.85))
+        conviction = float(np.clip(0.45 + seniority_score * 0.25 + rng.normal(0, 0.05), 0.2, 0.9))
+        opinion = float(np.clip(rng.normal(0.0, 0.06), -0.18, 0.18))
+        persona = {
+            "type": "现实组织画像",
+            "desc": (
+                f"{role_label}。专业背景：{specialty}。"
+                "该画像基于匿名组织角色和研究方向生成，只用于模拟近身科研群体的可能判断差异。"
+            ),
+            "profile_mode": "realistic",
+            "role_label": role_label,
+            "specialty": specialty,
+            "seniority": seniority_label,
+            "privacy_note": "synthetic anonymized profile; no personal identifiers used",
+        }
+        agents.append(RealisticAgentProfile(
+            agent_id=i,
+            name=f"匿名成员 #{i + 1}",
+            role_label=role_label,
+            department="上海社会科学院新闻研究所",
+            specialty=specialty,
+            title=title,
+            seniority_label=seniority_label,
+            community_id=_community_id(specialty, "上海社会科学院新闻研究所"),
+            is_influencer=bool(influence >= 0.72 or is_admin),
+            opinion=opinion,
+            belief_strength=belief_strength,
+            influence=influence,
+            susceptibility=susceptibility,
+            fear_of_isolation=fear_of_isolation,
+            conviction=conviction,
+            persona=persona,
+            public_evidence=[],
+            search_queries=[],
+        ))
+    return RealisticPopulationProfile(
+        profile_id="shass_news_institute",
+        display_name="上海社会科学院新闻研究所匿名现实组织画像",
+        source_path="synthetic://shass_news_institute",
+        agents=agents,
+        warnings=warnings,
+        cache_path="",
+        generated_at=_utc_now(),
+    )
+
+
 def _load_profile_cache(path: Path) -> RealisticPopulationProfile:
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -361,6 +458,7 @@ def _build_agent_profile(
     include_public_enrichment: bool,
 ) -> RealisticAgentProfile:
     rng = np.random.default_rng(10_000 + agent_id)
+    name = _text(row.get("姓名")) or _text(row.get("濮撳悕")) or f"成员 #{agent_id + 1}"
     department = _text(row.get("部门")) or _text(row.get("单位")) or "新闻研究所"
     specialty = _text(row.get("现从事专业")) or "新闻传播研究"
     title = _text(row.get("聘任专技职务")) or _text(row.get("专技职务资格")) or _text(row.get("院岗位类别")) or "科研人员"
@@ -409,6 +507,7 @@ def _build_agent_profile(
 
     return RealisticAgentProfile(
         agent_id=agent_id,
+        name=name,
         role_label=role_label,
         department=department,
         specialty=specialty,

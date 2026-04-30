@@ -41,6 +41,7 @@ ENV/
 htmlcov/
 .tox/
 .hypothesis/
+data/test_realistic_profiles/
 
 # 日志和报告（生成的）
 reports/*.md

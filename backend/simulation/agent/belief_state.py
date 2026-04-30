@@ -29,9 +29,7 @@ class ExposureSource(str, Enum):
 
 class ExposureEvent(BaseModel):
     """信息暴露事件 - 记录 Agent 接收到的信息"""
-    model_config = ConfigDict(
-        json_encoders={datetime: lambda v: v.isoformat()}
-    )
+    model_config = ConfigDict()
 
     timestamp: datetime = Field(default_factory=_utcnow)
     step: int = 0
@@ -130,9 +128,7 @@ class BeliefState(BaseModel):
         description="最近的推理过程"
     )
 
-    model_config = ConfigDict(
-        json_encoders={datetime: lambda v: v.isoformat() if v else None}
-    )
+    model_config = ConfigDict()
     
     def to_opinion(self) -> float:
         """

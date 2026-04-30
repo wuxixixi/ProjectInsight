@@ -9,7 +9,7 @@ AgentBase - Agent 抽象基类
 """
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 import logging
 
@@ -39,8 +39,7 @@ class AgentProfile(BaseModel):
     persona_type: str = "普通用户"
     persona_desc: str = "普通社交媒体用户"
     
-    class Config:
-        extra = "allow"  # 允许额外字段
+    model_config = ConfigDict(extra="allow")
 
 
 class AgentBase(ABC):

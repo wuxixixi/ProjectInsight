@@ -22,6 +22,11 @@ from .math_model_enhanced import EnhancedMathModel, EnhancedMathParams
 from .knowledge_evolution import KnowledgeDrivenEvolution, KnowledgeEvolutionConfig
 from .engine_v3 import EngineV3Integration
 from .agent import BeliefState
+from .realistic_population import (
+    apply_realistic_profile_to_llm_population,
+    apply_realistic_profile_to_math_population,
+    load_realistic_population,
+)
 from ..models.schemas import SimulationState, SimulationMode
 from ..constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 from ..llm.client import LLMClient, LLMConfig
@@ -88,7 +93,11 @@ class SimulationEngine:
         opinion_range_rumor_high: float = -0.2,
         opinion_range_truth_low: float = 0.2,
         opinion_range_truth_high: float = 0.8,
-        opinion_range_neutral_radius: float = 0.05
+        opinion_range_neutral_radius: float = 0.05,
+        population_profile_id: Optional[str] = None,
+        realistic_profile_source_path: Optional[str] = None,
+        refresh_realistic_profile: bool = False,
+        include_public_enrichment: bool = False
     ):
         # 处理兼容参数：优先使用新参数名，旧参数名作为别名
         if debunk_delay is not None:
@@ -98,6 +107,19 @@ class SimulationEngine:
         if debunk_credibility is not None:
             response_credibility = debunk_credibility
         self.population_size = population_size
+        self.population_profile_id = population_profile_id
+        self.realistic_profile_source_path = realistic_profile_source_path
+        self.refresh_realistic_profile = refresh_realistic_profile
+        self.include_public_enrichment = include_public_enrichment
+        self.realistic_population_profile = None
+        if self.population_profile_id:
+            self.realistic_population_profile = load_realistic_population(
+                self.population_profile_id,
+                source_path=self.realistic_profile_source_path,
+                refresh_cache=self.refresh_realistic_profile,
+                include_public_enrichment=self.include_public_enrichment,
+            )
+            self.population_size = self.realistic_population_profile.size
         self.cocoon_strength = cocoon_strength
         self.response_delay = response_delay
         self.initial_negative_spread = initial_negative_spread
@@ -521,6 +543,7 @@ class SimulationEngine:
             # 新闻模式：应用真实分布锚定
             if self.mode == SimulationMode.NEWS and self.init_distribution:
                 self._apply_init_distribution_llm()
+            self._apply_realistic_population_profile()
         else:
             # 数学模型模式
             self.population = AgentPopulation(
@@ -533,6 +556,7 @@ class SimulationEngine:
             # 新闻模式：应用真实分布锚定
             if self.mode == SimulationMode.NEWS and self.init_distribution:
                 self._apply_init_distribution()
+            self._apply_realistic_population_profile()
 
         # v3.0: 先初始化 v3 Agent 状态（必须在 _compute_state 之前）
         if self.use_v3 and self.v3:
@@ -542,6 +566,20 @@ class SimulationEngine:
         self.history.append(self.current_state.to_dict())
 
         return self.current_state
+
+    def _apply_realistic_population_profile(self):
+        if not self.realistic_population_profile:
+            return
+        if self.use_llm and self.llm_population:
+            apply_realistic_profile_to_llm_population(
+                self.llm_population,
+                self.realistic_population_profile,
+            )
+        elif self.population:
+            apply_realistic_profile_to_math_population(
+                self.population,
+                self.realistic_population_profile,
+            )
 
     def _initialize_v3(self):
         """
@@ -985,6 +1023,11 @@ class SimulationEngine:
                     "avg_neighbor_opinion": float(np.mean(old_opinions[valid_neighbors])) if valid_neighbors else 0.0
                 }
             }
+
+            if hasattr(pop, "realistic_profiles") and i < len(pop.realistic_profiles):
+                snapshot["realistic_profile"] = pop.realistic_profiles[i]
+                if "persona" in pop.realistic_profiles[i]:
+                    snapshot["persona"] = pop.realistic_profiles[i]["persona"]
 
             # 保存到全局存储
             AGENT_DECISION_SNAPSHOTS[i] = snapshot

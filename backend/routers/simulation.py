@@ -16,6 +16,7 @@ from ..helpers import (
 )
 from ..simulation.engine import SimulationEngine
 from ..simulation.engine_dual import SimulationEngineDual
+from ..simulation.realistic_population import load_realistic_population
 from ..simulation.llm_agents import get_agent_snapshot_global
 from ..simulation.llm_agents_dual import get_agent_snapshot_global as get_agent_snapshot_global_dual
 from ..llm.client import LLMConfig
@@ -34,6 +35,28 @@ async def _maybe_set_news(engine, content: str, source: str) -> None:
         await result
 
 
+def _get_realistic_profile(agent_id: int):
+    engine = state.engine
+    if engine is None:
+        return None
+    if getattr(engine, "use_llm", False) and getattr(engine, "llm_population", None):
+        agents = getattr(engine.llm_population, "agents", [])
+        if 0 <= agent_id < len(agents):
+            return getattr(agents[agent_id], "realistic_profile", None)
+    population = getattr(engine, "population", None)
+    profiles = getattr(population, "realistic_profiles", None)
+    if profiles is not None and 0 <= agent_id < len(profiles):
+        return profiles[agent_id]
+    return None
+
+
+def _attach_realistic_profile(payload: dict, agent_id: int) -> dict:
+    profile = _get_realistic_profile(agent_id)
+    if profile:
+        payload["realistic_profile"] = profile
+    return payload
+
+
 @router.post("/simulation/start")
 async def start_simulation(params: StartRequest):
     """
@@ -48,9 +71,19 @@ async def start_simulation(params: StartRequest):
         entity_count = len(state.pending_knowledge_graph.get('entities', []))
         logger.info(f"检测到待注入事件，情感={sentiment}, 可信度={credibility}, 实体数={entity_count}")
 
+    effective_population_size = params.population_size
+    if params.population_profile_id:
+        profile = load_realistic_population(
+            params.population_profile_id,
+            source_path=params.realistic_profile_source_path,
+            refresh_cache=params.refresh_realistic_profile,
+            include_public_enrichment=params.include_public_enrichment,
+        )
+        effective_population_size = profile.size
+
     # 自动计算并发数（如果未指定）
-    max_concurrent = params.max_concurrent or calculate_max_concurrent(params.population_size)
-    logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {params.population_size})")
+    max_concurrent = params.max_concurrent or calculate_max_concurrent(effective_population_size)
+    logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {effective_population_size})")
 
     # 使用环境变量中的LLM配置，仅覆盖并发数和超时参数
     llm_config = LLMConfig(
@@ -69,7 +102,7 @@ async def start_simulation(params: StartRequest):
     if params.use_dual_network:
         logger.info(f"使用双层网络引擎, 社群数: {params.num_communities}, LLM模式: {params.use_llm}")
         state.engine = SimulationEngineDual(
-            population_size=params.population_size,
+            population_size=effective_population_size,
             cocoon_strength=params.cocoon_strength,
             debunk_delay=effective_debunk_delay,
             initial_rumor_spread=effective_initial_spread,
@@ -83,11 +116,15 @@ async def start_simulation(params: StartRequest):
             backfire_strength=params.backfire_strength,
             silence_threshold=params.silence_threshold,
             polarization_factor=params.polarization_factor,
-            echo_chamber_factor=params.echo_chamber_factor
+            echo_chamber_factor=params.echo_chamber_factor,
+            population_profile_id=params.population_profile_id,
+            realistic_profile_source_path=params.realistic_profile_source_path,
+            refresh_realistic_profile=params.refresh_realistic_profile,
+            include_public_enrichment=params.include_public_enrichment
         )
     else:
         state.engine = SimulationEngine(
-            population_size=params.population_size,
+            population_size=effective_population_size,
             cocoon_strength=params.cocoon_strength,
             debunk_delay=effective_debunk_delay,
             initial_rumor_spread=effective_initial_spread,
@@ -104,7 +141,11 @@ async def start_simulation(params: StartRequest):
             # Phase 3: 运行模式参数
             mode=params.mode,
             init_distribution=params.init_distribution,
-            time_acceleration=params.time_acceleration
+            time_acceleration=params.time_acceleration,
+            population_profile_id=params.population_profile_id,
+            realistic_profile_source_path=params.realistic_profile_source_path,
+            refresh_realistic_profile=params.refresh_realistic_profile,
+            include_public_enrichment=params.include_public_enrichment
         )
 
     # 如果有待注入事件，根据事件内容设置初始分布
@@ -248,6 +289,7 @@ async def inspect_agent(agent_id: int):
 
     if snapshot:
         result = _normalize_snapshot_climate(snapshot)
+        _attach_realistic_profile(result, agent_id)
         # 附加 v3.0 字段
         result.update(_get_v3_agent_fields(agent_id))
         return JSONResponse(content=result)
@@ -257,6 +299,7 @@ async def inspect_agent(agent_id: int):
         snapshot = engine.llm_population.get_agent_snapshot(agent_id)
         if snapshot:
             result = _normalize_snapshot_climate(snapshot)
+            _attach_realistic_profile(result, agent_id)
             result.update(_get_v3_agent_fields(agent_id))
             return JSONResponse(content=result)
 
@@ -292,6 +335,32 @@ async def inspect_agent(agent_id: int):
         content={"error": "Agent信息不可用", "has_decided": False},
         status_code=500
     )
+    if not engine.use_llm and getattr(engine, "population", None):
+        population = engine.population
+        payload = {
+            "agent_id": agent_id,
+            "persona": {"type": "数学模型Agent", "desc": "基于增强版数学模型决策"},
+            "persona_str": "数学模型Agent - 基于增强版数学模型决策",
+            "belief_strength": float(population.belief_strength[agent_id]),
+            "susceptibility": float(population.susceptibility[agent_id]),
+            "influence": float(population.influence[agent_id]),
+            "old_opinion": float(population.opinions[agent_id]),
+            "new_opinion": float(population.opinions[agent_id]),
+            "received_news": [],
+            "llm_raw_response": None,
+            "emotion": "未激活",
+            "action": "未参与",
+            "generated_comment": "",
+            "reasoning": "该Agent尚未参与本轮推演，处于初始状态",
+            "has_decided": False,
+            "fear_of_isolation": float(population.fear_of_isolation[agent_id]),
+            "conviction": float(population.conviction[agent_id]),
+            "is_silent": bool(population.is_silent[agent_id]),
+            "perceived_climate": _build_perceived_climate_summary(agent_id),
+            **_get_v3_agent_fields(agent_id),
+        }
+        _attach_realistic_profile(payload, agent_id)
+        return JSONResponse(content=payload)
 
 
 @router.post("/simulation/finish")

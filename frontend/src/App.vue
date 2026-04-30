@@ -161,6 +161,23 @@
         <p class="param-desc" v-else>真实分布锚定，预测现实演进</p>
       </div>
 
+      <!-- 样本画像 -->
+      <div class="control-section">
+        <label class="section-label">样本画像</label>
+        <div class="mode-toggle">
+          <button :class="['mode-btn', { active: populationProfile === 'theory' }]" @click="setPopulationProfile('theory')" :disabled="isRunning">
+            <span class="mode-icon">⚙</span>
+            理论人设
+          </button>
+          <button :class="['mode-btn', { active: populationProfile === 'shass_news_institute' }]" @click="setPopulationProfile('shass_news_institute')" :disabled="isRunning">
+            <span class="mode-icon">🏛</span>
+            新闻所27人
+          </button>
+        </div>
+        <p class="param-desc" v-if="populationProfile === 'theory'">基于社会心理理论生成通用 Agent</p>
+        <p class="param-desc" v-else>匿名科研人员画像，只模拟角色与研究背景差异</p>
+      </div>
+
       <!-- 真实分布锚定（新闻模式） -->
       <div class="control-section" v-if="simulationMode === 'news'">
         <label class="section-label">真实分布锚定</label>
@@ -235,7 +252,8 @@
             </div>
             <span class="param-value">{{ populationSize }}</span>
           </div>
-          <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning" />
+          <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning || populationProfile !== 'theory'" />
+          <p class="param-desc" v-if="populationProfile !== 'theory'">现实组织样本固定为 27 个匿名画像</p>
         </div>
 
         <!-- 双层网络开关 -->
@@ -1085,6 +1103,14 @@
                   <span class="label">Agent ID</span>
                   <span class="value">#{{ agentSnapshot.agent_id }}</span>
                 </div>
+                <div class="info-item" v-if="agentSnapshot.realistic_profile?.name">
+                  <span class="label">姓名</span>
+                  <span class="value highlight">{{ agentSnapshot.realistic_profile.name }}</span>
+                </div>
+                <div class="info-item" v-if="agentSnapshot.realistic_profile?.role_label">
+                  <span class="label">现实角色</span>
+                  <span class="value">{{ agentSnapshot.realistic_profile.role_label }}</span>
+                </div>
                 <div class="info-item">
                   <span class="label">人设类型</span>
                   <span class="value highlight">{{ agentSnapshot.persona?.type || '未知' }}</span>
@@ -1780,6 +1806,7 @@ export default {
 
       // Agent参数
       populationSize: 200,
+      populationProfile: 'theory',
       networkType: 'small_world',
 
       // LLM并发参数（留空则自动计算）
@@ -2402,6 +2429,17 @@ export default {
 
     // ==================== 模拟控制 ====================
 
+    setPopulationProfile(profile) {
+      this.populationProfile = profile
+      if (profile === 'shass_news_institute') {
+        this.populationSize = 27
+        this.useDualNetwork = true
+        this.simulationMode = 'news'
+      } else if (this.populationSize < 50) {
+        this.populationSize = 200
+      }
+    },
+
     startSimulation() {
       this.isRunning = true
       this.hasStopped = false
@@ -2447,7 +2485,9 @@ export default {
           debunk_delay: this.debunkDelay,
           initial_rumor_spread: this.initialRumorSpread,
           use_llm: this.useLLM,
-          population_size: this.populationSize,
+          population_size: this.populationProfile === 'theory' ? this.populationSize : 27,
+          population_profile_id: this.populationProfile === 'theory' ? null : this.populationProfile,
+          refresh_realistic_profile: this.populationProfile !== 'theory',
           network_type: this.networkType,
           max_steps: this.maxSteps,
           max_concurrent: this.maxConcurrent,

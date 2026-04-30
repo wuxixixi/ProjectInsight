@@ -140,7 +140,7 @@ class AgentPopulation:
 
         agents = []
         for i in range(self.size):
-            agents.append({
+            item = {
                 "id": i,
                 "opinion": float(self.opinions[i]),
                 "belief_strength": float(self.belief_strength[i]),
@@ -151,7 +151,16 @@ class AgentPopulation:
                 "is_silent": bool(self.is_silent[i]),
                 "exposed_to_negative": bool(self.exposed_to_negative[i]),
                 "exposed_to_positive": bool(self.exposed_to_positive[i])
-            })
+            }
+            if hasattr(self, "realistic_profiles") and i < len(self.realistic_profiles):
+                item["realistic_profile"] = self.realistic_profiles[i]
+            if hasattr(self, "personas") and i < len(self.personas):
+                item["persona"] = {"type": self.personas[i], "profile_mode": "realistic"}
+            if hasattr(self, "community_ids") and i < len(self.community_ids):
+                item["community_id"] = int(self.community_ids[i])
+            if hasattr(self, "is_influencer") and i < len(self.is_influencer):
+                item["is_influencer"] = bool(self.is_influencer[i])
+            agents.append(item)
         self._agent_list_cache = agents
         return agents
 
