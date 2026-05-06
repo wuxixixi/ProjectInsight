@@ -175,7 +175,7 @@
           </button>
         </div>
         <p class="param-desc" v-if="populationProfile === 'theory'">基于社会心理理论生成通用 Agent</p>
-        <p class="param-desc" v-else>匿名科研人员画像，只模拟角色与研究背景差异</p>
+        <p class="param-desc" v-else>实名科研人员画像，保留姓名便于演示核验</p>
       </div>
 
       <!-- 真实分布锚定（新闻模式） -->
@@ -253,7 +253,7 @@
             <span class="param-value">{{ populationSize }}</span>
           </div>
           <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning || populationProfile !== 'theory'" />
-          <p class="param-desc" v-if="populationProfile !== 'theory'">现实组织样本固定为 27 个匿名画像</p>
+          <p class="param-desc" v-if="populationProfile !== 'theory'">现实组织样本固定为 27 个实名画像</p>
         </div>
 
         <!-- 双层网络开关 -->
@@ -1080,7 +1080,7 @@
     <div v-if="showAgentModal" class="agent-modal-overlay" @click.self="closeAgentModal">
       <div class="agent-modal">
         <div class="modal-header">
-          <h3><span class="icon">🔍</span> Agent #{{ inspectAgentId }} 微观行为透视</h3>
+          <h3><span class="icon">🔍</span> {{ inspectedAgentTitle }}</h3>
           <button class="close-btn" @click="closeAgentModal">✕</button>
         </div>
 
@@ -2009,6 +2009,11 @@ export default {
       if (opinion < 0) return '误信'
       return '不确定'
     },
+    inspectedAgentTitle() {
+      const name = this.agentSnapshot?.realistic_profile?.name
+      const id = this.inspectAgentId ?? this.agentSnapshot?.agent_id
+      return name ? `${name} (#${id}) 微观行为透视` : `Agent #${id} 微观行为透视`
+    },
     needLabel() {
       const labels = {
         '生理': '🏠 生理需求',
@@ -2252,6 +2257,11 @@ export default {
 
     toggleGroup(group) {
       this.expandedGroups[group] = !this.expandedGroups[group]
+    },
+
+    getAgentDisplayName(agent) {
+      const name = agent?.realistic_profile?.name
+      return name || `Agent ${agent?.id ?? ''}`
     },
 
     // 预测字段名兼容：新名优先，旧名兜底
@@ -3388,6 +3398,7 @@ export default {
       ]
 
       const nodes = this.agents.map(agent => {
+        const displayName = this.getAgentDisplayName(agent)
         let color
         if (agent.opinion < 0) color = '#ef4444'
         else if (agent.opinion > 0) color = '#22c55e'
@@ -3409,7 +3420,7 @@ export default {
 
         return {
           id: agent.id.toString(),
-          name: `#${agent.id}`,
+          name: displayName,
           symbolSize: symbolSize,
           itemStyle: {
             color: color,
@@ -3417,6 +3428,16 @@ export default {
             borderColor: agent.is_influencer ? '#fcd34d' : null,
             borderWidth: agent.is_influencer ? 2 : 0
           },
+          label: agent.realistic_profile?.name ? {
+            show: true,
+            formatter: displayName,
+            fontSize: 10,
+            color: '#e2e8f0',
+            backgroundColor: 'rgba(15, 23, 42, 0.72)',
+            borderRadius: 4,
+            padding: [2, 4],
+            position: 'right'
+          } : null,
           x: Math.random() * 800,
           y: Math.random() * 500
         }
@@ -3438,6 +3459,7 @@ export default {
             if (params.dataType === 'node') {
               const agent = this.agents.find(a => a.id.toString() === params.data.id)
               if (agent) {
+                const displayName = this.getAgentDisplayName(agent)
                 const influencerTag = agent.is_influencer ? ' [大V]' : ''
                 const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
                 const tag = this.useDualNetwork && this.activeNetworkTab === 'public' ? influencerTag : communityTag
@@ -3453,7 +3475,7 @@ export default {
                   ? `<div style="color: #94a3b8;">发布渠道: ${channelMap[agent.publish_channel] || agent.publish_channel}</div>`
                   : ''
                 return `<div style="padding: 8px;">
-                  <div style="font-weight: bold;">Agent ${agent.id}${tag}${silenceTag}</div>
+                  <div style="font-weight: bold;">${displayName} (#${agent.id})${tag}${silenceTag}</div>
                   <div>观点: ${agent.opinion.toFixed(3)}</div>
                   ${rumorTrust}${truthTrust}${dominantNeed}${predictedBehavior}${publishChannel}
                 </div>`
@@ -3893,6 +3915,7 @@ export default {
       ]
 
       const nodes = this.agents.map(agent => {
+        const displayName = this.getAgentDisplayName(agent)
         let color
         if (agent.opinion < 0) color = '#ef4444'
         else if (agent.opinion > 0) color = '#22c55e'
@@ -3916,6 +3939,7 @@ export default {
 
         return {
           id: agent.id.toString(),
+          name: displayName,
           symbolSize: symbolSize,
           itemStyle: {
             color: color,
@@ -3923,7 +3947,16 @@ export default {
             borderColor: agent.is_influencer ? '#fcd34d' : null,
             borderWidth: agent.is_influencer ? 2 : 0
           },
-          label: agent.is_influencer && this.activeNetworkTab === 'public' ? {
+          label: agent.realistic_profile?.name ? {
+            show: true,
+            formatter: displayName,
+            fontSize: 10,
+            color: '#e2e8f0',
+            backgroundColor: 'rgba(15, 23, 42, 0.72)',
+            borderRadius: 4,
+            padding: [2, 4],
+            position: 'right'
+          } : agent.is_influencer && this.activeNetworkTab === 'public' ? {
             show: true,
             formatter: 'V',
             fontSize: 10,
@@ -3955,6 +3988,7 @@ export default {
             if (params.dataType === 'node') {
               const agent = this.agents.find(a => a.id.toString() === params.data.id)
               if (agent) {
+                const displayName = this.getAgentDisplayName(agent)
                 const influencerTag = agent.is_influencer ? ' [大V]' : ''
                 const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
                 const tag = this.activeNetworkTab === 'public' ? influencerTag : communityTag
@@ -3970,7 +4004,7 @@ export default {
                   ? `<div style="color: #94a3b8;">发布渠道: ${channelMap[agent.publish_channel] || agent.publish_channel}</div>`
                   : ''
                 return `<div style="padding: 8px;">
-                  <div style="font-weight: bold;">Agent ${agent.id}${tag}${silenceTag}</div>
+                  <div style="font-weight: bold;">${displayName} (#${agent.id})${tag}${silenceTag}</div>
                   <div>观点: ${agent.opinion.toFixed(3)}</div>
                   ${rumorTrust}${truthTrust}${dominantNeed}${predictedBehavior}${publishChannel}
                   <div style="color: #64b5f6; margin-top: 4px;">点击查看详情</div>

@@ -22,6 +22,7 @@ from .routers import prediction as pred_router
 from .llm.client import LLMConfig
 from .simulation.engine import SimulationEngine
 from .simulation.engine_dual import SimulationEngineDual
+from .simulation.realistic_population import load_realistic_population
 
 # 配置日志
 logging.basicConfig(
@@ -224,13 +225,26 @@ async def websocket_simulation(websocket: WebSocket):
                 use_llm = params.get("use_llm", True)
                 population_size = params.get("population_size", 200)
                 use_dual_network = params.get("use_dual_network", True)
+                population_profile_id = params.get("population_profile_id")
+                realistic_profile_source_path = params.get("realistic_profile_source_path")
+                refresh_realistic_profile = params.get("refresh_realistic_profile", False)
+                include_public_enrichment = params.get("include_public_enrichment", False)
+                effective_population_size = population_size
+                if population_profile_id:
+                    profile = load_realistic_population(
+                        population_profile_id,
+                        source_path=realistic_profile_source_path,
+                        refresh_cache=refresh_realistic_profile,
+                        include_public_enrichment=include_public_enrichment,
+                    )
+                    effective_population_size = profile.size
                 max_steps = params.get("max_steps", 50)  # 从前端获取最大步数
 
                 # 自动计算并发数（如果未指定）
                 max_concurrent = params.get("max_concurrent")
                 if max_concurrent is None:
-                    max_concurrent = calculate_max_concurrent(population_size)
-                logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {population_size})")
+                    max_concurrent = calculate_max_concurrent(effective_population_size)
+                logger.info(f"LLM并发数设置: {max_concurrent} (Agent数量: {effective_population_size})")
 
                 # 从前端获取LLM并发参数
                 # 使用环境变量中的LLM配置，仅覆盖并发数和超时参数
@@ -250,7 +264,7 @@ async def websocket_simulation(websocket: WebSocket):
                 if use_dual_network:
                     logger.info(f"使用双层网络引擎, 社群数: {params.get('num_communities', 8)}, LLM模式: {use_llm}")
                     state.engine = SimulationEngineDual(
-                        population_size=population_size,
+                        population_size=effective_population_size,
                         cocoon_strength=params.get("cocoon_strength", 0.5),
                         debunk_delay=effective_debunk_delay,
                         initial_rumor_spread=effective_initial_spread,
@@ -264,11 +278,15 @@ async def websocket_simulation(websocket: WebSocket):
                         backfire_strength=params.get("backfire_strength", 0.3),
                         silence_threshold=params.get("silence_threshold", 0.3),
                         polarization_factor=params.get("polarization_factor", 0.3),
-                        echo_chamber_factor=params.get("echo_chamber_factor", 0.2)
+                        echo_chamber_factor=params.get("echo_chamber_factor", 0.2),
+                        population_profile_id=population_profile_id,
+                        realistic_profile_source_path=realistic_profile_source_path,
+                        refresh_realistic_profile=refresh_realistic_profile,
+                        include_public_enrichment=include_public_enrichment
                     )
                 else:
                     state.engine = SimulationEngine(
-                        population_size=population_size,
+                        population_size=effective_population_size,
                         cocoon_strength=params.get("cocoon_strength", 0.5),
                         debunk_delay=effective_debunk_delay,
                         initial_rumor_spread=effective_initial_spread,
@@ -281,7 +299,11 @@ async def websocket_simulation(websocket: WebSocket):
                         backfire_strength=params.get("backfire_strength", 0.3),
                         silence_threshold=params.get("silence_threshold", 0.3),
                         polarization_factor=params.get("polarization_factor", 0.3),
-                        echo_chamber_factor=params.get("echo_chamber_factor", 0.2)
+                        echo_chamber_factor=params.get("echo_chamber_factor", 0.2),
+                        population_profile_id=population_profile_id,
+                        realistic_profile_source_path=realistic_profile_source_path,
+                        refresh_realistic_profile=refresh_realistic_profile,
+                        include_public_enrichment=include_public_enrichment
                     )
 
                 # 设置进度回调

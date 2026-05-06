@@ -306,7 +306,7 @@ async def inspect_agent(agent_id: int):
     # 获取基础Agent信息（未参与决策）
     if engine.use_llm and engine.llm_population:
         agent = engine.llm_population.agents[agent_id]
-        return JSONResponse(content={
+        payload = {
             "agent_id": agent_id,
             "persona": agent.persona,
             "persona_str": f"{agent.persona['type']} - {agent.persona['desc']}",
@@ -329,12 +329,10 @@ async def inspect_agent(agent_id: int):
             "perceived_climate": _build_perceived_climate_summary(agent_id),
             # v3.0 字段
             **_get_v3_agent_fields(agent_id)
-        })
+        }
+        _attach_realistic_profile(payload, agent_id)
+        return JSONResponse(content=payload)
 
-    return JSONResponse(
-        content={"error": "Agent信息不可用", "has_decided": False},
-        status_code=500
-    )
     if not engine.use_llm and getattr(engine, "population", None):
         population = engine.population
         payload = {
@@ -361,6 +359,11 @@ async def inspect_agent(agent_id: int):
         }
         _attach_realistic_profile(payload, agent_id)
         return JSONResponse(content=payload)
+
+    return JSONResponse(
+        content={"error": "Agent信息不可用", "has_decided": False},
+        status_code=500
+    )
 
 
 @router.post("/simulation/finish")

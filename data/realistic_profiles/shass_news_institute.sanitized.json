@@ -7,10 +7,11 @@
     "Sensitive columns were detected and excluded: Email, 健康状况, 公民身份号码, 出生日期, 婚姻状况, 户口所在地, 手机, 联系地址, 血型"
   ],
   "cache_path": "data\\realistic_profiles\\shass_news_institute.sanitized.json",
-  "generated_at": "2026-04-28T00:46:36.457976+00:00",
+  "generated_at": "2026-05-06T08:50:06.149737+00:00",
   "agents": [
     {
       "agent_id": 0,
+      "name": "张雪魁",
       "role_label": "资深研究员 / 管理职责 / 哲学",
       "department": "所长室",
       "specialty": "哲学",
@@ -42,6 +43,7 @@
     },
     {
       "agent_id": 1,
+      "name": "戴丽娜",
       "role_label": "资深研究员 / 管理职责 / 新闻学",
       "department": "所长室",
       "specialty": "新闻学",
@@ -73,6 +75,7 @@
     },
     {
       "agent_id": 2,
+      "name": "吴曦",
       "role_label": "中坚科研人员 / 管理职责 / 情报学",
       "department": "办公室",
       "specialty": "情报学",
@@ -104,6 +107,7 @@
     },
     {
       "agent_id": 3,
+      "name": "廖建碧",
       "role_label": "中坚科研人员 / 管理职责 / 会计",
       "department": "办公室",
       "specialty": "会计",
@@ -135,6 +139,7 @@
     },
     {
       "agent_id": 4,
+      "name": "杨文婧",
       "role_label": "青年科研人员 / 管理职责 / 学术秘书",
       "department": "办公室",
       "specialty": "学术秘书",
@@ -166,6 +171,7 @@
     },
     {
       "agent_id": 5,
+      "name": "方师师",
       "role_label": "中坚研究员 / 管理职责 / 新闻学",
       "department": "互联网治理研究中心",
       "specialty": "新闻学",
@@ -197,6 +203,7 @@
     },
     {
       "agent_id": 6,
+      "name": "万旋傲",
       "role_label": "青年研究员 / 互联网治理",
       "department": "互联网治理研究中心",
       "specialty": "互联网治理",
@@ -228,6 +235,7 @@
     },
     {
       "agent_id": 7,
+      "name": "卢垚",
       "role_label": "中坚研究员 / 互联网治理",
       "department": "互联网治理研究中心",
       "specialty": "互联网治理",
@@ -259,6 +267,7 @@
     },
     {
       "agent_id": 8,
+      "name": "唐巧盈",
       "role_label": "青年研究员 / 互联网治理",
       "department": "互联网治理研究中心",
       "specialty": "互联网治理",
@@ -290,6 +299,7 @@
     },
     {
       "agent_id": 9,
+      "name": "王蔚",
       "role_label": "资深研究员 / 管理职责 / 新闻学",
       "department": "新媒体研究中心",
       "specialty": "新闻学",
@@ -321,6 +331,7 @@
     },
     {
       "agent_id": 10,
+      "name": "王月",
       "role_label": "中坚研究员 / 新闻学",
       "department": "新媒体研究中心",
       "specialty": "新闻学",
@@ -352,6 +363,7 @@
     },
     {
       "agent_id": 11,
+      "name": "童希",
       "role_label": "中坚研究员 / 传播学",
       "department": "新媒体研究中心",
       "specialty": "传播学",
@@ -383,6 +395,7 @@
     },
     {
       "agent_id": 12,
+      "name": "王理",
       "role_label": "青年研究员 / 传播学",
       "department": "新媒体研究中心",
       "specialty": "传播学",
@@ -414,6 +427,7 @@
     },
     {
       "agent_id": 13,
+      "name": "吕鹏",
       "role_label": "中坚研究员 / 管理职责 / 新闻学",
       "department": "新闻学研究中心",
       "specialty": "新闻学",
@@ -445,6 +459,7 @@
     },
     {
       "agent_id": 14,
+      "name": "孟晖",
       "role_label": "中坚研究员 / 新闻学",
       "department": "新闻学研究中心",
       "specialty": "新闻学",
@@ -476,6 +491,7 @@
     },
     {
       "agent_id": 15,
+      "name": "张新璐",
       "role_label": "中坚研究员 / 新闻学",
       "department": "新闻学研究中心",
       "specialty": "新闻学",
@@ -507,6 +523,7 @@
     },
     {
       "agent_id": 16,
+      "name": "钟媛",
       "role_label": "青年研究员 / 传播学",
       "department": "新闻学研究中心",
       "specialty": "传播学",
@@ -538,6 +555,7 @@
     },
     {
       "agent_id": 17,
+      "name": "李敬",
       "role_label": "资深研究员 / 管理职责 / 传播学",
       "department": "传播学研究中心",
       "specialty": "传播学",
@@ -569,6 +587,7 @@
     },
     {
       "agent_id": 18,
+      "name": "董倩",
       "role_label": "中坚研究员 / 新闻学",
       "department": "传播学研究中心",
       "specialty": "新闻学",
@@ -600,6 +619,7 @@
     },
     {
       "agent_id": 19,
+      "name": "徐生权",
       "role_label": "青年研究员 / 传播学",
       "department": "传播学研究中心",
       "specialty": "传播学",
@@ -631,6 +651,7 @@
     },
     {
       "agent_id": 20,
+      "name": "张早早",
       "role_label": "青年研究员 / 传播学",
       "department": "传播学研究中心",
       "specialty": "传播学",
@@ -662,6 +683,7 @@
     },
     {
       "agent_id": 21,
+      "name": "李喆",
       "role_label": "青年研究员 / 传播学",
       "department": "传播学研究中心",
       "specialty": "传播学",
@@ -693,6 +715,7 @@
     },
     {
       "agent_id": 22,
+      "name": "同心",
       "role_label": "中坚研究员 / 管理职责 / 新闻学",
       "department": "舆论学研究中心",
       "specialty": "新闻学",
@@ -724,6 +747,7 @@
     },
     {
       "agent_id": 23,
+      "name": "郭欣",
       "role_label": "青年科研人员 / 哲学",
       "department": "舆论学研究中心",
       "specialty": "哲学",
@@ -755,6 +779,7 @@
     },
     {
       "agent_id": 24,
+      "name": "张卓",
       "role_label": "中坚研究员 / 舆论学",
       "department": "舆论学研究中心",
       "specialty": "舆论学",
@@ -786,6 +811,7 @@
     },
     {
       "agent_id": 25,
+      "name": "王震宇",
       "role_label": "青年研究员 / 管理职责 / 新闻学",
       "department": "舆论学研究中心",
       "specialty": "新闻学",
@@ -817,6 +843,7 @@
     },
     {
       "agent_id": 26,
+      "name": "谢添",
       "role_label": "青年研究员 / 新闻传播学",
       "department": "舆论学研究中心",
       "specialty": "新闻传播学",
