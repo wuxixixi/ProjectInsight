@@ -57,6 +57,9 @@ class ReplayWriter:
         self.conn.row_factory = sqlite3.Row
 
         self._init_tables()
+
+        # 连接状态标记
+        self._closed = False
     
     def _init_tables(self):
         """初始化表结构"""
@@ -336,7 +339,10 @@ class ReplayWriter:
     
     def close(self):
         """关闭连接"""
+        if self._closed:
+            return
         self.conn.close()
+        self._closed = True
 
     def __enter__(self):
         """上下文管理器入口"""
@@ -347,7 +353,8 @@ class ReplayWriter:
         self.close()
 
     def __del__(self):
-        try:
-            self.close()
-        except Exception:
-            pass
+        if not self._closed:
+            try:
+                self.close()
+            except Exception:
+                pass
