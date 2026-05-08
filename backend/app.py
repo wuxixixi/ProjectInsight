@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import Optional
+from typing import Dict, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +30,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+active_websockets: Dict[str, WebSocket] = {}
 
 app = FastAPI(
     title="信息茧房推演系统",
@@ -97,6 +98,14 @@ async def websocket_simulation(websocket: WebSocket):
         {"type": "error", "message": "..."}
     """
     await websocket.accept()
+    client_key = websocket.client.host if websocket.client else "unknown"
+    previous_ws = active_websockets.get(client_key)
+    if previous_ws is not None and previous_ws is not websocket:
+        try:
+            await previous_ws.close(code=4000, reason="newer connection opened")
+        except Exception:
+            pass
+    active_websockets[client_key] = websocket
     logger.info("WebSocket 连接已建立")
 
     auto_mode = False
@@ -134,8 +143,18 @@ async def websocket_simulation(websocket: WebSocket):
             progress_data["message"] = f"正在推演 Agent {step}/{total}" + (f" (ID:{agent_id})" if agent_id is not None else "")
 
             await websocket.send_json(progress_data)
+        except (WebSocketDisconnect, RuntimeError):
+            raise
         except Exception as e:
             logger.debug(f"发送进度失败: {e}")
+
+    async def safe_send_json(payload: dict) -> bool:
+        try:
+            await websocket.send_json(payload)
+            return True
+        except (WebSocketDisconnect, RuntimeError) as e:
+            logger.info(f"WebSocket已断开，停止发送: {e}")
+            return False
 
     async def auto_step_loop(interval: int):
         """自动推演循环"""
@@ -145,10 +164,11 @@ async def websocket_simulation(websocket: WebSocket):
                 # 如果事件注入正在进行，等待注入完成
                 if state.injection_in_progress:
                     logger.debug("事件注入进行中，推演等待...")
-                    await websocket.send_json({
+                    if not await safe_send_json({
                         "type": "progress",
                         "message": "事件注入解析中，推演暂停等待..."
-                    })
+                    }):
+                        break
                     # 等待注入完成（可配置超时，默认120秒）
                     injection_timeout = int(os.environ.get("INJECTION_TIMEOUT", "120"))
                     for _ in range(injection_timeout):
@@ -159,23 +179,28 @@ async def websocket_simulation(websocket: WebSocket):
                         logger.warning("事件注入超时，恢复推演")
                     else:
                         logger.info("事件注入完成，恢复推演")
-                        await websocket.send_json({
+                        if not await safe_send_json({
                             "type": "progress",
                             "message": "事件注入完成，恢复推演"
-                        })
+                        }):
+                            break
 
                 s = await state.engine.async_step()
-                await websocket.send_json({
+                if not await safe_send_json({
                     "type": "state",
                     "data": _state_to_dict(s)
-                })
+                }):
+                    break
                 await asyncio.sleep(interval / 1000)
             except asyncio.CancelledError:
                 logger.info("自动推演任务已取消")
                 break
+            except (WebSocketDisconnect, RuntimeError) as e:
+                logger.info(f"自动推演连接已断开: {e}")
+                break
             except Exception as e:
                 logger.error(f"自动推演错误: {e}")
-                await websocket.send_json({
+                await safe_send_json({
                     "type": "error",
                     "message": str(e)
                 })
@@ -309,7 +334,57 @@ async def websocket_simulation(websocket: WebSocket):
                 # 设置进度回调
                 state.engine.set_progress_callback(send_progress)
 
+                # 如果有待注入事件，根据事件内容设置初始分布
+                if state.pending_knowledge_graph and state.pending_event_content:
+                    sentiment = state.pending_knowledge_graph.get("sentiment", "中性")
+                    credibility = state.pending_knowledge_graph.get("credibility_hint", "不确定")
+                    entity_count = len(state.pending_knowledge_graph.get('entities', []))
+                    if hasattr(state.engine, 'set_initial_distribution_from_news'):
+                        state.engine.set_initial_distribution_from_news(sentiment, credibility, entity_count)
+                        logger.info(f"已根据新闻内容设置初始分布")
+
                 initial_state = state.engine.initialize()
+
+                # ==================== 自动注入待处理的事件 ====================
+                if state.pending_knowledge_graph and state.pending_event_content:
+                    logger.info(f"检测到待注入事件，自动注入到引擎: {state.pending_event_content[:50]}...")
+
+                    # 设置知识图谱，启用知识驱动演化
+                    entities = state.pending_knowledge_graph.get('entities', [])
+                    relations = state.pending_knowledge_graph.get('relations', [])
+                    if entities and hasattr(state.engine, 'set_knowledge_graph'):
+                        state.engine.set_knowledge_graph(entities, relations, merge=False)
+                        logger.info(f"知识驱动演化已启用")
+
+                    # 如果引擎支持设置新闻
+                    if hasattr(state.engine, 'set_news'):
+                        result = state.engine.set_news(
+                            state.pending_event_content,
+                            state.pending_event_source or "public",
+                            parse_graph=False,
+                        )
+                        import inspect as _inspect
+                        if _inspect.isawaitable(result):
+                            await result
+
+                    # 广播事件（触发事件冲击）
+                    target_scope = "all"
+                    if state.pending_event_source == "public":
+                        target_scope = "public_only"
+                    elif state.pending_event_source == "private":
+                        target_scope = "private_only"
+
+                    sentiment = state.pending_knowledge_graph.get("sentiment", "中性")
+                    credibility = state.pending_knowledge_graph.get("credibility_hint", "不确定")
+                    state.engine.broadcast_event(state.pending_event_content, target_scope, sentiment=sentiment, credibility=credibility)
+
+                    logger.info(f"待注入事件已成功注入，图谱包含 {len(state.pending_knowledge_graph.get('entities', []))} 个实体")
+
+                    # 清空待注入数据
+                    state.pending_knowledge_graph = None
+                    state.pending_event_content = None
+                    state.pending_event_source = None
+
                 await websocket.send_json({
                     "type": "state",
                     "data": _state_to_dict(initial_state)
@@ -412,3 +487,9 @@ async def websocket_simulation(websocket: WebSocket):
         auto_mode = False
     except Exception as e:
         logger.error(f"WebSocket 错误: {e}")
+    finally:
+        auto_mode = False
+        if auto_task:
+            auto_task.cancel()
+        if active_websockets.get(client_key) is websocket:
+            active_websockets.pop(client_key, None)

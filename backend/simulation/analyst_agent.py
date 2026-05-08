@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 import logging
 
 from ..llm.client import LLMClient, LLMConfig
+from .report_utils import (
+    credibility_rule_text,
+    event_pool_summary,
+    extract_sample_profile,
+    format_count_distribution,
+    response_effect_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +47,11 @@ class DataSampler:
         # 计算趋势（issue #1048: 使用get()提供fallback）
         rumor_trend = [h.get('negative_belief_rate', h.get('rumor_spread_rate', 0)) for h in engine.history]
         truth_trend = [h.get('positive_belief_rate', h.get('truth_acceptance_rate', 0)) for h in engine.history]
+        believe_trend = [h.get('believe_rate', 0) for h in engine.history]
+        reject_trend = [h.get('reject_rate', 0) for h in engine.history]
         opinion_trend = [h.get('avg_opinion', 0) for h in engine.history]
         polarization_trend = [h.get('polarization_index', 0) for h in engine.history]
+        silence_trend = [h.get('silence_rate', 0) for h in engine.history]
 
         # 兼容单层/双层引擎的网络类型字段
         network_type = getattr(engine, "network_type", None)
@@ -62,13 +72,7 @@ class DataSampler:
         event_pool = getattr(engine, 'event_pool', [])
 
         # 构建所有事件的摘要文本
-        if event_pool:
-            events_summary = "\n".join([
-                f"【事件{i+1}】Step {e.get('step', 0)} | 可信度: {e.get('credibility', '不确定')} | 内容: {e.get('content', '')[:100]}..."
-                for i, e in enumerate(event_pool)
-            ])
-        else:
-            events_summary = news_content if news_content else "未注入任何新闻事件"
+        events_summary = event_pool_summary(event_pool) if event_pool else (news_content if news_content else "未注入任何新闻事件")
 
         return {
             # 初始参数
@@ -79,7 +83,11 @@ class DataSampler:
                 "initial_rumor_spread": initial_rumor_spread,
                 "network_type": network_type,
                 "use_llm": engine.use_llm,
-                "total_steps": len(engine.history) - 1
+                "total_steps": len(engine.history) - 1,
+                "response_credibility": getattr(engine, "response_credibility", getattr(engine, "debunk_credibility", 0.7)),
+                "authority_factor": getattr(engine, "authority_factor", 0.5),
+                "backfire_strength": getattr(engine, "backfire_strength", 0.3),
+                "silence_threshold": getattr(engine, "silence_threshold", 0.3),
             },
             # 初始状态
             "initial_state": {
@@ -88,6 +96,9 @@ class DataSampler:
                 "believe_rate": initial_state.get('believe_rate', 0),
                 "reject_rate": initial_state.get('reject_rate', 0),
                 "news_credibility": initial_state.get('news_credibility', '不确定'),
+                "deep_mislead_rate": initial_state.get('deep_negative_rate', 0),
+                "deep_correct_rate": initial_state.get('deep_positive_rate', 0),
+                "silence_rate": initial_state.get('silence_rate', 0),
                 "avg_opinion": initial_state['avg_opinion'],
                 "polarization_index": initial_state['polarization_index']
             },
@@ -98,11 +109,31 @@ class DataSampler:
                 "believe_rate": final_state.get('believe_rate', 0),
                 "reject_rate": final_state.get('reject_rate', 0),
                 "news_credibility": final_state.get('news_credibility', '不确定'),
+                "deep_mislead_rate": final_state.get('deep_negative_rate', 0),
+                "deep_correct_rate": final_state.get('deep_positive_rate', 0),
+                "silence_rate": final_state.get('silence_rate', 0),
+                "avg_rumor_trust": final_state.get("avg_rumor_trust", 0),
+                "avg_truth_trust": final_state.get("avg_truth_trust", 0),
+                "need_distribution": final_state.get("need_distribution") or {},
+                "behavior_distribution": final_state.get("behavior_distribution") or {},
+                "entity_impact_summary": final_state.get("entity_impact_summary") or {},
                 "avg_opinion": final_state['avg_opinion'],
                 "polarization_index": final_state['polarization_index']
             },
             # 变化趋势
             "trends": {
+                "believe": {
+                    "start": believe_trend[0] if believe_trend else 0,
+                    "end": believe_trend[-1] if believe_trend else 0,
+                    "max": max(believe_trend) if believe_trend else 0,
+                    "min": min(believe_trend) if believe_trend else 0
+                },
+                "reject": {
+                    "start": reject_trend[0] if reject_trend else 0,
+                    "end": reject_trend[-1] if reject_trend else 0,
+                    "max": max(reject_trend) if reject_trend else 0,
+                    "min": min(reject_trend) if reject_trend else 0
+                },
                 "rumor_spread": {
                     "start": rumor_trend[0] if rumor_trend else 0,
                     "end": rumor_trend[-1] if rumor_trend else 0,
@@ -122,6 +153,11 @@ class DataSampler:
                     "start": polarization_trend[0] if polarization_trend else 0,
                     "end": polarization_trend[-1] if polarization_trend else 0,
                     "max": max(polarization_trend) if polarization_trend else 0
+                },
+                "silence": {
+                    "start": silence_trend[0] if silence_trend else 0,
+                    "end": silence_trend[-1] if silence_trend else 0,
+                    "max": max(silence_trend) if silence_trend else 0
                 }
             },
             # 关键节点
@@ -129,12 +165,43 @@ class DataSampler:
             "debunk_released": engine.responded,  # 兼容旧名
             "response_step": engine.response_delay,
             "debunk_step": engine.response_delay,  # 兼容旧名
+            "response_effect": response_effect_summary(engine.history, engine.response_delay, engine.responded),
             # 事件信息
             "news_content": news_content,
             "news_source": news_source,
+            "credibility_rule": credibility_rule_text(final_state.get('news_credibility', getattr(engine, 'news_credibility', '不确定'))),
             "knowledge_graph": knowledge_graph,
             "event_count": len(event_pool),
-            "events_summary": events_summary  # 所有事件的摘要文本
+            "events_summary": events_summary,  # 所有事件的摘要文本
+            "population_profile_id": getattr(engine, "population_profile_id", None) or "theory"
+        }
+
+    @staticmethod
+    def _sample_payload(agent, snapshot: Dict[str, Any], old_op: float, new_op: float) -> Dict[str, Any]:
+        realistic_profile = getattr(agent, "realistic_profile", None) or snapshot.get("realistic_profile") or {}
+        return {
+            "agent_id": agent.id,
+            "name": realistic_profile.get("name", ""),
+            "realistic_profile": realistic_profile,
+            "persona": agent.persona,
+            "persona_str": snapshot.get('persona_str', ''),
+            "profile_label": extract_sample_profile({
+                "agent_id": agent.id,
+                "name": realistic_profile.get("name", ""),
+                "realistic_profile": realistic_profile,
+            }),
+            "belief_strength": float(agent.belief_strength),
+            "susceptibility": float(agent.susceptibility),
+            "influence": float(agent.influence),
+            "old_opinion": old_op,
+            "new_opinion": new_op,
+            "opinion_change": abs(new_op - old_op),
+            "emotion": snapshot.get('emotion', ''),
+            "action": snapshot.get('action', ''),
+            "generated_comment": snapshot.get('generated_comment', ''),
+            "reasoning": snapshot.get('reasoning', ''),
+            "fear_of_isolation": float(getattr(agent, "fear_of_isolation", 0)),
+            "is_silent": bool(getattr(agent, "is_silent", False)),
         }
 
     @classmethod
@@ -182,37 +249,11 @@ class DataSampler:
 
             # 转化样本
             if is_converted:
-                converted_agents.append({
-                    "agent_id": agent.id,
-                    "persona": agent.persona,
-                    "persona_str": snapshot.get('persona_str', ''),
-                    "belief_strength": float(agent.belief_strength),
-                    "susceptibility": float(agent.susceptibility),
-                    "old_opinion": old_op,
-                    "new_opinion": new_op,
-                    "opinion_change": abs(new_op - old_op),
-                    "emotion": snapshot.get('emotion', ''),
-                    "action": snapshot.get('action', ''),
-                    "generated_comment": snapshot.get('generated_comment', ''),
-                    "reasoning": snapshot.get('reasoning', '')
-                })
+                converted_agents.append(cls._sample_payload(agent, snapshot, old_op, new_op))
 
             # 顽固坚持误信
             elif is_stubborn:
-                stubborn_agents.append({
-                    "agent_id": agent.id,
-                    "persona": agent.persona,
-                    "persona_str": snapshot.get('persona_str', ''),
-                    "belief_strength": float(agent.belief_strength),
-                    "susceptibility": float(agent.susceptibility),
-                    "old_opinion": old_op,
-                    "new_opinion": new_op,
-                    "opinion_change": abs(new_op - old_op),
-                    "emotion": snapshot.get('emotion', ''),
-                    "action": snapshot.get('action', ''),
-                    "generated_comment": snapshot.get('generated_comment', ''),
-                    "reasoning": snapshot.get('reasoning', '')
-                })
+                stubborn_agents.append(cls._sample_payload(agent, snapshot, old_op, new_op))
 
         # 随机抽样（使用类级 RNG 确保可重现性）
         rng = cls._rng
@@ -254,24 +295,9 @@ class DataSampler:
             opinion_change = abs(new_op - old_op)
 
             # 记录完整信息
-            all_changes.append({
-                "agent_id": agent.id,
-                "persona": agent.persona,
-                "persona_str": snapshot.get('persona_str', ''),
-                "belief_strength": float(agent.belief_strength),
-                "susceptibility": float(agent.susceptibility),
-                "influence": float(agent.influence),
-                "old_opinion": old_op,
-                "new_opinion": new_op,
-                "opinion_change": opinion_change,
-                "change_direction": "positive" if new_op > old_op else ("negative" if new_op < old_op else "neutral"),
-                "emotion": snapshot.get('emotion', ''),
-                "action": snapshot.get('action', ''),
-                "generated_comment": snapshot.get('generated_comment', ''),
-                "reasoning": snapshot.get('reasoning', ''),
-                "fear_of_isolation": float(agent.fear_of_isolation),
-                "is_silent": bool(agent.is_silent)
-            })
+            payload = DataSampler._sample_payload(agent, snapshot, old_op, new_op)
+            payload["change_direction"] = "positive" if new_op > old_op else ("negative" if new_op < old_op else "neutral")
+            all_changes.append(payload)
 
         # 按观点变化幅度降序排序
         all_changes.sort(key=lambda x: x['opinion_change'], reverse=True)
@@ -336,6 +362,7 @@ ANALYST_SYSTEM_PROMPT = """你是一位上海社会科学院（国家高端智�
 4. 数据引用要准确，分析要有理有据
 5. 政策建议要切实可行，具有操作性
 6. 报告末尾注明：本分析基于上海社会科学院觉测团队【洞见】多智能体舆论认知干预沙盘仿真数据
+7. 不得编造系统未提供的外部事实；如果事件材料不足，必须明确写成“依据当前注入材料判断”
 """
 
 ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库专报。必须紧扣新闻事件本身进行分析。
@@ -350,6 +377,7 @@ ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库
 
 ## 关键语义说明
 - 新闻可信度为"{event_credibility}"
+- {credibility_rule}
 - 若为"高可信"新闻：相信者=正确认知，拒绝者=误信
 - 若为"低可信"新闻：相信者=误信（被误导），拒绝者=正确认知（识破谣言）
 - opinion值含义：>0表示相信新闻，<0表示拒绝新闻
@@ -361,12 +389,21 @@ ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库
 {event_relations}
 
 ## 推演参数
-{use_llm_mode}模式，{population_size}人，茧房强度{cocoon_strength:.1f}，权威回应延迟{debunk_delay}步
+{use_llm_mode}模式，{population_size}人，样本画像{population_profile_id}，茧房强度{cocoon_strength:.1f}，权威回应延迟{debunk_delay}步，回应可信度{response_credibility:.1f}，权威因子{authority_factor:.1f}，逆火强度{backfire_strength:.1f}
 
 ## 推演结果趋势
+相信新闻比例 {initial_believe_rate:.0%}→{final_believe_rate:.0%}，拒绝新闻比例 {initial_reject_rate:.0%}→{final_reject_rate:.0%}
 误信率 {initial_rumor_rate:.0%}→{final_rumor_rate:.0%}，正确认知率 {initial_truth_rate:.0%}→{final_truth_rate:.0%}
-极化指数 {initial_polarization:.2f}→{final_polarization:.2f}
-权威回应：{response_status}（第{debunk_delay}步介入）
+深度误信 {initial_deep_mislead_rate:.0%}→{final_deep_mislead_rate:.0%}，深度正确认知 {initial_deep_correct_rate:.0%}→{final_deep_correct_rate:.0%}
+极化指数 {initial_polarization:.2f}→{final_polarization:.2f}，沉默率 {initial_silence_rate:.0%}→{final_silence_rate:.0%}
+权威回应：{response_status}（第{debunk_delay}步介入）；回应效果：{response_effect}
+趋势摘要：误信峰值{rumor_peak:.0%}，正确认知峰值{truth_peak:.0%}，极化峰值{polarization_peak:.2f}，沉默峰值{silence_peak:.0%}
+
+## 行为与心理分布
+需求分布：{need_distribution}
+行为分布：{behavior_distribution}
+平均负面信念信任度：{avg_rumor_trust:.2f}
+平均正面信念信任度：{avg_truth_trust:.2f}
 
 ## 个体样本
 转化样本（从误信转向正确认知）:
@@ -380,9 +417,9 @@ ANALYST_REPORT_TEMPLATE = """基于以下舆情推演数据，撰写专业智库
 
 ## 报告结构（共5节，每节150-250字）
 一、事件背景与核心摘要 - 概述新闻事件的核心矛盾，提炼推演关键发现
-二、事件舆情演化分析 - 结合事件具体内容，分析误信传播路径和正确认知扩散过程
-三、参数与机制分析 - 茧房强度、权威回应时机如何影响该事件舆论走向
-四、关键个体深度剖析 - 结合事件内容和样本人设，分析典型个体的认知转变或固化的心理机制
+二、舆情演化与风险研判 - 同时解释相信/拒绝、误信/正确认知、极化、沉默的变化
+三、参数与机制分析 - 茧房强度、权威回应时机、逆火风险如何影响该事件舆论走向
+四、关键个体深度剖析 - 结合事件内容和样本人设/现实画像，分析典型个体的认知转变或固化的心理机制
 五、针对性政策建议 - 3条针对该事件类型的具体干预建议
 
 请直接输出报告内容，使用中文撰写。必须紧密结合新闻事件本身进行分析，避免脱离事件语境的泛泛而谈。"""
@@ -430,14 +467,32 @@ class AnalystAgent:
         lines = []
         for i, s in enumerate(samples, 1):
             comment_part = f"，评论：「{s['generated_comment']}」" if s.get('generated_comment') else ""
+            profile = s.get("profile_label") or extract_sample_profile(s)
             lines.append(
-                f"样本{i}: Agent #{s['agent_id']}，人设「{s['persona_str']}」，"
+                f"样本{i}: {profile}，人设「{s['persona_str']}」，"
                 f"信念{ s['belief_strength']:.0%}，易感{s['susceptibility']:.0%}，"
+                f"影响力{s.get('influence', 0):.0%}，孤立恐惧{s.get('fear_of_isolation', 0):.0%}，"
                 f"观点{ s['old_opinion']:.2f}→{s['new_opinion']:.2f}，"
-                f"情绪「{s['emotion']}」，行动「{s['action']}」，"
+                f"情绪「{s['emotion']}」，行动「{s['action']}」，是否沉默：{'是' if s.get('is_silent') else '否'}，"
                 f"理由：{s['reasoning']}{comment_part}"
             )
 
+        return "\n".join(lines)
+
+    def _format_named_agent_samples(self, samples: List[Dict], label: str) -> str:
+        if not samples:
+            return f"（无{label}样本）"
+        lines = []
+        for i, s in enumerate(samples, 1):
+            profile = s.get("profile_label") or extract_sample_profile(s)
+            comment_part = f"，评论：「{s['generated_comment']}」" if s.get('generated_comment') else ""
+            lines.append(
+                f"{i}. {profile}，{s.get('persona_str', '未提供人设')}，"
+                f"信念{s.get('belief_strength', 0):.0%}，易感{s.get('susceptibility', 0):.0%}，影响力{s.get('influence', 0):.0%}，"
+                f"观点{s.get('old_opinion', 0):.2f}→{s.get('new_opinion', 0):.2f}，"
+                f"情绪「{s.get('emotion', '')}」，行动「{s.get('action', '')}」，"
+                f"理由：{s.get('reasoning', '')}{comment_part}"
+            )
         return "\n".join(lines)
 
     def _format_extreme_samples(self, samples: List[Dict]) -> str:
@@ -451,12 +506,13 @@ class AnalystAgent:
 
         lines = []
         for i, s in enumerate(samples, 1):
-            direction = "↑转向正确认知" if s.get('change_direction') == 'positive' else (
-                "↓陷入误信" if s.get('change_direction') == 'negative' else "→维持不确定"
+            direction = "观点上移（更接受新闻）" if s.get('change_direction') == 'positive' else (
+                "观点下移（更拒绝新闻）" if s.get('change_direction') == 'negative' else "观点基本不变"
             )
             comment_part = f"，评论：「{s['generated_comment']}」" if s.get('generated_comment') else ""
+            profile = s.get("profile_label") or extract_sample_profile(s)
             lines.append(
-                f"转折点{i}: Agent #{s['agent_id']}，人设「{s['persona_str']}」，"
+                f"转折点{i}: {profile}，人设「{s['persona_str']}」，"
                 f"信念{s['belief_strength']:.0%}，易感{s['susceptibility']:.0%}，"
                 f"影响力{s['influence']:.0%}，"
                 f"观点变化{s['old_opinion']:.2f}→{s['new_opinion']:.2f}（变化{s['opinion_change']:.2f}，{direction}），"
@@ -544,6 +600,14 @@ class AnalystAgent:
             "relations": relations_str
         }
 
+    @staticmethod
+    def _compress_context(text: str, limit: int = 1800) -> str:
+        if not text:
+            return ""
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "\n...（已截断，保留前文）"
+
     async def generate_report(self, context: Dict[str, Any]) -> str:
         """
         生成智库专报
@@ -575,11 +639,11 @@ class AnalystAgent:
             raise RuntimeError("请使用 async with 上下文管理器")
 
         # 格式化样本
-        converted_samples = self._format_agent_samples(
+        converted_samples = self._format_named_agent_samples(
             context['agents']['converted'],
             "被辟谣转化"
         )
-        stubborn_samples = self._format_agent_samples(
+        stubborn_samples = self._format_named_agent_samples(
             context['agents']['stubborn'],
             "顽固坚持误信"
         )
@@ -596,6 +660,7 @@ class AnalystAgent:
         # 提取并格式化事件信息
         news_content = context['macro'].get('news_content', '未提供新闻事件内容')
         events_summary = context['macro'].get('events_summary', news_content)  # 所有事件摘要
+        events_summary = self._compress_context(events_summary, 2200)
         news_source = context['macro'].get('news_source', 'public')
         news_source_label = "公共媒体（公域信息）" if news_source == "public" else "私密渠道（私域信息）"
         knowledge_graph = context['macro'].get('knowledge_graph', {})
@@ -604,35 +669,60 @@ class AnalystAgent:
         # 权威回应状态
         response_released = context['macro'].get('response_released', False)
         response_status = "已发布" if response_released else "未发布"
+        trends = context['macro'].get('trends', {})
 
         # 构建 Prompt
         user_prompt = ANALYST_REPORT_TEMPLATE.format(
             use_llm_mode="LLM驱动" if params['use_llm'] else "数学模型",
             population_size=params['population_size'],
+            population_profile_id=context['macro'].get('population_profile_id', 'theory'),
             cocoon_strength=params['cocoon_strength'],
             debunk_delay=params['debunk_delay'],
             initial_rumor_spread=params['initial_rumor_spread'],
             network_type=params['network_type'],
             total_steps=params['total_steps'],
+            response_credibility=params.get('response_credibility', 0.7),
+            authority_factor=params.get('authority_factor', 0.5),
+            backfire_strength=params.get('backfire_strength', 0.3),
+            initial_believe_rate=initial.get('believe_rate', 0),
+            final_believe_rate=final.get('believe_rate', 0),
+            initial_reject_rate=initial.get('reject_rate', 0),
+            final_reject_rate=final.get('reject_rate', 0),
             final_rumor_rate=final['rumor_spread_rate'],
             initial_rumor_rate=initial['rumor_spread_rate'],
             final_truth_rate=final['truth_acceptance_rate'],
             initial_truth_rate=initial['truth_acceptance_rate'],
+            initial_deep_mislead_rate=initial.get('deep_mislead_rate', 0),
+            final_deep_mislead_rate=final.get('deep_mislead_rate', 0),
+            initial_deep_correct_rate=initial.get('deep_correct_rate', 0),
+            final_deep_correct_rate=final.get('deep_correct_rate', 0),
             final_avg_opinion=final['avg_opinion'],
             initial_avg_opinion=initial['avg_opinion'],
             final_polarization=final['polarization_index'],
             initial_polarization=initial['polarization_index'],
+            initial_silence_rate=initial.get('silence_rate', 0),
+            final_silence_rate=final.get('silence_rate', 0),
+            rumor_peak=trends.get('rumor_spread', {}).get('max', 0),
+            truth_peak=trends.get('truth_acceptance', {}).get('max', 0),
+            polarization_peak=trends.get('polarization', {}).get('max', 0),
+            silence_peak=trends.get('silence', {}).get('max', 0),
+            need_distribution=format_count_distribution(final.get('need_distribution')),
+            behavior_distribution=format_count_distribution(final.get('behavior_distribution')),
+            avg_rumor_trust=final.get('avg_rumor_trust', 0),
+            avg_truth_trust=final.get('avg_truth_trust', 0),
             converted_samples=converted_samples,
             stubborn_samples=stubborn_samples,
             extreme_samples=extreme_samples,
-            news_content=events_summary,  # 使用所有事件摘要
+            news_content=self._compress_context(news_content or events_summary, 1200),
             news_source_label=news_source_label,
-            event_summary=kg_formatted['summary'],
+            event_summary=self._compress_context(kg_formatted['summary'], 800),
             event_keywords=kg_formatted['keywords'],
             event_sentiment=kg_formatted['sentiment'],
             event_credibility=kg_formatted['credibility'],
-            event_entities=kg_formatted['entities'],
-            event_relations=kg_formatted['relations'],
+            event_entities=self._compress_context(kg_formatted['entities'], 1200),
+            event_relations=self._compress_context(kg_formatted['relations'], 1200),
+            credibility_rule=context['macro'].get('credibility_rule', ''),
+            response_effect=context['macro'].get('response_effect', ''),
             response_status=response_status
         )
 

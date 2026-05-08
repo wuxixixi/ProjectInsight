@@ -22,6 +22,16 @@ from .realistic_population import (
     apply_realistic_profile_to_math_population,
     load_realistic_population,
 )
+from .report_utils import (
+    credibility_rule_text,
+    event_pool_summary,
+    format_entity_summary,
+    infer_credibility_label,
+    response_effect_summary,
+    risk_level,
+    summarize_history_trend,
+    trend_peak_summary,
+)
 from ..models.schemas import SimulationState
 from ..llm.client import LLMClient, LLMConfig
 from ..constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
@@ -1004,11 +1014,26 @@ class SimulationEngineDual:
         initial_state = self.history[0]
 
         mode_str = "LLM 驱动（双层网络）" if self.use_llm else "数学模型"
+        credibility = infer_credibility_label(final_state.get("news_credibility", initial_state.get("news_credibility", "不确定")))
+        mislead_label = "误信率" if credibility != "不确定" else "误信率（参考口径）"
+        correct_label = "正确认知率" if credibility != "不确定" else "正确认知率（参考口径）"
+        risk, risk_desc = risk_level(final_state)
 
         report = f"""# 信息茧房推演报告（双层模态版本）
 
 > 生成时间: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}
 > 推演模式: {mode_str}
+> 可信度口径: {credibility}
+
+## 事件与口径
+
+{credibility_rule_text(credibility)}
+
+### 事件摘要
+{event_pool_summary(getattr(self, "event_pool", []))}
+
+### 知识图谱
+{format_entity_summary(getattr(self, "knowledge_graph", {}))}
 
 ## 模拟参数
 
@@ -1017,28 +1042,50 @@ class SimulationEngineDual:
 | 群体规模 | {self.population_size} 人 |
 | 算法茧房强度 | {self.cocoon_strength:.2f} |
 | 权威回应延迟 | {self.response_delay} 步 |
-| 初始负面信念传播率 | {self.initial_negative_spread:.0%} |
+| 初始负面信念比例 | {self.initial_negative_spread:.0%} |
 | 社群数量 | {self.num_communities} |
+| 意见领袖数量 | {final_state.get('num_influencers', 0)} |
 | 总推演步数 | {len(self.history) - 1} 步 |
 
 ## 模拟结果摘要
 
 ### 整体状态
 
-| 指标 | 初始值 | 最终值 |
-|------|--------|--------|
-| 负面信念传播率 | {initial_state['negative_belief_rate']:.1%} | {final_state['negative_belief_rate']:.1%} |
-| 正确认知接受率 | {initial_state['positive_belief_rate']:.1%} | {final_state['positive_belief_rate']:.1%} |
-| 沉默率 | {initial_state.get('silence_rate', 0):.1%} | {final_state.get('silence_rate', 0):.1%} |
+| 指标 | 初始值 | 最终值 | 变化 |
+|------|--------|--------|------|
+| 相信新闻比例 | {initial_state.get('believe_rate', 0):.1%} | {final_state.get('believe_rate', 0):.1%} | {self._change_arrow(initial_state.get('believe_rate', 0), final_state.get('believe_rate', 0))} |
+| 拒绝新闻比例 | {initial_state.get('reject_rate', 0):.1%} | {final_state.get('reject_rate', 0):.1%} | {self._change_arrow(initial_state.get('reject_rate', 0), final_state.get('reject_rate', 0))} |
+| {mislead_label} | {initial_state.get('mislead_rate', initial_state.get('negative_belief_rate', 0)):.1%} | {final_state.get('mislead_rate', final_state.get('negative_belief_rate', 0)):.1%} | {self._change_arrow(initial_state.get('mislead_rate', initial_state.get('negative_belief_rate', 0)), final_state.get('mislead_rate', final_state.get('negative_belief_rate', 0)))} |
+| {correct_label} | {initial_state.get('correct_rate', initial_state.get('positive_belief_rate', 0)):.1%} | {final_state.get('correct_rate', final_state.get('positive_belief_rate', 0)):.1%} | {self._change_arrow(initial_state.get('correct_rate', initial_state.get('positive_belief_rate', 0)), final_state.get('correct_rate', final_state.get('positive_belief_rate', 0)))} |
+| 沉默率 | {initial_state.get('silence_rate', 0):.1%} | {final_state.get('silence_rate', 0):.1%} | {self._change_arrow(initial_state.get('silence_rate', 0), final_state.get('silence_rate', 0))} |
 
 ### 公域 vs 私域对比
 
-| 渠道 | 负面信念率 | 正确认知率 |
+| 渠道 | {mislead_label} | {correct_label} |
 |------|--------|--------|
 | 公域网络 | {final_state.get('public_negative_rate', 0):.1%} | {final_state.get('public_positive_rate', 0):.1%} |
 | 私域网络 | {final_state.get('private_negative_rate', 0):.1%} | {final_state.get('private_positive_rate', 0):.1%} |
 
----
+### 风险判断
+
+当前风险等级：{risk}
+
+{risk_desc}
+
+## 机制分析
+
+### 权威回应
+{response_effect_summary(self.history, self.response_delay, self.responded)}
+
+### 极化趋势
+{trend_peak_summary(self.history, key='polarization_index', label='极化指数')}
+
+### 沉默趋势
+{summarize_history_trend(self.history, key='silence_rate', label='沉默率')}
+
+## 建议
+
+{self._generate_recommendations(final_state)}
 
 *本报告由信息茧房推演系统（双层模态版本）自动生成*
 """
@@ -1048,3 +1095,24 @@ class SimulationEngineDual:
         report_path.write_text(report, encoding='utf-8')
 
         return str(report_path)
+
+    def _change_arrow(self, old: float, new: float) -> str:
+        diff = new - old
+        if abs(diff) < 0.01:
+            return "→ 稳定"
+        return "↑ 上升" if diff > 0 else "↓ 下降"
+
+    def _generate_recommendations(self, final_state: Dict) -> str:
+        recommendations = []
+        mislead_rate = final_state.get("mislead_rate", final_state.get("negative_belief_rate", 0))
+        if mislead_rate > 0.4:
+            recommendations.append("- 建议提前权威回应时间，并在私域社群中同步高可信解释材料。")
+        if final_state.get("public_negative_rate", 0) > final_state.get("private_negative_rate", 0) + 0.1:
+            recommendations.append("- 公域误信更高，建议加强平台侧澄清入口和意见领袖协同。")
+        if final_state.get("private_negative_rate", 0) > final_state.get("public_negative_rate", 0) + 0.1:
+            recommendations.append("- 私域误信更高，建议面向社群关键节点投放可转述的权威材料。")
+        if final_state.get("silence_rate", 0) > 0.35:
+            recommendations.append("- 沉默率偏高，建议提供低冲突表达渠道，避免真实疑虑被压到私域。")
+        if not recommendations:
+            recommendations.append("- 当前双层网络指标相对可控，建议继续观察公域与私域的分化。")
+        return "\n".join(recommendations)

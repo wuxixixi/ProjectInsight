@@ -237,6 +237,7 @@ def _check_engine_ready(error_prefix: str = "推演") -> Optional[JSONResponse]:
 
 
 
+@router.post("/generate")
 async def generate_intelligence_report_endpoint():
     """
     生成智库专报 (异步，耗时较长)
@@ -303,16 +304,26 @@ async def stream_intelligence_report(request: Request):
             llm_config.max_tokens = int(os.environ.get("REPORT_LLM_MAX_TOKENS", "2000"))
             llm_config.temperature = float(os.environ.get("REPORT_LLM_TEMPERATURE", "0.5"))
 
+            chunks = []
             async with AnalystAgent(llm_config) as agent:
                 async for chunk in agent.generate_report_stream(context):
                     if await request.is_disconnected():
                         logger.info("客户端已断开，停止报告生成")
                         return
+                    chunks.append(chunk)
                     # SSE 格式: data: {content}\n\n
                     yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
 
+            reports_dir = _get_reports_dir()
+            os.makedirs(reports_dir, exist_ok=True)
+            report_filename = f"intelligence_report_{int(time.time())}.md"
+            report_path = os.path.join(reports_dir, report_filename)
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write("".join(chunks))
+
             # 发送结束信号
-            yield f"data: {json.dumps({'done': True}, ensure_ascii=False)}\n\n"
+            safe_path = report_path.replace("\\", "/")
+            yield f"data: {json.dumps({'done': True, 'filename': report_filename, 'path': safe_path}, ensure_ascii=False)}\n\n"
 
         except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"流式报告生成失败: {e}")

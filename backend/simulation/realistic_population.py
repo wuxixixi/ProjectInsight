@@ -58,6 +58,7 @@ class RealisticAgentProfile:
     persona: Dict[str, Any]
     public_evidence: List[Dict[str, str]]
     search_queries: List[str]
+    generation_trace: Dict[str, Any]
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
@@ -72,6 +73,7 @@ class RealisticAgentProfile:
             "is_influencer": self.is_influencer,
             "public_evidence": self.public_evidence,
             "search_queries": self.search_queries,
+            "generation_trace": self.generation_trace,
         }
 
     def to_cache_dict(self) -> Dict[str, Any]:
@@ -107,6 +109,7 @@ class RealisticAgentProfile:
             persona=dict(data.get("persona", {})),
             public_evidence=list(data.get("public_evidence", [])),
             search_queries=list(data.get("search_queries", [])),
+            generation_trace=_coerce_generation_trace(data.get("generation_trace"), data),
         )
 
 
@@ -381,6 +384,32 @@ def _build_synthetic_shass_news_institute_profile() -> RealisticPopulationProfil
         fear_of_isolation = float(np.clip(0.44 + (0.12 if is_admin else 0.0) + rng.normal(0, 0.05), 0.15, 0.85))
         conviction = float(np.clip(0.45 + seniority_score * 0.25 + rng.normal(0, 0.05), 0.2, 0.9))
         opinion = float(np.clip(rng.normal(0.0, 0.06), -0.18, 0.18))
+        generation_trace = _build_generation_trace(
+            source="synthetic_roster",
+            inputs={
+                "seniority_label": seniority_label,
+                "title": title,
+                "specialty": specialty,
+                "admin_role": "管理职责" if is_admin else "",
+                "education": "",
+                "degree": "",
+                "age": None,
+                "work_years": None,
+                "org_years": None,
+            },
+            seniority_score=seniority_score,
+            metrics={
+                "opinion": opinion,
+                "belief_strength": belief_strength,
+                "influence": influence,
+                "susceptibility": susceptibility,
+                "fear_of_isolation": fear_of_isolation,
+                "conviction": conviction,
+            },
+            formulas=_synthetic_metric_formulas(),
+            community_id=_community_id(specialty, "上海社会科学院新闻研究所"),
+            is_influencer=bool(influence >= 0.72 or is_admin),
+        )
         persona = {
             "type": "现实组织画像",
             "desc": (
@@ -412,6 +441,7 @@ def _build_synthetic_shass_news_institute_profile() -> RealisticPopulationProfil
             persona=persona,
             public_evidence=[],
             search_queries=[],
+            generation_trace=generation_trace,
         ))
     return RealisticPopulationProfile(
         profile_id="shass_news_institute",
@@ -445,6 +475,114 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
+
+
+def _synthetic_metric_formulas() -> Dict[str, str]:
+    return {
+        "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.18, 0.18]，避免初始立场过于极化",
+        "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+        "influence": "资历分越高、若有管理职责则再提高，最后限制在0.1到1.0之间",
+        "susceptibility": "资历分越高通常越不容易受影响，再叠加少量随机扰动，最后限制在0.15到0.75之间",
+        "fear_of_isolation": "有管理职责时会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.85之间",
+        "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间",
+    }
+
+
+def _workbook_metric_formulas() -> Dict[str, str]:
+    return {
+        "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+        "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+        "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+        "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+        "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+        "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间",
+    }
+
+
+def _friendly_metric_formulas(source: str, formulas: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    if formulas and not any(
+        isinstance(text, str) and any(token in text for token in ("clip", "seniority_score", "N("))
+        for text in formulas.values()
+    ):
+        return formulas
+    if source == "workbook":
+        return _workbook_metric_formulas()
+    return _synthetic_metric_formulas()
+
+
+def _coerce_generation_trace(value: Any, data: Dict[str, Any]) -> Dict[str, Any]:
+    if isinstance(value, dict) and value:
+        normalized = dict(value)
+        normalized["formulas"] = _friendly_metric_formulas(
+            str(normalized.get("source") or data.get("generation_source") or "cached_profile"),
+            normalized.get("formulas", {}),
+        )
+        return normalized
+    return _build_cached_generation_trace(data)
+
+
+def _years_band(value: Optional[float]) -> str:
+    if value is None:
+        return ""
+    if value < 5:
+        return "5年以内"
+    if value < 10:
+        return "5-10年"
+    if value < 20:
+        return "10-20年"
+    if value < 30:
+        return "20-30年"
+    return "30年以上"
+
+
+def _age_band(value: Optional[float]) -> str:
+    if value is None:
+        return ""
+    if value < 35:
+        return "35岁以下"
+    if value < 45:
+        return "35-44岁"
+    if value < 55:
+        return "45-54岁"
+    return "55岁以上"
+
+
+def _build_generation_trace(
+    *,
+    source: str,
+    inputs: Dict[str, Any],
+    seniority_score: float,
+    metrics: Dict[str, float],
+    formulas: Dict[str, str],
+    community_id: int,
+    is_influencer: bool,
+) -> Dict[str, Any]:
+    return {
+        "source": source,
+        "inputs": inputs,
+        "derived": {
+            "seniority_score": round(float(seniority_score), 3),
+            "community_id": int(community_id),
+            "is_influencer": bool(is_influencer),
+        },
+        "metrics": {k: round(float(v), 4) for k, v in metrics.items()},
+        "formulas": formulas,
+    }
+
+
+def _build_cached_generation_trace(data: Dict[str, Any]) -> Dict[str, Any]:
+    source = str(data.get("generation_source", "cached_profile"))
+    return {
+        "source": source,
+        "inputs": data.get("generation_inputs", {}),
+        "derived": data.get("generation_derived", {}),
+        "metrics": {
+            k: data.get(k)
+            for k in ("opinion", "belief_strength", "influence", "susceptibility", "fear_of_isolation", "conviction")
+            if data.get(k) is not None
+        },
+        "formulas": _friendly_metric_formulas(source, data.get("generation_formulas", {})),
+    }
 
 
 def _drop_sensitive_columns(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -483,6 +621,35 @@ def _build_agent_profile(
     community_id = _community_id(specialty, department)
     is_influencer = bool(influence >= 0.72 or admin_role)
     queries = _build_search_queries(row, specialty)
+    generation_trace = _build_generation_trace(
+        source="workbook",
+        inputs={
+            "age": age,
+            "age_band": _age_band(age),
+            "work_years": work_years,
+            "work_years_band": _years_band(work_years),
+            "org_years": org_years,
+            "org_years_band": _years_band(org_years),
+            "title": title,
+            "admin_role": admin_role,
+            "party_role": party_role,
+            "education": education,
+            "degree": degree,
+            "specialty": specialty,
+        },
+        seniority_score=seniority_score,
+        metrics={
+            "opinion": opinion,
+            "belief_strength": belief_strength,
+            "influence": influence,
+            "susceptibility": susceptibility,
+            "fear_of_isolation": fear_of_isolation,
+            "conviction": conviction,
+        },
+        formulas=_workbook_metric_formulas(),
+        community_id=community_id,
+        is_influencer=is_influencer,
+    )
 
     public_evidence: List[Dict[str, str]] = []
     if include_public_enrichment:
@@ -521,10 +688,11 @@ def _build_agent_profile(
         susceptibility=susceptibility,
         fear_of_isolation=fear_of_isolation,
         conviction=conviction,
-        persona=persona,
-        public_evidence=public_evidence,
-        search_queries=queries,
-    )
+            persona=persona,
+            public_evidence=public_evidence,
+            search_queries=queries,
+            generation_trace=generation_trace,
+        )
 
 
 def _build_search_queries(row: Dict[str, Any], specialty: str) -> List[str]:

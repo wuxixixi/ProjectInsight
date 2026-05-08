@@ -7,7 +7,7 @@
     "Sensitive columns were detected and excluded: Email, 健康状况, 公民身份号码, 出生日期, 婚姻状况, 户口所在地, 手机, 联系地址, 血型"
   ],
   "cache_path": "data\\realistic_profiles\\shass_news_institute.sanitized.json",
-  "generated_at": "2026-05-06T08:50:06.149737+00:00",
+  "generated_at": "2026-05-08T08:48:57.013635+00:00",
   "agents": [
     {
       "agent_id": 0,
@@ -25,6 +25,44 @@
         "\"张雪魁\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"张雪魁\" \"哲学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 52.0,
+          "age_band": "45-54岁",
+          "work_years": 28.0,
+          "work_years_band": "20-30年",
+          "org_years": 17.0,
+          "org_years_band": "10-20年",
+          "title": "研究员",
+          "admin_role": "新闻所副所长（同级管理，临时负责）",
+          "party_role": "新闻所支部统战委员",
+          "education": "研究生毕业",
+          "degree": "经济学博士",
+          "specialty": "哲学"
+        },
+        "derived": {
+          "seniority_score": 0.855,
+          "community_id": 4,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.0819,
+          "belief_strength": 0.7144,
+          "influence": 0.8277,
+          "susceptibility": 0.2562,
+          "fear_of_isolation": 0.6465,
+          "conviction": 0.5998
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.08191814616855558,
       "belief_strength": 0.7143688192542078,
       "influence": 0.8276666666666667,
@@ -57,6 +95,44 @@
         "\"戴丽娜\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"戴丽娜\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 49.0,
+          "age_band": "45-54岁",
+          "work_years": 21.0,
+          "work_years_band": "20-30年",
+          "org_years": 21.0,
+          "org_years_band": "20-30年",
+          "title": "研究员",
+          "admin_role": "新闻所副所长（同级管理）",
+          "party_role": "新闻所支部组织委员兼工青妇委员",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.804,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.0724,
+          "belief_strength": 0.6557,
+          "influence": 0.8022,
+          "susceptibility": 0.2689,
+          "fear_of_isolation": 0.5966,
+          "conviction": 0.7137
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.0723744931975384,
       "belief_strength": 0.6556964837560052,
       "influence": 0.8021666666666667,
@@ -89,6 +165,44 @@
         "\"吴曦\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"吴曦\" \"情报学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 47.0,
+          "age_band": "45-54岁",
+          "work_years": 26.0,
+          "work_years_band": "20-30年",
+          "org_years": 20.0,
+          "org_years_band": "20-30年",
+          "title": "经济师",
+          "admin_role": "新闻所办公室主任",
+          "party_role": "工会主席 新闻所支部纪检委员",
+          "education": "研究生毕业",
+          "degree": "管理学硕士",
+          "specialty": "情报学"
+        },
+        "derived": {
+          "seniority_score": 0.567,
+          "community_id": 4,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.0055,
+          "belief_strength": 0.6253,
+          "influence": 0.6837,
+          "susceptibility": 0.4082,
+          "fear_of_isolation": 0.6,
+          "conviction": 0.5596
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.005459147010791209,
       "belief_strength": 0.6253074162247021,
       "influence": 0.6836904761904762,
@@ -121,6 +235,44 @@
         "\"廖建碧\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"廖建碧\" \"会计\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 50.0,
+          "age_band": "45-54岁",
+          "work_years": 23.0,
+          "work_years_band": "20-30年",
+          "org_years": 21.0,
+          "org_years_band": "20-30年",
+          "title": "管理人员",
+          "admin_role": "行政秘书",
+          "party_role": "新闻所妇委会主任",
+          "education": "大学毕业",
+          "degree": "无学位",
+          "specialty": "会计"
+        },
+        "derived": {
+          "seniority_score": 0.577,
+          "community_id": 4,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": -0.0712,
+          "belief_strength": 0.6505,
+          "influence": 0.6885,
+          "susceptibility": 0.4058,
+          "fear_of_isolation": 0.665,
+          "conviction": 0.6478
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.07115518771122288,
       "belief_strength": 0.6504574457268367,
       "influence": 0.6884761904761905,
@@ -153,6 +305,44 @@
         "\"杨文婧\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"杨文婧\" \"学术秘书\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 40.0,
+          "age_band": "35-44岁",
+          "work_years": 15.0,
+          "work_years_band": "10-20年",
+          "org_years": 15.0,
+          "org_years_band": "10-20年",
+          "title": "研究实习员",
+          "admin_role": "学术秘书",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "经济学硕士",
+          "specialty": "学术秘书"
+        },
+        "derived": {
+          "seniority_score": 0.4,
+          "community_id": 4,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": -0.1397,
+          "belief_strength": 0.6442,
+          "influence": 0.6002,
+          "susceptibility": 0.4499,
+          "fear_of_isolation": 0.5423,
+          "conviction": 0.6357
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.13966500652046185,
       "belief_strength": 0.6442276418652308,
       "influence": 0.6002380952380952,
@@ -185,6 +375,44 @@
         "\"方师师\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"方师师\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 41.0,
+          "age_band": "35-44岁",
+          "work_years": 12.0,
+          "work_years_band": "10-20年",
+          "org_years": 10.0,
+          "org_years_band": "10-20年",
+          "title": "副研究员",
+          "admin_role": "互联网治理研究中心主任",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.607,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.1116,
+          "belief_strength": 0.5677,
+          "influence": 0.7037,
+          "susceptibility": 0.3182,
+          "fear_of_isolation": 0.6772,
+          "conviction": 0.6487
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.11162231827993785,
       "belief_strength": 0.5676641047841238,
       "influence": 0.7036904761904762,
@@ -217,6 +445,44 @@
         "\"万旋傲\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"万旋傲\" \"互联网治理\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 36.0,
+          "age_band": "35-44岁",
+          "work_years": 10.0,
+          "work_years_band": "10-20年",
+          "org_years": 6.0,
+          "org_years_band": "5-10年",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "管理学博士",
+          "specialty": "互联网治理"
+        },
+        "derived": {
+          "seniority_score": 0.407,
+          "community_id": 0,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0976,
+          "belief_strength": 0.5666,
+          "influence": 0.4537,
+          "susceptibility": 0.3681,
+          "fear_of_isolation": 0.4914,
+          "conviction": 0.5771
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.09761356665533492,
       "belief_strength": 0.5666429862799568,
       "influence": 0.45371428571428574,
@@ -249,6 +515,44 @@
         "\"卢垚\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"卢垚\" \"互联网治理\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 40.0,
+          "age_band": "35-44岁",
+          "work_years": 18.0,
+          "work_years_band": "10-20年",
+          "org_years": 6.0,
+          "org_years_band": "5-10年",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "管理学博士",
+          "specialty": "互联网治理"
+        },
+        "derived": {
+          "seniority_score": 0.498,
+          "community_id": 0,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0321,
+          "belief_strength": 0.6227,
+          "influence": 0.499,
+          "susceptibility": 0.3455,
+          "fear_of_isolation": 0.4752,
+          "conviction": 0.5703
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.032127225222555594,
       "belief_strength": 0.6227147103180175,
       "influence": 0.4989523809523809,
@@ -281,6 +585,44 @@
         "\"唐巧盈\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"唐巧盈\" \"互联网治理\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 34.0,
+          "age_band": "35岁以下",
+          "work_years": 8.0,
+          "work_years_band": "5-10年",
+          "org_years": 3.0,
+          "org_years_band": "5年以内",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "法学博士",
+          "specialty": "互联网治理"
+        },
+        "derived": {
+          "seniority_score": 0.358,
+          "community_id": 0,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.1006,
+          "belief_strength": 0.6144,
+          "influence": 0.4292,
+          "susceptibility": 0.3804,
+          "fear_of_isolation": 0.5175,
+          "conviction": 0.551
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.10057674246034914,
       "belief_strength": 0.6143623914654327,
       "influence": 0.42923809523809525,
@@ -313,6 +655,44 @@
         "\"王蔚\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"王蔚\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 48.0,
+          "age_band": "45-54岁",
+          "work_years": 27.0,
+          "work_years_band": "20-30年",
+          "org_years": 17.0,
+          "org_years_band": "10-20年",
+          "title": "副研究员",
+          "admin_role": "新媒体研究中心主任",
+          "party_role": "新闻所支部宣传委员",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.815,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.0783,
+          "belief_strength": 0.6879,
+          "influence": 0.8074,
+          "susceptibility": 0.2663,
+          "fear_of_isolation": 0.6374,
+          "conviction": 0.7843
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.07832810827735258,
       "belief_strength": 0.6878882035277809,
       "influence": 0.8074285714285715,
@@ -345,6 +725,44 @@
         "\"王月\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"王月\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 42.0,
+          "age_band": "35-44岁",
+          "work_years": 22.0,
+          "work_years_band": "20-30年",
+          "org_years": 13.0,
+          "org_years_band": "10-20年",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.585,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.0565,
+          "belief_strength": 0.6258,
+          "influence": 0.5426,
+          "susceptibility": 0.3237,
+          "fear_of_isolation": 0.5092,
+          "conviction": 0.5159
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.05651574382887534,
       "belief_strength": 0.6258005239221194,
       "influence": 0.5425714285714286,
@@ -377,6 +795,44 @@
         "\"童希\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"童希\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 39.0,
+          "age_band": "35-44岁",
+          "work_years": 12.0,
+          "work_years_band": "10-20年",
+          "org_years": 12.0,
+          "org_years_band": "10-20年",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.483,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.0558,
+          "belief_strength": 0.579,
+          "influence": 0.4914,
+          "susceptibility": 0.3493,
+          "fear_of_isolation": 0.3749,
+          "conviction": 0.596
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.055774407694651716,
       "belief_strength": 0.5790348446076258,
       "influence": 0.4913571428571428,
@@ -409,6 +865,44 @@
         "\"王理\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"王理\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 39.0,
+          "age_band": "35-44岁",
+          "work_years": 11.0,
+          "work_years_band": "10-20年",
+          "org_years": 4.0,
+          "org_years_band": "5年以内",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "管理学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.428,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.1285,
+          "belief_strength": 0.6453,
+          "influence": 0.4638,
+          "susceptibility": 0.3631,
+          "fear_of_isolation": 0.4948,
+          "conviction": 0.5009
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.12851605818753517,
       "belief_strength": 0.64526667612372,
       "influence": 0.4637857142857143,
@@ -441,6 +935,44 @@
         "\"吕鹏\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"吕鹏\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 45.0,
+          "age_band": "45-54岁",
+          "work_years": 16.0,
+          "work_years_band": "10-20年",
+          "org_years": 16.0,
+          "org_years_band": "10-20年",
+          "title": "研究员",
+          "admin_role": "新闻学研究中心主任",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.705,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.1593,
+          "belief_strength": 0.6914,
+          "influence": 0.7526,
+          "susceptibility": 0.2937,
+          "fear_of_isolation": 0.6308,
+          "conviction": 0.6203
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.15929349709894625,
       "belief_strength": 0.6913750804216299,
       "influence": 0.7526428571428572,
@@ -473,6 +1005,44 @@
         "\"孟晖\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"孟晖\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 48.0,
+          "age_band": "45-54岁",
+          "work_years": 27.0,
+          "work_years_band": "20-30年",
+          "org_years": 14.0,
+          "org_years_band": "10-20年",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.677,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.097,
+          "belief_strength": 0.6529,
+          "influence": 0.5884,
+          "susceptibility": 0.3008,
+          "fear_of_isolation": 0.5715,
+          "conviction": 0.6834
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.09702981510077235,
       "belief_strength": 0.6528991448332994,
       "influence": 0.5884285714285714,
@@ -505,6 +1075,44 @@
         "\"张新璐\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"张新璐\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 40.0,
+          "age_band": "35-44岁",
+          "work_years": 16.0,
+          "work_years_band": "10-20年",
+          "org_years": 5.0,
+          "org_years_band": "5-10年",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.478,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.092,
+          "belief_strength": 0.5394,
+          "influence": 0.4888,
+          "susceptibility": 0.3506,
+          "fear_of_isolation": 0.4074,
+          "conviction": 0.6285
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.09203888900513134,
       "belief_strength": 0.5394151679253629,
       "influence": 0.4888095238095238,
@@ -537,6 +1145,44 @@
         "\"钟媛\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"钟媛\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 32.0,
+          "age_band": "35岁以下",
+          "work_years": 6.0,
+          "work_years_band": "5-10年",
+          "org_years": 0.0,
+          "org_years_band": "5年以内",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.31,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0179,
+          "belief_strength": 0.5531,
+          "influence": 0.4048,
+          "susceptibility": 0.3926,
+          "fear_of_isolation": 0.4863,
+          "conviction": 0.4642
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.017871937376409155,
       "belief_strength": 0.553088650795303,
       "influence": 0.40476190476190477,
@@ -569,6 +1215,44 @@
         "\"李敬\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"李敬\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 48.0,
+          "age_band": "45-54岁",
+          "work_years": 25.0,
+          "work_years_band": "20-30年",
+          "org_years": 13.0,
+          "org_years_band": "10-20年",
+          "title": "研究员",
+          "admin_role": "传播学研究中心主任",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.777,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": -0.0995,
+          "belief_strength": 0.6549,
+          "influence": 0.7883,
+          "susceptibility": 0.2759,
+          "fear_of_isolation": 0.5817,
+          "conviction": 0.504
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.09947785250402673,
       "belief_strength": 0.6549487823450212,
       "influence": 0.7882857142857144,
@@ -601,6 +1285,44 @@
         "\"董倩\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"董倩\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 46.0,
+          "age_band": "45-54岁",
+          "work_years": 20.0,
+          "work_years_band": "20-30年",
+          "org_years": 12.0,
+          "org_years_band": "10-20年",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.598,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.0014,
+          "belief_strength": 0.6893,
+          "influence": 0.5491,
+          "susceptibility": 0.3205,
+          "fear_of_isolation": 0.5275,
+          "conviction": 0.5967
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.0013775944245063099,
       "belief_strength": 0.6892640218382502,
       "influence": 0.5490952380952381,
@@ -633,6 +1355,44 @@
         "\"徐生权\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"徐生权\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 38.0,
+          "age_band": "35-44岁",
+          "work_years": 12.0,
+          "work_years_band": "10-20年",
+          "org_years": 3.0,
+          "org_years_band": "5年以内",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.42,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0128,
+          "belief_strength": 0.5606,
+          "influence": 0.4602,
+          "susceptibility": 0.3649,
+          "fear_of_isolation": 0.4339,
+          "conviction": 0.5689
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.01282480328171241,
       "belief_strength": 0.5606448343284071,
       "influence": 0.4601904761904762,
@@ -665,6 +1425,44 @@
         "\"张早早\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"张早早\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 35.0,
+          "age_band": "35-44岁",
+          "work_years": 12.0,
+          "work_years_band": "10-20年",
+          "org_years": 2.0,
+          "org_years_band": "5年以内",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.389,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0492,
+          "belief_strength": 0.5167,
+          "influence": 0.4447,
+          "susceptibility": 0.3727,
+          "fear_of_isolation": 0.5444,
+          "conviction": 0.5519
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.04915749640021035,
       "belief_strength": 0.5167457722356185,
       "influence": 0.4446904761904762,
@@ -697,6 +1495,44 @@
         "\"李喆\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"李喆\" \"传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 33.0,
+          "age_band": "35岁以下",
+          "work_years": 7.0,
+          "work_years_band": "5-10年",
+          "org_years": 0.0,
+          "org_years_band": "5年以内",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "传播学"
+        },
+        "derived": {
+          "seniority_score": 0.325,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.068,
+          "belief_strength": 0.5787,
+          "influence": 0.4125,
+          "susceptibility": 0.3888,
+          "fear_of_isolation": 0.4707,
+          "conviction": 0.5479
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.06803585150558845,
       "belief_strength": 0.578741583196844,
       "influence": 0.4125,
@@ -729,6 +1565,44 @@
         "\"同心\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"同心\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 38.0,
+          "age_band": "35-44岁",
+          "work_years": 11.0,
+          "work_years_band": "10-20年",
+          "org_years": 11.0,
+          "org_years_band": "10-20年",
+          "title": "助理研究员",
+          "admin_role": "舆论学研究中心主任",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.581,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.085,
+          "belief_strength": 0.5717,
+          "influence": 0.6906,
+          "susceptibility": 0.3247,
+          "fear_of_isolation": 0.6387,
+          "conviction": 0.591
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.08495845807693318,
       "belief_strength": 0.5717147243895796,
       "influence": 0.6906190476190476,
@@ -761,6 +1635,44 @@
         "\"郭欣\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"郭欣\" \"哲学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 36.0,
+          "age_band": "35-44岁",
+          "work_years": 10.0,
+          "work_years_band": "10-20年",
+          "org_years": 10.0,
+          "org_years_band": "10-20年",
+          "title": "编辑",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "哲学硕士",
+          "specialty": "哲学"
+        },
+        "derived": {
+          "seniority_score": 0.181,
+          "community_id": 4,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.1054,
+          "belief_strength": 0.5224,
+          "influence": 0.3407,
+          "susceptibility": 0.5046,
+          "fear_of_isolation": 0.5423,
+          "conviction": 0.4944
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.10537005833600721,
       "belief_strength": 0.5224233010507203,
       "influence": 0.34071428571428575,
@@ -793,6 +1705,44 @@
         "\"张卓\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"张卓\" \"舆论学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 39.0,
+          "age_band": "35-44岁",
+          "work_years": 14.0,
+          "work_years_band": "10-20年",
+          "org_years": 5.0,
+          "org_years_band": "5-10年",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "新闻所工会主席",
+          "education": "研究生毕业",
+          "degree": "管理学博士",
+          "specialty": "舆论学"
+        },
+        "derived": {
+          "seniority_score": 0.455,
+          "community_id": 4,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": 0.0291,
+          "belief_strength": 0.5697,
+          "influence": 0.4775,
+          "susceptibility": 0.3563,
+          "fear_of_isolation": 0.5541,
+          "conviction": 0.5871
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.029056654248891117,
       "belief_strength": 0.5696981262828804,
       "influence": 0.4775,
@@ -825,6 +1775,44 @@
         "\"王震宇\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"王震宇\" \"新闻学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 31.0,
+          "age_band": "35岁以下",
+          "work_years": 4.0,
+          "work_years_band": "5年以内",
+          "org_years": 4.0,
+          "org_years_band": "5年以内",
+          "title": "副研究员",
+          "admin_role": "青年研究中心主任",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻学"
+        },
+        "derived": {
+          "seniority_score": 0.431,
+          "community_id": 1,
+          "is_influencer": true
+        },
+        "metrics": {
+          "opinion": 0.0814,
+          "belief_strength": 0.4825,
+          "influence": 0.6155,
+          "susceptibility": 0.3623,
+          "fear_of_isolation": 0.5178,
+          "conviction": 0.5508
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": 0.08144980584634062,
       "belief_strength": 0.48252177502262933,
       "influence": 0.615452380952381,
@@ -857,6 +1845,44 @@
         "\"谢添\" \"Shanghai Academy of Social Sciences\" journalism",
         "\"谢添\" \"新闻传播学\" 论文"
       ],
+      "generation_trace": {
+        "source": "workbook",
+        "inputs": {
+          "age": 33.0,
+          "age_band": "35岁以下",
+          "work_years": 8.0,
+          "work_years_band": "5-10年",
+          "org_years": 1.0,
+          "org_years_band": "5年以内",
+          "title": "助理研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "研究生毕业",
+          "degree": "文学博士",
+          "specialty": "新闻传播学"
+        },
+        "derived": {
+          "seniority_score": 0.338,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0824,
+          "belief_strength": 0.5335,
+          "influence": 0.4191,
+          "susceptibility": 0.3855,
+          "fear_of_isolation": 0.413,
+          "conviction": 0.5031
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
+          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
+          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+        }
+      },
       "opinion": -0.08238019827632423,
       "belief_strength": 0.5334672062117916,
       "influence": 0.41907142857142854,

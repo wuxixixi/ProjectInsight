@@ -129,6 +129,13 @@
         {{ connectionStatus }}
       </div>
 
+      <!-- 调试信息 (临时) -->
+      <div style="background:#1a1a2e;padding:8px;margin:4px 0;border-radius:6px;font-size:11px;color:#94a3b8;font-family:monospace;">
+        <div>WS: {{ isConnected ? '✅' : '❌' }} | Running: {{ isRunning ? '🔄' : '⏸' }} | Paused: {{ isPaused ? '⏸' : '▶' }}</div>
+        <div>Step: {{ currentStep }}/{{ maxSteps }} | Events: {{ pendingEvents.length }} | Stopped: {{ hasStopped }}</div>
+        <div>Profile: {{ populationProfile }} | Mode: {{ simulationMode }} | LLM: {{ useLLM }}</div>
+      </div>
+
       <!-- 推演模式 -->
       <div class="control-section">
         <label class="section-label">推演模式</label>
@@ -662,7 +669,7 @@
               <span v-if="newsCredibility !== '不确定'" class="credibility-badge" :class="newsCredibility === '高可信' ? 'high' : 'low'">
                 {{ newsCredibility === '高可信' ? '✅ 高可信新闻' : '⚠️ 低可信新闻' }}
               </span>
-              <button class="chart-zoom-btn" @click="openChartModal('opinion')" title="放大">🔍</button>
+              <button class="chart-zoom-btn" @click.stop.prevent="openChartModal('opinion')" title="放大">🔍</button>
               <div class="chart-legend">
                 <span class="legend-item rumor">{{ misleadLegendLabel }}</span>
                 <span class="legend-item neutral">中立</span>
@@ -674,7 +681,7 @@
           <div class="chart-card network-chart">
             <div class="chart-header">
               <h3>信息传播网络</h3>
-              <button class="chart-zoom-btn" @click="openChartModal('network')" title="放大">🔍</button>
+              <button class="chart-zoom-btn" @click.stop.prevent="openChartModal('network')" title="放大">🔍</button>
               <div class="network-tabs" v-if="useDualNetwork">
                 <button :class="['tab-btn', { active: activeNetworkTab === 'public' }]" @click="activeNetworkTab = 'public'">
                   🏛️ 公域广场
@@ -698,7 +705,7 @@
           <div class="chart-card trend-chart">
             <div class="chart-header">
               <h3>舆论演化趋势</h3>
-              <button class="chart-zoom-btn" @click="openChartModal('trend')" title="放大">🔍</button>
+              <button class="chart-zoom-btn" @click.stop.prevent="openChartModal('trend')" title="放大">🔍</button>
               <span v-if="debunked" class="debunk-badge">权威回应已发布</span>
             </div>
             <div class="chart-body" ref="trendChart"></div>
@@ -1156,6 +1163,51 @@
               </div>
             </div>
           </div>
+
+          <details v-if="generationTrace" class="info-block trace-block">
+            <summary class="trace-toggle">
+              <span class="trace-toggle-title"><span class="block-icon">🧩</span> 数值来源</span>
+              <span class="trace-toggle-meta">
+                <span class="trace-badge">{{ generationTraceSourceLabel }}</span>
+                <span class="trace-badge" v-if="generationTrace?.derived?.seniority_score !== undefined">资历分 {{ generationTrace.derived.seniority_score }}</span>
+                <span class="trace-badge" v-if="generationTrace?.derived?.is_influencer !== undefined">{{ generationTrace.derived.is_influencer ? '意见领袖' : '普通成员' }}</span>
+                <span class="trace-chevron"></span>
+              </span>
+            </summary>
+            <div class="block-content">
+              <div class="trace-summary">{{ generationTraceSummary }}</div>
+
+              <div v-if="generationTraceInputs.length" class="trace-section">
+                <div class="trace-section-title">输入依据</div>
+                <div class="trace-grid">
+                  <div v-for="item in generationTraceInputs" :key="item.key" class="trace-item">
+                    <span class="label">{{ item.label }}</span>
+                    <span class="value">{{ item.value }}<template v-if="item.suffix">{{ item.suffix }}</template></span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="generationTraceDerived.length" class="trace-section">
+                <div class="trace-section-title">中间结果</div>
+                <div class="trace-grid">
+                  <div v-for="item in generationTraceDerived" :key="item.key" class="trace-item" :title="item.tooltip">
+                    <span class="label">{{ item.label }}</span>
+                    <span class="value">{{ typeof item.value === 'boolean' ? (item.value ? '是' : '否') : item.value }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="generationTraceMetrics.length" class="trace-section">
+                <div class="trace-section-title">最终数值</div>
+                <div class="trace-grid">
+                  <div v-for="item in generationTraceMetrics" :key="item.key" class="trace-item" :title="item.tooltip">
+                    <span class="label">{{ item.label }}</span>
+                    <span class="value">{{ typeof item.value === 'number' ? item.value.toFixed(3) : item.value }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
 
           <!-- v3.0 新增：行为预测区块 -->
           <div v-if="agentSnapshot.predicted_behavior" class="info-block behavior-block">
@@ -1768,8 +1820,13 @@ import * as echarts from 'echarts'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-const API_BASE = window.location.origin
-const WS_BASE = `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`
+const IS_DEV_SERVER = ['3000', '5173'].includes(window.location.port)
+const API_BASE = IS_DEV_SERVER
+  ? `http://${window.location.hostname}:8000`
+  : window.location.origin
+const WS_BASE = IS_DEV_SERVER
+  ? `ws://${window.location.hostname}:8000`
+  : `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`
 
 export default {
   name: 'App',
@@ -1781,6 +1838,8 @@ export default {
       ws: null,
       wsReconnectCount: 0,
       wsMaxReconnectAttempts: 5,
+      wsReconnectTimer: null,
+      wsOwnerToken: null,
 
       // UI状态
       showHelp: true,  // 帮助说明默认展开
@@ -1964,6 +2023,8 @@ export default {
       inspectAgentId: null,
       agentSnapshot: null,
       agentLoading: false,
+      inspectRequestSeq: 0,
+      showGenerationTrace: false,
 
       // 高级设置抽屉
       showSettingsDrawer: false,
@@ -2013,6 +2074,76 @@ export default {
       const name = this.agentSnapshot?.realistic_profile?.name
       const id = this.inspectAgentId ?? this.agentSnapshot?.agent_id
       return name ? `${name} (#${id}) 微观行为透视` : `Agent #${id} 微观行为透视`
+    },
+    generationTrace() {
+      return this.agentSnapshot?.realistic_profile?.generation_trace || null
+    },
+    generationTraceSourceLabel() {
+      const source = this.generationTrace?.source
+      const labels = {
+        workbook: '工作簿生成',
+        synthetic_roster: '合成样本',
+        cached_profile: '缓存回读'
+      }
+      return labels[source] || source || '-'
+    },
+    generationTraceSummary() {
+      return this.generationTrace?.summary || (
+        this.generationTrace?.source === 'workbook'
+          ? '先根据年龄、工龄、本单位工龄、职称和管理/党内职务计算资历分，再映射到信念强度、影响力、易感性、孤立恐惧感和初始观点。'
+          : '先根据资历档位和角色标签生成基础画像，再叠加小幅随机扰动，避免初始立场过于极化。'
+      )
+    },
+    generationTraceInputs() {
+      const inputs = this.generationTrace?.inputs || {}
+      const items = [
+        { key: 'age', label: '年龄', suffix: '岁' },
+        { key: 'age_band', label: '年龄段' },
+        { key: 'work_years', label: '工龄', suffix: '年' },
+        { key: 'work_years_band', label: '工龄区间' },
+        { key: 'org_years', label: '本单位工龄', suffix: '年' },
+        { key: 'org_years_band', label: '本单位工龄区间' },
+        { key: 'title', label: '职称' },
+        { key: 'admin_role', label: '行政职务' },
+        { key: 'party_role', label: '党内职务' },
+        { key: 'education', label: '学历' },
+        { key: 'degree', label: '学位' },
+        { key: 'specialty', label: '专业' }
+      ]
+      return items
+        .map(item => ({
+          ...item,
+          value: inputs[item.key]
+        }))
+        .filter(item => item.value !== undefined && item.value !== null && item.value !== '')
+    },
+    generationTraceDerived() {
+      const derived = this.generationTrace?.derived || {}
+      return [
+        { key: 'seniority_score', label: '资历分', value: derived.seniority_score, tooltip: '综合年龄、工龄、本单位工龄、职称和管理职责得到的角色资历权重，范围0-1。' },
+        { key: 'community_id', label: '社群分组', value: derived.community_id, tooltip: '根据专业方向归入相近议题社群，用于私域网络连接。' },
+        { key: 'is_influencer', label: '意见领袖标记', value: derived.is_influencer, tooltip: '影响力较高或具有管理职责时标记为意见领袖。' }
+      ].filter(item => item.value !== undefined && item.value !== null)
+    },
+    generationTraceMetrics() {
+      const metrics = this.generationTrace?.metrics || {}
+      const formulas = this.generationTrace?.formulas || {}
+      const order = [
+        ['opinion', '初始观点', '模拟开始时的立场，接近0代表尚未形成明确判断。'],
+        ['belief_strength', '信念强度', '越高越不容易改变已有观点。'],
+        ['influence', '影响力', '越高越容易影响他人，管理职责和高资历会提高该值。'],
+        ['susceptibility', '易感性', '越高越容易被周围观点或新信息影响。'],
+        ['fear_of_isolation', '孤立恐惧感', '越高越容易因舆论压力选择沉默。'],
+        ['conviction', '初始信念', '形成初始判断时的坚定程度。']
+      ]
+      return order
+        .map(([key, label, desc]) => ({
+          key,
+          label,
+          value: metrics[key],
+          tooltip: `${desc}\n数值来源：${this.readableTraceRule(key, formulas[key])}`
+        }))
+        .filter(item => item.value !== undefined && item.value !== null)
     },
     needLabel() {
       const labels = {
@@ -2255,6 +2386,23 @@ export default {
   methods: {
     // ==================== UI 辅助方法 ====================
 
+    readableTraceRule(key, rawRule) {
+      const fallback = {
+        opinion: '以中性为中心叠加小幅随机扰动，并限制在较窄范围内，避免把现实人员预设为明确立场。',
+        belief_strength: '以资历分为基础，再叠加少量随机扰动，形成初始信念强度。',
+        influence: '资历分越高、具有管理职责时影响力越高，最后把结果限制在合理范围内。',
+        susceptibility: '资历分越高通常越不容易受周围观点影响，学历等因素会做小幅修正。',
+        fear_of_isolation: '行政或党内职务会略微提高对舆论压力的敏感度，再叠加少量随机扰动。',
+        conviction: '资历分越高通常越坚定，再叠加少量随机扰动，形成初始坚定程度。'
+      }
+      if (!rawRule) return fallback[key] || '由输入依据和中间结果映射得到。'
+      const ruleText = typeof rawRule === 'string' ? rawRule : String(rawRule)
+      if (ruleText.includes('clip') || ruleText.includes('seniority_score') || ruleText.includes('N(')) {
+        return fallback[key] || '由输入依据和中间结果映射得到，并把结果限制在合理范围内。'
+      }
+      return ruleText
+    },
+
     toggleGroup(group) {
       this.expandedGroups[group] = !this.expandedGroups[group]
     },
@@ -2262,6 +2410,50 @@ export default {
     getAgentDisplayName(agent) {
       const name = agent?.realistic_profile?.name
       return name || `Agent ${agent?.id ?? ''}`
+    },
+
+    getClickedAgentId(params) {
+      const rawId = params?.data?.id ?? params?.data?.agent_id ?? params?.data?.name
+      const agentId = Number.parseInt(rawId, 10)
+      return Number.isInteger(agentId) ? agentId : null
+    },
+
+    buildAgentSnapshotFromState(agentId) {
+      const agent = this.agents.find(item => Number.parseInt(item.id, 10) === agentId)
+      if (!agent) return null
+      return {
+        agent_id: agentId,
+        persona: agent.persona || { type: 'Agent', desc: '当前网络节点快照' },
+        persona_str: agent.persona?.type
+          ? `${agent.persona.type} - ${agent.persona.desc || ''}`
+          : '当前网络节点快照',
+        belief_strength: Number(agent.belief_strength || 0),
+        susceptibility: Number(agent.susceptibility || 0),
+        influence: Number(agent.influence || 0),
+        old_opinion: Number(agent.opinion || 0),
+        new_opinion: Number(agent.opinion || 0),
+        received_news: [],
+        llm_raw_response: null,
+        emotion: '读取中',
+        action: '读取中',
+        generated_comment: '',
+        reasoning: '正在补全后端决策链路，已先显示当前网络节点快照。',
+        has_decided: false,
+        fear_of_isolation: Number(agent.fear_of_isolation || 0),
+        conviction: Number(agent.conviction || 0),
+        is_silent: Boolean(agent.is_silent),
+        perceived_climate: agent.perceived_climate || null,
+        is_influencer: Boolean(agent.is_influencer),
+        community_id: agent.community_id,
+        publish_channel: agent.publish_channel,
+        realistic_profile: agent.realistic_profile,
+        rumor_trust: agent.rumor_trust,
+        truth_trust: agent.truth_trust,
+        dominant_need: agent.dominant_need,
+        predicted_behavior: agent.predicted_behavior,
+        behavior_confidence: agent.behavior_confidence,
+        cognitive_closed_need: agent.cognitive_closed_need
+      }
     },
 
     // 预测字段名兼容：新名优先，旧名兜底
@@ -2339,27 +2531,63 @@ export default {
     // ==================== WebSocket 连接 ====================
 
     connectWebSocket() {
+      if (this.ws && [WebSocket.CONNECTING, WebSocket.OPEN].includes(this.ws.readyState)) {
+        return
+      }
+      const existingSocket = window.__projectInsightWs
+      if (
+        existingSocket &&
+        existingSocket !== this.ws &&
+        [WebSocket.CONNECTING, WebSocket.OPEN].includes(existingSocket.readyState)
+      ) {
+        existingSocket.onclose = null
+        existingSocket.close()
+      }
       // 使用动态地址（开发环境走代理，生产环境直接访问）
       const wsUrl = `${WS_BASE}/ws/simulation`
       console.log('连接 WebSocket:', wsUrl)
 
       try {
-        this.ws = new WebSocket(wsUrl)
+        const ownerToken = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+        const socket = new WebSocket(wsUrl)
+        this.ws = socket
+        this.wsOwnerToken = ownerToken
+        window.__projectInsightWs = socket
+        window.__projectInsightWsOwner = ownerToken
 
-        this.ws.onopen = () => {
+        socket.onopen = () => {
+          if (this.ws !== socket || window.__projectInsightWsOwner !== ownerToken) {
+            socket.close()
+            return
+          }
           this.isConnected = true
           this.wsReconnectCount = 0
           console.log('WebSocket 已连接')
         }
 
-        this.ws.onclose = (event) => {
-          this.isConnected = false
+        socket.onclose = (event) => {
+          const isCurrentOwner = window.__projectInsightWsOwner === ownerToken
+          if (isCurrentOwner) {
+            window.__projectInsightWs = null
+            window.__projectInsightWsOwner = null
+          }
+          if (this.ws === socket) {
+            this.ws = null
+            this.isConnected = false
+            // WebSocket 断开时重置运行状态，避免 UI 进入僵尸状态
+            if (this.isRunning) {
+              console.warn('WebSocket 断开，重置推演状态')
+              this.isRunning = false
+              this.isPaused = false
+            }
+          }
           console.log('WebSocket 已断开', event.code, event.reason)
-          if (this.wsReconnectCount < this.wsMaxReconnectAttempts) {
+          if (isCurrentOwner && this.wsReconnectCount < this.wsMaxReconnectAttempts && !this.wsReconnectTimer) {
             this.wsReconnectCount++
             console.log(`WebSocket 重连尝试 ${this.wsReconnectCount}/${this.wsMaxReconnectAttempts}`)
-            setTimeout(() => {
-              if (!this.isConnected) {
+            this.wsReconnectTimer = window.setTimeout(() => {
+              this.wsReconnectTimer = null
+              if (!this.isConnected && !this.ws && window.__projectInsightWsOwner === ownerToken) {
                 this.connectWebSocket()
               }
             }, 3000)
@@ -2369,17 +2597,24 @@ export default {
           }
         }
 
-        this.ws.onerror = (error) => {
+        socket.onerror = (error) => {
           console.error('WebSocket 错误:', error)
           this.isConnected = false
         }
 
-        this.ws.onmessage = (event) => {
+        socket.onmessage = (event) => {
+          if (this.ws !== socket || window.__projectInsightWsOwner !== ownerToken) return
           try {
             const msg = JSON.parse(event.data)
             this.handleMessage(msg)
           } catch (e) {
             console.error('WebSocket message parse error:', e, event.data)
+            // 消息处理出错时重置运行状态，防止 UI 僵死
+            if (this.isRunning) {
+              console.warn('消息处理异常，重置推演状态')
+              this.isRunning = false
+              this.isPaused = false
+            }
           }
         }
       } catch (e) {
@@ -2389,13 +2624,24 @@ export default {
     },
 
     disconnectWebSocket() {
+      if (this.wsReconnectTimer) {
+        window.clearTimeout(this.wsReconnectTimer)
+        this.wsReconnectTimer = null
+      }
       if (this.ws) {
+        this.ws.onclose = null
         this.ws.close()
+        if (window.__projectInsightWs === this.ws) {
+          window.__projectInsightWs = null
+          window.__projectInsightWsOwner = null
+        }
         this.ws = null
       }
+      this.isConnected = false
     },
 
     handleMessage(msg) {
+      console.log('[handleMessage]', msg.type, msg.type === 'state' ? `step=${msg.data?.step}` : '')
       switch (msg.type) {
         case 'state':
           this.updateState(msg.data)
@@ -2433,13 +2679,17 @@ export default {
 
     sendAction(action, params = {}) {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        console.log('[sendAction]', action)
         this.ws.send(JSON.stringify({ action, ...params }))
+      } else {
+        console.warn('[sendAction] WebSocket 未连接, action:', action, 'ws:', this.ws, 'readyState:', this.ws?.readyState)
       }
     },
 
     // ==================== 模拟控制 ====================
 
     setPopulationProfile(profile) {
+      console.log('[setPopulationProfile]', profile)
       this.populationProfile = profile
       if (profile === 'shass_news_institute') {
         this.populationSize = 27
@@ -2451,6 +2701,7 @@ export default {
     },
 
     startSimulation() {
+      console.log('[startSimulation] 开始推演, isRunning:', this.isRunning, 'isConnected:', this.isConnected, 'pendingEvents:', this.pendingEvents.length)
       this.isRunning = true
       this.hasStopped = false
       this.currentStep = 0
@@ -2844,9 +3095,11 @@ export default {
       try {
         const response = await fetch(API_BASE + '/api/simulation/state')
         const data = await response.json()
-        if (data.step !== undefined) {
+        if (data.step !== undefined && data.agents && data.opinion_distribution) {
           this.updateState(data)
           console.log('[refreshSimulationState] 状态已刷新，当前步骤:', data.step)
+        } else {
+          console.warn('[refreshSimulationState] 返回数据不完整，跳过更新:', data)
         }
       } catch (error) {
         console.error('[refreshSimulationState] 刷新状态失败:', error)
@@ -2960,6 +3213,13 @@ export default {
 
             if (data.done) {
               // 生成完成
+              if (data.filename) {
+                this.intelligenceFilename = data.filename
+              }
+              if (data.path) {
+                this.reportPath = data.path
+              }
+              this.loadReportList()
               eventSource.close()
               this.reportGenerating = false
             } else if (data.error) {
@@ -3044,27 +3304,62 @@ export default {
     // ==================== Agent透视功能 ====================
 
     async inspectAgent(agentId) {
+      if (!Number.isInteger(agentId) || agentId < 0) {
+        this.showAgentModal = true
+        this.agentLoading = false
+        this.agentSnapshot = { error: `无效的Agent ID: ${agentId}` }
+        return
+      }
+
+      const requestSeq = ++this.inspectRequestSeq
       this.inspectAgentId = agentId
       this.showAgentModal = true
-      this.agentLoading = true
-      this.agentSnapshot = null
+      const localSnapshot = this.buildAgentSnapshotFromState(agentId)
+      this.agentSnapshot = localSnapshot
+      this.agentLoading = !localSnapshot
+      this.showGenerationTrace = false
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), 10000)
 
       try {
-        const response = await fetch(`${API_BASE}/api/agent/${agentId}/inspect`)
+        const response = await fetch(`${API_BASE}/api/agent/${agentId}/inspect`, {
+          signal: controller.signal,
+          cache: 'no-store'
+        })
+        if (!response.ok) {
+          throw new Error(`接口返回 ${response.status}`)
+        }
         const data = await response.json()
+        if (requestSeq !== this.inspectRequestSeq) return
         this.agentSnapshot = data
       } catch (error) {
         console.error('获取Agent信息失败:', error)
-        this.agentSnapshot = { error: '获取Agent信息失败' }
+        if (requestSeq === this.inspectRequestSeq) {
+          const message = error.name === 'AbortError'
+            ? '获取Agent信息超时，请稍后重试'
+            : `获取Agent信息失败：${error.message}`
+          this.agentSnapshot = localSnapshot
+            ? { ...localSnapshot, reasoning: `${localSnapshot.reasoning}（后端补全失败：${message}）` }
+            : { error: message, has_decided: false }
+        }
       } finally {
-        this.agentLoading = false
+        window.clearTimeout(timeoutId)
+        if (requestSeq === this.inspectRequestSeq) {
+          this.agentLoading = false
+        }
       }
+    },
+
+    toggleGenerationTrace() {
+      this.showGenerationTrace = !this.showGenerationTrace
     },
 
     closeAgentModal() {
       this.showAgentModal = false
       this.inspectAgentId = null
       this.agentSnapshot = null
+      this.showGenerationTrace = false
+      this.inspectRequestSeq++
     },
 
     formatJson(obj) {
@@ -3075,30 +3370,36 @@ export default {
     // ==================== 状态更新 ====================
 
     updateState(data) {
-      this.currentStep = data.step
-      this.agents = data.agents
-      this.edges = data.edges
+      console.log('[updateState] step:', data?.step, 'agents:', data?.agents?.length, 'opinionDist:', data?.opinion_distribution ? 'OK' : 'MISSING')
+      if (!data || typeof data !== 'object') {
+        console.error('[updateState] 无效的状态数据:', data)
+        return
+      }
+
+      this.currentStep = data.step ?? 0
+      this.agents = data.agents || []
+      this.edges = data.edges || []
 
       // 双层网络边数据
       this.publicEdges = data.public_edges || data.edges || []
       this.privateEdges = data.private_edges || []
 
       // 双层统计数据
-      this.publicRumorRate = data.public_rumor_rate || data.rumor_spread_rate
-      this.privateRumorRate = data.private_rumor_rate || data.rumor_spread_rate
+      this.publicRumorRate = data.public_rumor_rate || data.rumor_spread_rate || 0
+      this.privateRumorRate = data.private_rumor_rate || data.rumor_spread_rate || 0
       this.numCommunities = data.num_communities || 0
       this.numInfluencers = data.num_influencers || 0
 
-      this.opinionDist = data.opinion_distribution
-      this.rumorSpreadRate = data.mislead_rate || data.rumor_spread_rate
-      this.truthAcceptanceRate = data.correct_rate || data.truth_acceptance_rate
+      this.opinionDist = data.opinion_distribution || { counts: [], centers: [] }
+      this.rumorSpreadRate = data.mislead_rate || data.rumor_spread_rate || 0
+      this.truthAcceptanceRate = data.correct_rate || data.truth_acceptance_rate || 0
       this.believeRate = data.believe_rate || 0
       this.rejectRate = data.reject_rate || 0
       this.newsCredibility = data.news_credibility || '不确定'
-      this.avgOpinion = data.avg_opinion
-      this.polarizationIndex = data.polarization_index
+      this.avgOpinion = data.avg_opinion ?? 0
+      this.polarizationIndex = data.polarization_index ?? 0
       this.silenceRate = data.silence_rate || 0
-      this.debunked = data.step >= this.debunkDelay
+      this.debunked = (data.step ?? 0) >= this.debunkDelay
 
       // v3.0 新增字段
       this.avgRumorTrust = data.avg_rumor_trust || 0
@@ -3116,19 +3417,19 @@ export default {
       // 只在步骤变化时追加历史记录（避免事件注入刷新时重复）
       const lastStep = this.trendHistory.steps[this.trendHistory.steps.length - 1]
       if (lastStep !== data.step) {
-        this.trendHistory.steps.push(data.step)
-        this.trendHistory.rumorRates.push(data.rumor_spread_rate)
-        this.trendHistory.truthRates.push(data.truth_acceptance_rate)
-        this.trendHistory.avgOpinions.push(data.avg_opinion)
-        this.trendHistory.polarization.push(data.polarization_index)
+        this.trendHistory.steps.push(data.step ?? 0)
+        this.trendHistory.rumorRates.push(data.rumor_spread_rate ?? 0)
+        this.trendHistory.truthRates.push(data.truth_acceptance_rate ?? 0)
+        this.trendHistory.avgOpinions.push(data.avg_opinion ?? 0)
+        this.trendHistory.polarization.push(data.polarization_index ?? 0)
         this.trendHistory.silenceRates.push(data.silence_rate || 0)
-        this.trendHistory.publicRumorRates.push(data.public_rumor_rate || data.rumor_spread_rate)
-        this.trendHistory.privateRumorRates.push(data.private_rumor_rate || data.rumor_spread_rate)
+        this.trendHistory.publicRumorRates.push(data.public_rumor_rate || data.rumor_spread_rate || 0)
+        this.trendHistory.privateRumorRates.push(data.private_rumor_rate || data.rumor_spread_rate || 0)
       }
 
       this.agentProgress = ''
 
-      if (data.step >= this.maxSteps) {
+      if ((data.step ?? 0) >= this.maxSteps) {
         this.isRunning = false
         this.hasStopped = true
         this.sendAction('stop')
@@ -3146,10 +3447,10 @@ export default {
         this.expandedGroups.report = true
       }
 
-      this.renderOpinionChart()
-      this.renderNetworkChart()
-      this.renderTrendChart()
-      this.renderV3Charts()
+      try { this.renderOpinionChart() } catch (e) { console.error('[renderOpinionChart]', e) }
+      try { this.renderNetworkChart() } catch (e) { console.error('[renderNetworkChart]', e) }
+      try { this.renderTrendChart() } catch (e) { console.error('[renderTrendChart]', e) }
+      try { this.renderV3Charts() } catch (e) { console.error('[renderV3Charts]', e) }
 
       // 每3步获取一次预测和风险预警
       if (this.currentStep >= 3 && this.currentStep % 3 === 0) {
@@ -3238,8 +3539,17 @@ export default {
       this.chartModalOpen = true
 
       this.$nextTick(() => {
-        this.chartModalInstance = echarts.init(this.$refs.chartModalBody)
-        this.renderModalChart()
+        try {
+          if (this.chartModalInstance) {
+            this.chartModalInstance.dispose()
+            this.chartModalInstance = null
+          }
+          if (!this.$refs.chartModalBody) return
+          this.chartModalInstance = echarts.init(this.$refs.chartModalBody)
+          this.renderModalChart()
+        } catch (error) {
+          console.error('打开图表放大弹窗失败:', error)
+        }
       })
     },
 
@@ -3273,8 +3583,8 @@ export default {
         this.chartModalInstance.off('click')
         this.chartModalInstance.on('click', (params) => {
           if (params.dataType === 'node') {
-            const agentId = parseInt(params.data.id)
-            this.inspectAgent(agentId)
+            const agentId = this.getClickedAgentId(params)
+            if (agentId !== null) this.inspectAgent(agentId)
           }
         })
       }
@@ -3666,6 +3976,7 @@ export default {
     },
 
     renderOpinionChart() {
+      if (!this.opinionDist || !this.opinionDist.counts) return
       const data = this.opinionDist.counts.map((count, i) => ({
         value: count,
         center: this.opinionDist.centers?.[i] || i
@@ -4042,8 +4353,8 @@ export default {
 
       this.networkChartInstance?.off('click')
       this.networkChartInstance?.on('click', (params) => {
-        if (params.dataType === 'node') {
-          const agentId = parseInt(params.data.id)
+        const agentId = this.getClickedAgentId(params)
+        if (params.dataType === 'node' && agentId !== null) {
           this.inspectAgent(agentId)
         }
       })
@@ -6550,6 +6861,126 @@ export default {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(100, 181, 246, 0.1);
   overflow: hidden;
+}
+
+.trace-block {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.trace-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 0;
+  background: rgba(100, 181, 246, 0.05);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.trace-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.trace-toggle::marker {
+  content: "";
+}
+
+.trace-toggle-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.trace-toggle-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.trace-chevron {
+  font-size: 11px;
+  color: #93c5fd;
+}
+
+.trace-chevron::after {
+  content: "展开";
+}
+
+.trace-block[open] .trace-chevron::after {
+  content: "收起";
+}
+
+.trace-summary {
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.trace-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.trace-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.16);
+  color: #93c5fd;
+  font-size: 11px;
+}
+
+.trace-section {
+  margin-top: 12px;
+}
+
+.trace-section-title {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
+.trace-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.trace-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+}
+
+.trace-item .label {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.trace-item .value {
+  font-size: 12px;
+  color: #e2e8f0;
+  word-break: break-word;
 }
 
 .block-title {

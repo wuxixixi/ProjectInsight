@@ -27,6 +27,19 @@ from .realistic_population import (
     apply_realistic_profile_to_math_population,
     load_realistic_population,
 )
+from .report_utils import (
+    credibility_rule_text,
+    event_pool_summary,
+    format_count_distribution,
+    format_entity_summary,
+    format_top_changes,
+    infer_credibility_label,
+    metric_semantics,
+    response_effect_summary,
+    risk_level,
+    summarize_history_trend,
+    trend_peak_summary,
+)
 from ..models.schemas import SimulationState, SimulationMode
 from ..constants import OPINION_THRESHOLD_NEGATIVE, OPINION_THRESHOLD_POSITIVE
 from ..llm.client import LLMClient, LLMConfig
@@ -1173,23 +1186,37 @@ class SimulationEngine:
 
         final_state = self.history[-1]
         initial_state = self.history[0]
+        credibility = infer_credibility_label(final_state.get("news_credibility", initial_state.get("news_credibility", "不确定")))
+        semantics = metric_semantics(credibility)
 
-        # 兼容新旧字段名
-        negative_trend = [h.get('negative_belief_rate', h.get('rumor_spread_rate', 0)) for h in self.history]
-        positive_trend = [h.get('positive_belief_rate', h.get('truth_acceptance_rate', 0)) for h in self.history]
-        opinion_trend = [h['avg_opinion'] for h in self.history]
-        polarization_trend = [h['polarization_index'] for h in self.history]
+        mislead_label = "误信率" if credibility != "不确定" else "误信率（参考口径）"
+        correct_label = "正确认知率" if credibility != "不确定" else "正确认知率（参考口径）"
 
+        event_pool = getattr(self, "event_pool", [])
+        knowledge_graph = getattr(self, "knowledge_graph", {})
+        entity_summary = format_entity_summary(knowledge_graph)
+        event_summary = event_pool_summary(event_pool)
+        response_summary = response_effect_summary(self.history, self.response_delay, self.responded)
+        risk, risk_desc = risk_level(final_state)
+        mode_str = "LLM 驱动" if self.use_llm else "数学模型"
         final_result = self._analyze_result(final_state)
         cocoon_effect = self._analyze_cocoon_effect()
-        response_effect = self._analyze_response_effect(negative_trend, positive_trend)
-
-        mode_str = "LLM 驱动" if self.use_llm else "数学模型"
 
         report = f"""# 信息茧房推演报告
 
 > 生成时间: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")}
 > 推演模式: {mode_str}
+> 可信度口径: {credibility}
+
+## 事件与口径
+
+{credibility_rule_text(credibility)}
+
+### 事件摘要
+{event_summary}
+
+### 知识图谱
+{entity_summary}
 
 ## 模拟参数
 
@@ -1197,49 +1224,60 @@ class SimulationEngine:
 |------|-----|
 | 群体规模 | {self.population_size} 人 |
 | 算法茧房强度 | {self.cocoon_strength:.2f} |
-| 官方权威回应延迟 | {self.response_delay} 步 |
-| 初始误信率 | {self.initial_negative_spread:.0%} |
+| 权威回应延迟 | {self.response_delay} 步 |
+| 初始负面信念比例 | {self.initial_negative_spread:.0%} |
 | 社交网络类型 | {self._network_type_name()} |
 | 总推演步数 | {len(self.history) - 1} 步 |
 
-## 模拟结果摘要
-
-### 最终状态
+## 核心结果
 
 | 指标 | 初始值 | 最终值 | 变化 |
 |------|--------|--------|------|
-| 误信率 | {initial_state.get('negative_belief_rate', initial_state.get('rumor_spread_rate', 0)):.1%} | {final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)):.1%} | {self._change_arrow(initial_state.get('negative_belief_rate', initial_state.get('rumor_spread_rate', 0)), final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)))} |
-| 正面信念率 | {initial_state.get('positive_belief_rate', initial_state.get('truth_acceptance_rate', 0)):.1%} | {final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0)):.1%} | {self._change_arrow(initial_state.get('positive_belief_rate', initial_state.get('truth_acceptance_rate', 0)), final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0)))} |
-| 平均观点 | {initial_state['avg_opinion']:.3f} | {final_state['avg_opinion']:.3f} | {self._change_arrow(initial_state['avg_opinion'], final_state['avg_opinion'], reverse=True)} |
-| 极化指数 | {initial_state['polarization_index']:.3f} | {final_state['polarization_index']:.3f} | {self._change_arrow(initial_state['polarization_index'], final_state['polarization_index'], reverse=True)} |
+| 相信新闻比例 | {initial_state.get('believe_rate', 0):.1%} | {final_state.get('believe_rate', 0):.1%} | {self._change_arrow(initial_state.get('believe_rate', 0), final_state.get('believe_rate', 0))} |
+| 拒绝新闻比例 | {initial_state.get('reject_rate', 0):.1%} | {final_state.get('reject_rate', 0):.1%} | {self._change_arrow(initial_state.get('reject_rate', 0), final_state.get('reject_rate', 0))} |
+| {mislead_label} | {initial_state.get('mislead_rate', initial_state.get('negative_belief_rate', initial_state.get('rumor_spread_rate', 0))):.1%} | {final_state.get('mislead_rate', final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0))):.1%} | {self._change_arrow(initial_state.get('mislead_rate', initial_state.get('negative_belief_rate', initial_state.get('rumor_spread_rate', 0))), final_state.get('mislead_rate', final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0))))} |
+| {correct_label} | {initial_state.get('correct_rate', initial_state.get('positive_belief_rate', initial_state.get('truth_acceptance_rate', 0))):.1%} | {final_state.get('correct_rate', final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0))):.1%} | {self._change_arrow(initial_state.get('correct_rate', initial_state.get('positive_belief_rate', initial_state.get('truth_acceptance_rate', 0))), final_state.get('correct_rate', final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0))))} |
+| 平均观点 | {initial_state['avg_opinion']:.3f} | {final_state['avg_opinion']:.3f} | {self._change_arrow(initial_state['avg_opinion'], final_state['avg_opinion'])} |
+| 极化指数 | {initial_state['polarization_index']:.3f} | {final_state['polarization_index']:.3f} | {self._change_arrow(initial_state['polarization_index'], final_state['polarization_index'])} |
+| 沉默率 | {initial_state.get('silence_rate', 0.0):.1%} | {final_state.get('silence_rate', 0.0):.1%} | {self._change_arrow(initial_state.get('silence_rate', 0.0), final_state.get('silence_rate', 0.0))} |
 
-### 结论: {final_result['title']}
+### 结果判定
+
+{final_result['title']}
 
 {final_result['description']}
 
----
+### 风险判断
 
-## 详细分析
+当前风险等级：{risk}
 
-### 1. 算法茧房效应分析
+{risk_desc}
 
+## 机制分析
+
+### 算法茧房
 {cocoon_effect}
 
-### 2. 权威回应效果分析
+### 权威回应
+{response_summary}
 
-{response_effect}
+### 极化趋势
+{trend_peak_summary(self.history, key='polarization_index', label='极化指数')}
 
-### 3. 极化趋势分析
+### 观点趋势
+{summarize_history_trend(self.history, key='avg_opinion', label='平均观点', reverse=True)}
 
-{self._analyze_polarization(polarization_trend)}
-
----
+### 沉默趋势
+{summarize_history_trend(self.history, key='silence_rate', label='沉默率')}
 
 ## 建议
 
 {self._generate_recommendations(final_state)}
 
----
+## 说明
+
+- 观点为正表示更接受新闻内容，观点为负表示更拒绝新闻内容。
+- 当新闻可信度为高可信或低可信时，误信/正确认知按上方口径重算，不再直接等同于相信/拒绝。
 
 *本报告由信息茧房推演系统自动生成*
 """
@@ -1270,19 +1308,22 @@ class SimulationEngine:
 
     def _analyze_result(self, final_state: Dict) -> Dict:
         """分析最终结果"""
-        rumor_rate = final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0))
-        truth_rate = final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0))
+        credibility = infer_credibility_label(final_state.get("news_credibility", "不确定"))
+        rumor_rate = final_state.get('mislead_rate', final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)))
+        truth_rate = final_state.get('correct_rate', final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0)))
         polarization = final_state['polarization_index']
+        mislead_label = "误信" if credibility != "不确定" else "误信（参考口径）"
+        correct_label = "正确认知" if credibility != "不确定" else "正确认知（参考口径）"
 
         if rumor_rate > 0.5:
             return {
-                'title': '⚠️ 误信占主导',
-                'description': f'最终有{rumor_rate:.0%}的人持有负面信念，仅{truth_rate:.0%}接受正面信念。'
+                'title': f'⚠️ {mislead_label}占主导',
+                'description': f'最终有{rumor_rate:.0%}的人处于{mislead_label}状态，仅{truth_rate:.0%}处于{correct_label}状态。'
             }
         elif truth_rate > 0.5:
             return {
-                'title': '✅ 正面信念占主导',
-                'description': f'最终有{truth_rate:.0%}的人接受正面信念，仅{rumor_rate:.0%}持有负面信念。'
+                'title': f'✅ {correct_label}占主导',
+                'description': f'最终有{truth_rate:.0%}的人处于{correct_label}状态，仅{rumor_rate:.0%}处于{mislead_label}状态。'
             }
         elif polarization > 0.8:
             return {
@@ -1292,7 +1333,7 @@ class SimulationEngine:
         else:
             return {
                 'title': '⚖️ 群体趋于中立',
-                'description': f'多数人持中立态度，误信率{rumor_rate:.0%}，正面信念率{truth_rate:.0%}。'
+                'description': f'多数人持中立态度，{mislead_label}率{rumor_rate:.0%}，{correct_label}率{truth_rate:.0%}。'
             }
 
     def _analyze_cocoon_effect(self) -> str:
@@ -1306,53 +1347,43 @@ class SimulationEngine:
 
     def _analyze_response_effect(self, negative_trend: List, positive_trend: List) -> str:
         """分析权威回应效果"""
-        if self.response_delay >= len(self.history):
-            return "本次模拟未触发权威回应机制。"
-
-        response_step = self.response_delay
-        if response_step < len(negative_trend):
-            before_negative = negative_trend[max(0, response_step-2)]
-            after_negative = negative_trend[min(response_step+3, len(negative_trend)-1)]
-            effect = before_negative - after_negative
-
-            if effect > 0.1:
-                return f"权威回应在第{self.response_delay}步发布后，误信率从{before_negative:.1%}下降至{after_negative:.1%}，**效果显著**。"
-            elif effect > 0:
-                return f"权威回应在第{self.response_delay}步发布后，误信率小幅下降{effect:.1%}。"
-            else:
-                return "权威回应后误信率未明显下降，可能回应时机过晚。"
-
-        return "权威回应效果数据不足。"
+        return response_effect_summary(self.history, self.response_delay, self.responded)
 
     def _analyze_polarization(self, polarization_trend: List) -> str:
         """分析极化趋势"""
         if len(polarization_trend) < 2:
             return "数据不足以分析极化趋势。"
-
         initial = polarization_trend[0]
         final = polarization_trend[-1]
-
         if final > initial * 1.5:
-            return f"极化指数从{initial:.3f}上升至{final:.3f}，**社会撕裂加剧**。"
-        elif final < initial * 0.8:
-            return f"极化指数从{initial:.3f}下降至{final:.3f}，**社会共识增强**。"
-        else:
-            return f"极化指数维持在{initial:.3f}~{final:.3f}区间，相对稳定。"
+            return f"极化指数从{initial:.3f}上升至{final:.3f}，社会撕裂加剧。"
+        if final < initial * 0.8:
+            return f"极化指数从{initial:.3f}下降至{final:.3f}，社会共识增强。"
+        return f"极化指数维持在{initial:.3f}~{final:.3f}区间，相对稳定。"
 
     def _generate_recommendations(self, final_state: Dict) -> str:
         """生成建议"""
         recommendations = []
 
-        if final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)) > 0.4:
-            recommendations.append("- 建议提前权威回应时间，减少误信发酵期")
+        mislead_rate = final_state.get('mislead_rate', final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)))
+        correct_rate = final_state.get('correct_rate', final_state.get('positive_belief_rate', final_state.get('truth_acceptance_rate', 0)))
+
+        if mislead_rate > 0.4:
+            recommendations.append("- 建议提前权威回应时间，减少误信发酵期。")
 
         if final_state['polarization_index'] > 0.7:
-            recommendations.append("- 高极化风险，建议降低算法茧房强度")
+            recommendations.append("- 高极化风险，建议降低算法茧房强度。")
 
-        if self.cocoon_strength > 0.6 and final_state.get('negative_belief_rate', final_state.get('rumor_spread_rate', 0)) > 0.3:
-            recommendations.append("- 茧房效应过强阻碍正面信念传播，建议优化推荐算法")
+        if self.cocoon_strength > 0.6 and mislead_rate > 0.3:
+            recommendations.append("- 茧房效应过强阻碍正确认知传播，建议优化推荐算法。")
+
+        if final_state.get("silence_rate", 0.0) > 0.35:
+            recommendations.append("- 沉默率偏高，建议增加低风险表达窗口和权威可见度。")
+
+        if correct_rate < 0.3:
+            recommendations.append("- 正确认知扩散不足，建议提升权威回应的可解释性和可验证性。")
 
         if not recommendations:
-            recommendations.append("- 当前参数配置下舆论状况良好")
+            recommendations.append("- 当前参数配置下舆论状况良好。")
 
         return "\n".join(recommendations)

@@ -181,6 +181,13 @@ class TestReportEndpoints:
         assert response.status_code == 200
         assert "reports" in response.json()
 
+    def test_generate_intelligence_requires_llm_engine(self, client):
+        """测试智库专报接口已挂载且会校验LLM推演状态"""
+        response = client.post("/api/report/generate")
+
+        assert response.status_code == 400
+        assert "success" in response.json()
+
     def test_open_report_not_found(self, client):
         """测试打开不存在的报告"""
         response = client.post("/api/report/open", json={"path": "/nonexistent/report.md"})

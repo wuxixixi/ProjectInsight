@@ -40,6 +40,8 @@ def test_load_realistic_population_falls_back_to_anonymized_synthetic_profile(mo
         assert profile.profile_id == "shass_news_institute"
         assert profile.source_path == "synthetic://shass_news_institute"
         assert all(agent.persona["profile_mode"] == "realistic" for agent in profile.agents)
+        assert profile.agents[0].generation_trace["source"] == "synthetic_roster"
+        assert "belief_strength" in profile.agents[0].generation_trace["metrics"]
     finally:
         shutil.rmtree(cache_dir, ignore_errors=True)
 
@@ -64,5 +66,30 @@ def test_simulation_engine_applies_realistic_profile_to_math_population(monkeypa
         assert len(state.agents) == 27
         assert state.agents[0]["realistic_profile"]["department"] == "上海社会科学院新闻研究所"
         assert state.agents[0]["persona"]["profile_mode"] == "realistic"
+        assert state.agents[0]["realistic_profile"]["generation_trace"]["source"] in {"synthetic_roster", "workbook"}
+    finally:
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+
+def test_simulation_engine_applies_realistic_profile_to_llm_population(monkeypatch):
+    cache_dir = _workspace_cache_dir()
+    monkeypatch.setenv("REALISTIC_PROFILE_CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(realistic_population, "PROFILE_CACHE_DIR", cache_dir)
+    try:
+        engine = SimulationEngine(
+            use_llm=True,
+            population_size=27,
+            population_profile_id="shass_news_institute",
+            realistic_profile_source_path=str(cache_dir / "missing.xlsx"),
+            use_v3=False,
+        )
+
+        state = engine.initialize()
+
+        assert engine.population_size == 27
+        assert engine.llm_population is not None
+        assert len(state.agents) == 27
+        assert state.agents[0]["realistic_profile"]["name"]
+        assert state.agents[0]["realistic_profile"]["generation_trace"]["source"] in {"synthetic_roster", "workbook"}
     finally:
         shutil.rmtree(cache_dir, ignore_errors=True)

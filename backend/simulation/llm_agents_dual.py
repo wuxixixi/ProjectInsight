@@ -601,7 +601,7 @@ class LLMAgent:
 
     def to_dict(self) -> Dict:
         """转换为可序列化字典"""
-        return {
+        payload = {
             "id": self.id,
             "opinion": float(self.opinion),
             "belief_strength": float(self.belief_strength),
@@ -622,6 +622,9 @@ class LLMAgent:
             "community_id": self.community_id,
             "publish_channel": self.publish_channel
         }
+        if hasattr(self, "realistic_profile"):
+            payload["realistic_profile"] = self.realistic_profile
+        return payload
 
 
 class LLMAgentPopulationDual:
