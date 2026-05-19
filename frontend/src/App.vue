@@ -180,9 +180,41 @@
             <span class="mode-icon">🏛</span>
             新闻所27人
           </button>
+          <button :class="['mode-btn', { active: isUserPopulationProfile }]" @click="setPopulationProfile(selectedUserProfileId || 'user_custom')" :disabled="isRunning || !selectedUserProfileId">
+            <span class="mode-icon">📚</span>
+            自定义资料画像
+          </button>
         </div>
         <p class="param-desc" v-if="populationProfile === 'theory'">基于社会心理理论生成通用 Agent</p>
-        <p class="param-desc" v-else>实名科研人员画像，保留姓名便于演示核验</p>
+        <p class="param-desc" v-else-if="populationProfile === 'shass_news_institute'">实名科研人员画像，保留姓名便于演示核验</p>
+        <p class="param-desc" v-else>使用本地资料库离线构建并缓存的人设群体</p>
+
+        <div class="custom-profile-panel">
+          <div class="custom-profile-row">
+            <select v-model="selectedUserProfileId" class="network-select" :disabled="isRunning" @change="setPopulationProfile(selectedUserProfileId || 'theory')">
+              <option value="">选择自定义画像</option>
+              <option v-for="profile in userProfiles" :key="profile.profile_id" :value="profile.profile_id">
+                {{ profile.display_name }}{{ profile.size ? `（${profile.size}人）` : '' }}
+              </option>
+            </select>
+            <button class="btn-profile-small" @click="fetchProfiles" :disabled="isRunning || profileLoading">刷新</button>
+          </div>
+          <details class="profile-builder">
+            <summary>资料库构建</summary>
+            <div class="profile-builder-body">
+              <input v-model.trim="customProfileId" class="profile-input" placeholder="画像ID，例如 media_research_team" :disabled="isRunning" />
+              <input v-model.trim="customProfileName" class="profile-input" placeholder="显示名称，例如 媒体研究团队" :disabled="isRunning" />
+              <input ref="profileFiles" class="profile-input" type="file" multiple :disabled="isRunning" />
+              <div class="custom-profile-row">
+                <button class="btn-profile-small" @click="uploadProfileSources" :disabled="isRunning || profileLoading || !customProfileId">上传资料</button>
+                <button class="btn-profile-small primary" @click="buildCustomProfile" :disabled="isRunning || profileLoading || !customProfileId">离线构建画像</button>
+              </div>
+              <p class="param-desc">支持 CSV/TSV/JSON/JSONL/TXT/MD，后端有 pandas 时支持 Excel。资料会存入本地 <code>data/user_profiles</code> 并缓存复用。</p>
+              <p v-if="profileMessage" class="profile-message">{{ profileMessage }}</p>
+              <p v-if="profileError" class="profile-error">{{ profileError }}</p>
+            </div>
+          </details>
+        </div>
       </div>
 
       <!-- 真实分布锚定（新闻模式） -->
@@ -260,7 +292,8 @@
             <span class="param-value">{{ populationSize }}</span>
           </div>
           <input type="range" v-model.number="populationSize" min="50" max="500" step="50" :disabled="isRunning || populationProfile !== 'theory'" />
-          <p class="param-desc" v-if="populationProfile !== 'theory'">现实组织样本固定为 27 个实名画像</p>
+          <p class="param-desc" v-if="populationProfile === 'shass_news_institute'">现实组织样本固定为 27 个实名画像</p>
+          <p class="param-desc" v-else-if="isUserPopulationProfile">自定义画像样本固定为 {{ activeProfileOption?.size || populationSize }} 个缓存画像</p>
         </div>
 
         <!-- 双层网络开关 -->
@@ -1866,6 +1899,13 @@ export default {
       // Agent参数
       populationSize: 200,
       populationProfile: 'theory',
+      profileOptions: [],
+      selectedUserProfileId: '',
+      customProfileId: '',
+      customProfileName: '',
+      profileLoading: false,
+      profileMessage: '',
+      profileError: '',
       networkType: 'small_world',
 
       // LLM并发参数（留空则自动计算）
@@ -2047,6 +2087,15 @@ export default {
     },
     connectionStatus() {
       return this.isConnected ? '已连接' : '未连接'
+    },
+    userProfiles() {
+      return this.profileOptions.filter(profile => profile.kind !== 'built_in' && profile.profile_id !== 'shass_news_institute')
+    },
+    activeProfileOption() {
+      return this.profileOptions.find(profile => profile.profile_id === this.populationProfile) || null
+    },
+    isUserPopulationProfile() {
+      return this.populationProfile !== 'theory' && this.populationProfile !== 'shass_news_institute'
     },
     networkTypeDesc() {
       const descs = {
@@ -2370,6 +2419,7 @@ export default {
   mounted() {
     this.initCharts()
     this.connectWebSocket()
+    this.fetchProfiles()
     window.addEventListener('resize', this.handleResize)
   },
 
@@ -2690,13 +2740,105 @@ export default {
 
     setPopulationProfile(profile) {
       console.log('[setPopulationProfile]', profile)
+      if (!profile) return
       this.populationProfile = profile
+      if (profile !== 'theory' && profile !== 'shass_news_institute') {
+        this.selectedUserProfileId = profile
+      }
       if (profile === 'shass_news_institute') {
         this.populationSize = 27
         this.useDualNetwork = true
         this.simulationMode = 'news'
+      } else if (profile !== 'theory') {
+        const option = this.profileOptions.find(item => item.profile_id === profile)
+        if (option?.size) {
+          this.populationSize = option.size
+        }
+        this.useDualNetwork = true
+        this.simulationMode = 'news'
       } else if (this.populationSize < 50) {
         this.populationSize = 200
+      }
+    },
+
+    async fetchProfiles() {
+      this.profileLoading = true
+      try {
+        const response = await fetch(API_BASE + '/api/profiles')
+        const data = await response.json()
+        if (!response.ok || data.success === false) {
+          throw new Error(data.error || '画像列表获取失败')
+        }
+        this.profileOptions = data.profiles || []
+        if (!this.selectedUserProfileId && this.userProfiles.length) {
+          this.selectedUserProfileId = this.userProfiles[0].profile_id
+        }
+      } catch (error) {
+        this.profileError = error.message
+      } finally {
+        this.profileLoading = false
+      }
+    },
+
+    async uploadProfileSources() {
+      this.profileError = ''
+      this.profileMessage = ''
+      const files = this.$refs.profileFiles?.files
+      if (!files || files.length === 0) {
+        this.profileError = '请先选择资料文件'
+        return
+      }
+      this.profileLoading = true
+      try {
+        const formData = new FormData()
+        formData.append('profile_id', this.customProfileId)
+        if (this.customProfileName) {
+          formData.append('display_name', this.customProfileName)
+        }
+        Array.from(files).forEach(file => formData.append('files', file))
+        const response = await fetch(API_BASE + '/api/profiles/upload', {
+          method: 'POST',
+          body: formData
+        })
+        const data = await response.json()
+        if (!response.ok || data.success === false) {
+          throw new Error(data.error || '资料上传失败')
+        }
+        this.profileMessage = `已上传 ${data.saved?.length || 0} 个文件`
+        await this.fetchProfiles()
+      } catch (error) {
+        this.profileError = error.message
+      } finally {
+        this.profileLoading = false
+      }
+    },
+
+    async buildCustomProfile() {
+      this.profileError = ''
+      this.profileMessage = ''
+      this.profileLoading = true
+      try {
+        const response = await fetch(API_BASE + '/api/profiles/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profile_id: this.customProfileId,
+            display_name: this.customProfileName || this.customProfileId
+          })
+        })
+        const data = await response.json()
+        if (!response.ok || data.success === false) {
+          throw new Error(data.error || '画像构建失败')
+        }
+        const profile = data.profile
+        this.profileMessage = `画像已构建：${profile.display_name}，${profile.size} 人`
+        this.selectedUserProfileId = profile.profile_id
+        await this.fetchProfiles()
+        this.setPopulationProfile(profile.profile_id)
+      } catch (error) {
+        this.profileError = error.message
+      } finally {
+        this.profileLoading = false
       }
     },
 
@@ -2746,9 +2888,9 @@ export default {
           debunk_delay: this.debunkDelay,
           initial_rumor_spread: this.initialRumorSpread,
           use_llm: this.useLLM,
-          population_size: this.populationProfile === 'theory' ? this.populationSize : 27,
+          population_size: this.populationProfile === 'theory' ? this.populationSize : (this.activeProfileOption?.size || this.populationSize),
           population_profile_id: this.populationProfile === 'theory' ? null : this.populationProfile,
-          refresh_realistic_profile: this.populationProfile !== 'theory',
+          refresh_realistic_profile: false,
           network_type: this.networkType,
           max_steps: this.maxSteps,
           max_concurrent: this.maxConcurrent,
@@ -5307,6 +5449,89 @@ export default {
 
 .mode-icon {
   font-size: 16px;
+}
+
+.custom-profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(30, 41, 59, 0.28);
+  border: 1px solid rgba(100, 181, 246, 0.12);
+  border-radius: 8px;
+}
+
+.custom-profile-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.custom-profile-row .network-select {
+  flex: 1;
+}
+
+.profile-builder {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.profile-builder summary {
+  cursor: pointer;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.profile-builder-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-input {
+  width: 100%;
+  padding: 9px 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(100, 181, 246, 0.18);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.btn-profile-small {
+  padding: 9px 10px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 8px;
+  color: #bfdbfe;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-profile-small.primary {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #bbf7d0;
+}
+
+.btn-profile-small:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-message {
+  color: #86efac;
+  font-size: 11px;
+  margin: 0;
+}
+
+.profile-error {
+  color: #fca5a5;
+  font-size: 11px;
+  margin: 0;
 }
 
 /* ==================== Phase 3: 真实分布锚定样式 ==================== */

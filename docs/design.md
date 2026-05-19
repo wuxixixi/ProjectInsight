@@ -2,6 +2,21 @@
 
 > 基于 AgentSociety 架构启发的系统性升级
 
+> 当前状态更新（2026-05-11）：本文是 v3.0 架构设计背景文档，不是最新接口清单。当前系统已经落地 `backend/simulation/agent/`、`env/`、`message/`、`psychology/` 等模块；运行主路径仍由 `SimulationEngine`、`SimulationEngineDual`、FastAPI 路由和 `/ws/simulation` WebSocket 编排。最新 API、部署和现实画像说明以 [api.md](api.md)、[architecture.md](architecture.md)、[simulation.md](simulation.md)、[metrics.md](metrics.md)、[deployment.md](deployment.md) 为准。
+
+## 当前实现补充
+
+截至 2026-05-11，系统在原有理论人设基础上增加了现实组织画像路径：
+
+- `population_profile_id=shass_news_institute` 可启动上海社科院新闻所 27 人现实画像推演；
+- `/api/profiles` 支持用户上传表格、文章、报道等本地资料，并离线构建可复用的用户资料画像；
+- 现实画像由 `backend/simulation/realistic_population.py` 加载、缓存并生成 `generation_trace`；
+- 前端微观行为透视会显示姓名、角色、研究方向、决策链路和“数值来源”；
+- 姓名用于演示验证，身份证号、手机、地址、健康、婚姻、出生日期等敏感字段不进入缓存和接口；
+- 报告逻辑已经区分新闻可信度，按“高可信/低可信/不确定”解释相信、拒绝、误信和正确认知。
+
+当前仍需注意：v3 设计模块提供结构化认知、记忆、环境和通信能力，但对外接口仍应优先参考当前 FastAPI 路由，而不是本文中的规划性伪代码。
+
 ## 一、概述
 
 ### 1.1 优化背景

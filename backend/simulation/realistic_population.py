@@ -1,17 +1,20 @@
-"""Anonymized real-world organization population profiles.
+"""Real-world organization population profiles.
 
-The loader reads a local personnel workbook only when the sanitized cache is
-missing or explicitly refreshed. Runtime simulations use the JSON cache.
-Sensitive fields are never written to the cache or prompt payloads.
+The loader reads source files only when a sanitized cache is missing or
+explicitly refreshed. Runtime simulations use the JSON cache. Sensitive fields
+are never written to the cache or prompt payloads.
 """
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
@@ -19,6 +22,9 @@ import numpy as np
 DEFAULT_SHASS_NEWS_INSTITUTE_PATH = r"E:\wuxi_xws\名单\251231 新闻所在职人员名单.xlsx"
 PROFILE_CACHE_DIR = Path(os.getenv("REALISTIC_PROFILE_CACHE_DIR", "data/realistic_profiles"))
 EVIDENCE_QUEUE_DIR = Path(os.getenv("PUBLIC_EVIDENCE_QUEUE_DIR", "data/public_evidence_queue"))
+USER_PROFILE_LIBRARY_DIR = Path(os.getenv("USER_PROFILE_LIBRARY_DIR", "data/user_profiles"))
+USER_PROFILE_SOURCE_DIRNAME = "sources"
+USER_PROFILE_META_FILENAME = "profile.meta.json"
 
 SENSITIVE_COLUMNS = {
     "公民身份号码",
@@ -36,6 +42,8 @@ SENSITIVE_COLUMNS = {
 
 EXCLUDED_NAMES = {"徐清泉"}
 SHASS_PROFILE_ALIASES = {"shass_news_institute", "上海社科院新闻所", "news_institute"}
+TEXT_EXTENSIONS = {".txt", ".md", ".markdown"}
+TABLE_EXTENSIONS = {".csv", ".tsv", ".json", ".jsonl", ".xlsx", ".xls"}
 
 
 @dataclass(frozen=True)
@@ -167,9 +175,95 @@ def resolve_population_path(path: Optional[str] = None) -> str:
     return path or os.getenv("SHASS_NEWS_INSTITUTE_XLSX") or DEFAULT_SHASS_NEWS_INSTITUTE_PATH
 
 
+def normalize_profile_id(profile_id: str) -> str:
+    value = (profile_id or "").strip()
+    if not value:
+        raise ValueError("Profile id is required")
+    if value.lower() in SHASS_PROFILE_ALIASES:
+        return "shass_news_institute"
+    normalized = re.sub(r"[^0-9A-Za-z_\-\u4e00-\u9fff]+", "_", value).strip("_")
+    if not normalized:
+        raise ValueError(f"Invalid profile id: {profile_id}")
+    return normalized[:80]
+
+
 def get_profile_cache_path(profile_id: str) -> Path:
     PROFILE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    return PROFILE_CACHE_DIR / f"{profile_id}.sanitized.json"
+    return PROFILE_CACHE_DIR / f"{normalize_profile_id(profile_id)}.sanitized.json"
+
+
+def get_user_profile_dir(profile_id: str) -> Path:
+    return USER_PROFILE_LIBRARY_DIR / normalize_profile_id(profile_id)
+
+
+def get_user_profile_source_dir(profile_id: str) -> Path:
+    return get_user_profile_dir(profile_id) / USER_PROFILE_SOURCE_DIRNAME
+
+
+def get_user_profile_meta_path(profile_id: str) -> Path:
+    return get_user_profile_dir(profile_id) / USER_PROFILE_META_FILENAME
+
+
+def get_available_realistic_profiles() -> List[Dict[str, Any]]:
+    """Return built-in and user-built profiles visible to the frontend."""
+    profiles: Dict[str, Dict[str, Any]] = {
+        "shass_news_institute": {
+            "profile_id": "shass_news_institute",
+            "display_name": "上海社会科学院新闻研究所现实组织画像",
+            "kind": "built_in",
+            "size": None,
+            "ready": get_profile_cache_path("shass_news_institute").exists(),
+            "source_count": None,
+            "updated_at": None,
+        }
+    }
+
+    for meta_path in USER_PROFILE_LIBRARY_DIR.glob(f"*/{USER_PROFILE_META_FILENAME}"):
+        try:
+            with meta_path.open("r", encoding="utf-8") as handle:
+                meta = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        profile_id = normalize_profile_id(str(meta.get("profile_id") or meta_path.parent.name))
+        profiles[profile_id] = {
+            "profile_id": profile_id,
+            "display_name": meta.get("display_name") or profile_id,
+            "kind": "user",
+            "size": meta.get("size"),
+            "ready": get_profile_cache_path(profile_id).exists(),
+            "source_count": meta.get("source_count", 0),
+            "updated_at": meta.get("updated_at") or meta.get("created_at"),
+            "warnings": meta.get("warnings", []),
+        }
+
+    for cache_path in PROFILE_CACHE_DIR.glob("*.sanitized.json"):
+        profile_id = cache_path.name.removesuffix(".sanitized.json")
+        if profile_id in profiles:
+            if profiles[profile_id].get("size") is None:
+                try:
+                    cached = _load_profile_cache(cache_path)
+                    profiles[profile_id]["size"] = cached.size
+                    profiles[profile_id]["display_name"] = cached.display_name or profiles[profile_id]["display_name"]
+                except Exception:
+                    pass
+            profiles[profile_id]["ready"] = True
+            continue
+        try:
+            cached = _load_profile_cache(cache_path)
+        except Exception:
+            continue
+        profiles[profile_id] = {
+            "profile_id": cached.profile_id,
+            "display_name": cached.display_name,
+            "kind": "cache",
+            "size": cached.size,
+            "ready": True,
+            "source_count": None,
+            "updated_at": cached.generated_at,
+            "warnings": cached.warnings,
+        }
+
+    return sorted(profiles.values(), key=lambda item: (item.get("kind") != "built_in", item["display_name"]))
 
 
 def load_realistic_population(
@@ -179,11 +273,15 @@ def load_realistic_population(
     include_public_enrichment: bool = False,
     refresh_cache: bool = False,
 ) -> RealisticPopulationProfile:
-    normalized = (profile_id or "").strip().lower()
+    normalized = normalize_profile_id(profile_id)
     if normalized in {"", "theory", "theoretical"}:
         raise ValueError("No realistic population profile requested")
-    if normalized not in SHASS_PROFILE_ALIASES:
-        raise ValueError(f"Unsupported population profile: {profile_id}")
+    if normalized != "shass_news_institute":
+        return load_user_defined_population(
+            normalized,
+            source_path=source_path,
+            refresh_cache=refresh_cache,
+        )
 
     resolved_path = resolve_population_path(source_path)
     if not Path(resolved_path).exists():
@@ -221,9 +319,14 @@ def refresh_realistic_population_cache(
     *,
     include_public_enrichment: bool = False,
 ) -> RealisticPopulationProfile:
-    normalized = (profile_id or "").strip().lower()
-    if normalized not in SHASS_PROFILE_ALIASES:
-        raise ValueError(f"Unsupported population profile: {profile_id}")
+    normalized = normalize_profile_id(profile_id)
+    if normalized != "shass_news_institute":
+        return build_user_defined_population_profile(
+            normalized,
+            source_path=source_path,
+            display_name=None,
+            refresh_cache=True,
+        )
 
     profile = _build_shass_news_institute_profile(
         resolve_population_path(source_path),
@@ -304,6 +407,123 @@ def create_public_evidence_queue(profile: RealisticPopulationProfile) -> Dict[st
     }
     _write_json(queue_path, payload)
     return {"queue_path": str(queue_path), "agents": len(profile.agents)}
+
+
+def save_user_profile_sources(profile_id: str, files: Iterable[Tuple[str, bytes]]) -> Dict[str, Any]:
+    """Store uploaded source files in the user's offline profile library."""
+    normalized = normalize_profile_id(profile_id)
+    source_dir = get_user_profile_source_dir(normalized)
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    saved = []
+    for filename, content in files:
+        safe_name = _safe_filename(filename)
+        if not safe_name:
+            continue
+        target = source_dir / safe_name
+        stem = target.stem
+        suffix = target.suffix
+        counter = 1
+        while target.exists():
+            target = source_dir / f"{stem}_{counter}{suffix}"
+            counter += 1
+        target.write_bytes(content)
+        saved.append({"filename": target.name, "size": len(content), "path": str(target)})
+
+    meta = _read_user_profile_meta(normalized)
+    meta.update({
+        "profile_id": normalized,
+        "display_name": meta.get("display_name") or normalized,
+        "source_count": len(list(_iter_source_files(source_dir))),
+        "updated_at": _utc_now(),
+    })
+    _write_json(get_user_profile_meta_path(normalized), meta)
+    return {"profile_id": normalized, "saved": saved, "source_dir": str(source_dir)}
+
+
+def update_user_profile_meta(profile_id: str, **updates: Any) -> Dict[str, Any]:
+    normalized = normalize_profile_id(profile_id)
+    meta = _read_user_profile_meta(normalized)
+    meta.update({key: value for key, value in updates.items() if value is not None})
+    meta.setdefault("profile_id", normalized)
+    meta["updated_at"] = _utc_now()
+    _write_json(get_user_profile_meta_path(normalized), meta)
+    return meta
+
+
+def load_user_defined_population(
+    profile_id: str,
+    source_path: Optional[str] = None,
+    *,
+    refresh_cache: bool = False,
+) -> RealisticPopulationProfile:
+    normalized = normalize_profile_id(profile_id)
+    cache_path = get_profile_cache_path(normalized)
+    if cache_path.exists() and not refresh_cache:
+        return _load_profile_cache(cache_path)
+
+    source_root = Path(source_path) if source_path else get_user_profile_source_dir(normalized)
+    if not source_root.exists() and cache_path.exists():
+        return _load_profile_cache(cache_path)
+    if not source_root.exists():
+        raise FileNotFoundError(f"User profile source directory not found: {source_root}")
+
+    meta = _read_user_profile_meta(normalized)
+    return build_user_defined_population_profile(
+        normalized,
+        source_path=str(source_root),
+        display_name=meta.get("display_name") or normalized,
+        refresh_cache=True,
+    )
+
+
+def build_user_defined_population_profile(
+    profile_id: str,
+    *,
+    source_path: Optional[str] = None,
+    display_name: Optional[str] = None,
+    refresh_cache: bool = True,
+) -> RealisticPopulationProfile:
+    """Build a reusable offline profile from user-provided local documents."""
+    normalized = normalize_profile_id(profile_id)
+    source_root = Path(source_path) if source_path else get_user_profile_source_dir(normalized)
+    rows, warnings, source_files = _load_user_source_records(source_root)
+
+    if not rows:
+        raise ValueError(f"No usable profile records found in {source_root}")
+
+    agents = [
+        _build_user_defined_agent_profile(i, row, normalized)
+        for i, row in enumerate(rows)
+    ]
+    generated_at = _utc_now()
+    cache_path = get_profile_cache_path(normalized)
+    profile = RealisticPopulationProfile(
+        profile_id=normalized,
+        display_name=display_name or normalized,
+        source_path=str(source_root),
+        agents=agents,
+        warnings=warnings,
+        cache_path=str(cache_path),
+        generated_at=generated_at,
+    )
+    if refresh_cache:
+        _write_json(cache_path, profile.to_cache_dict())
+
+    meta = _read_user_profile_meta(normalized)
+    meta.update({
+        "profile_id": normalized,
+        "display_name": display_name or meta.get("display_name") or normalized,
+        "source_dir": str(source_root),
+        "source_count": len(source_files),
+        "record_count": len(rows),
+        "size": profile.size,
+        "cache_path": str(cache_path),
+        "warnings": warnings,
+        "updated_at": generated_at,
+    })
+    _write_json(get_user_profile_meta_path(normalized), meta)
+    return profile
 
 
 def _build_shass_news_institute_profile(
@@ -477,6 +697,270 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
+def _read_user_profile_meta(profile_id: str) -> Dict[str, Any]:
+    path = get_user_profile_meta_path(profile_id)
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _safe_filename(filename: str) -> str:
+    name = Path(filename or "").name.strip()
+    if not name:
+        return ""
+    return re.sub(r"[^0-9A-Za-z_\-\.\u4e00-\u9fff]+", "_", name)[:160]
+
+
+def _iter_source_files(source_root: Path) -> List[Path]:
+    if source_root.is_file():
+        return [source_root]
+    if not source_root.exists():
+        return []
+    allowed = TEXT_EXTENSIONS | TABLE_EXTENSIONS
+    return [
+        path
+        for path in source_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in allowed
+    ]
+
+
+def _load_user_source_records(source_root: Path) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    warnings: List[str] = []
+    rows: List[Dict[str, Any]] = []
+    files = _iter_source_files(source_root)
+    for path in files:
+        suffix = path.suffix.lower()
+        try:
+            if suffix in {".csv", ".tsv"}:
+                records = _load_delimited_records(path, delimiter="\t" if suffix == ".tsv" else ",")
+            elif suffix == ".json":
+                records = _load_json_records(path)
+            elif suffix == ".jsonl":
+                records = _load_jsonl_records(path)
+            elif suffix in {".xlsx", ".xls"}:
+                records = _load_excel_records(path, warnings)
+            elif suffix in TEXT_EXTENSIONS:
+                records = _load_text_records(path)
+            else:
+                records = []
+            for record in records:
+                record.setdefault("source_file", path.name)
+            rows.extend(records)
+        except Exception as exc:
+            warnings.append(f"Skipped {path.name}: {exc}")
+
+    deduped: List[Dict[str, Any]] = []
+    seen = set()
+    for row in rows:
+        normalized = _normalize_user_record(row)
+        name = normalized.get("name") or ""
+        key = name.strip() or hashlib.sha256(json.dumps(normalized, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+
+    if not files:
+        warnings.append(f"No supported source files found in {source_root}")
+    return deduped, warnings, [str(path) for path in files]
+
+
+def _load_delimited_records(path: Path, *, delimiter: str) -> List[Dict[str, Any]]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter=delimiter)
+        return [dict(row) for row in reader]
+
+
+def _load_json_records(path: Path) -> List[Dict[str, Any]]:
+    with path.open("r", encoding="utf-8-sig") as handle:
+        data = json.load(handle)
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if isinstance(data, dict):
+        for key in ("agents", "people", "persons", "members", "records", "data"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        return [data]
+    return []
+
+
+def _load_jsonl_records(path: Path) -> List[Dict[str, Any]]:
+    records = []
+    with path.open("r", encoding="utf-8-sig") as handle:
+        for line in handle:
+            text = line.strip()
+            if not text:
+                continue
+            item = json.loads(text)
+            if isinstance(item, dict):
+                records.append(item)
+    return records
+
+
+def _load_excel_records(path: Path, warnings: List[str]) -> List[Dict[str, Any]]:
+    try:
+        import pandas as pd
+    except ImportError:
+        warnings.append(f"Skipped {path.name}: pandas/openpyxl is required for Excel sources")
+        return []
+    frames = pd.read_excel(path, sheet_name=None)
+    records: List[Dict[str, Any]] = []
+    for sheet, frame in frames.items():
+        if frame.empty:
+            continue
+        for row in frame.dropna(how="all").to_dict(orient="records"):
+            row["_sheet"] = sheet
+            records.append(row)
+    return records
+
+
+def _load_text_records(path: Path) -> List[Dict[str, Any]]:
+    text = path.read_text(encoding="utf-8-sig", errors="ignore")
+    frontmatter = _parse_text_frontmatter(text)
+    if frontmatter:
+        frontmatter.setdefault("source_file", path.name)
+        frontmatter.setdefault("notes", _compact_text(text))
+        return [frontmatter]
+
+    records = []
+    chunks = [chunk.strip() for chunk in re.split(r"\n\s*(?:---+|#{1,3}\s+人物|#{1,3}\s+成员)\s*\n", text) if chunk.strip()]
+    for idx, chunk in enumerate(chunks):
+        fields = _parse_loose_profile_text(chunk)
+        fields.setdefault("name", _infer_name_from_text(chunk, fallback=f"{path.stem}-{idx + 1}"))
+        fields.setdefault("source_file", path.name)
+        fields.setdefault("notes", _compact_text(chunk))
+        records.append(fields)
+    return records or [{
+        "name": path.stem,
+        "source_file": path.name,
+        "notes": _compact_text(text),
+        "specialty": _infer_specialty_from_text(text),
+    }]
+
+
+def _parse_text_frontmatter(text: str) -> Dict[str, Any]:
+    match = re.match(r"^\s*---\s*\n(?P<body>[\s\S]+?)\n---\s*", text)
+    if not match:
+        return {}
+    fields: Dict[str, Any] = {}
+    for line in match.group("body").splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip()] = value.strip()
+    return fields
+
+
+def _parse_loose_profile_text(text: str) -> Dict[str, Any]:
+    fields: Dict[str, Any] = {}
+    key_aliases = {
+        "姓名": "name",
+        "名称": "name",
+        "名字": "name",
+        "单位": "department",
+        "部门": "department",
+        "机构": "department",
+        "职务": "title",
+        "职称": "title",
+        "岗位": "title",
+        "研究方向": "specialty",
+        "专业": "specialty",
+        "领域": "specialty",
+        "学历": "education",
+        "学位": "degree",
+        "年龄": "age",
+        "工龄": "work_years",
+        "本单位工龄": "org_years",
+    }
+    for line in text.splitlines():
+        line = line.strip(" -*\t")
+        if not line or (":" not in line and "：" not in line):
+            continue
+        key, value = re.split(r"[:：]", line, maxsplit=1)
+        key = key.strip()
+        normalized = key_aliases.get(key)
+        if normalized:
+            fields[normalized] = value.strip()
+    return fields
+
+
+def _normalize_user_record(row: Dict[str, Any]) -> Dict[str, Any]:
+    aliases = {
+        "name": ("name", "姓名", "名称", "名字", "人员", "作者", "person"),
+        "department": ("department", "部门", "单位", "机构", "所在单位", "organization"),
+        "specialty": ("specialty", "研究方向", "专业", "领域", "关键词", "tags", "topic"),
+        "title": ("title", "职称", "职务", "岗位", "position", "role"),
+        "admin_role": ("admin_role", "行政职务", "行政职务名称", "管理职责"),
+        "party_role": ("party_role", "党内职务", "党内职务名称"),
+        "education": ("education", "学历", "最高学历"),
+        "degree": ("degree", "学位", "最高学位"),
+        "age": ("age", "年龄"),
+        "work_years": ("work_years", "工龄", "工作年限"),
+        "org_years": ("org_years", "本单位工龄", "本单位年限"),
+        "notes": ("notes", "简介", "摘要", "内容", "文本", "报道", "文章", "bio", "description"),
+        "source_file": ("source_file", "_source_file", "文件", "来源文件"),
+    }
+    normalized: Dict[str, Any] = {}
+    for target, keys in aliases.items():
+        for key in keys:
+            if key in row and _text(row.get(key)):
+                normalized[target] = row.get(key)
+                break
+
+    if "specialty" not in normalized and normalized.get("notes"):
+        normalized["specialty"] = _infer_specialty_from_text(str(normalized["notes"]))
+    if "name" not in normalized:
+        normalized["name"] = _infer_name_from_record(row)
+    for key, value in row.items():
+        if key in SENSITIVE_COLUMNS:
+            continue
+        if key not in normalized and key not in aliases:
+            normalized.setdefault("extra", {})[str(key)] = _text(value)
+    return normalized
+
+
+def _infer_name_from_record(row: Dict[str, Any]) -> str:
+    ignored_keys = {"source_file", "_source_file", "_sheet"}
+    for key, value in row.items():
+        if str(key) in ignored_keys or str(key) in SENSITIVE_COLUMNS:
+            continue
+        text = _text(value)
+        if 2 <= len(text) <= 12 and not any(char in text for char in "，。；;:：/\\."):
+            return text
+    seed = json.dumps(row, ensure_ascii=False, sort_keys=True)
+    return "资料成员 " + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:6]
+
+
+def _infer_name_from_text(text: str, *, fallback: str) -> str:
+    fields = _parse_loose_profile_text(text)
+    if fields.get("name"):
+        return fields["name"]
+    first_line = next((line.strip("# -*\t") for line in text.splitlines() if line.strip()), "")
+    if 2 <= len(first_line) <= 20:
+        return first_line
+    return fallback
+
+
+def _infer_specialty_from_text(text: str) -> str:
+    keywords = [
+        "舆情", "新闻", "传播", "新媒体", "算法", "平台", "治理", "公共政策", "国际传播",
+        "城市传播", "文化传播", "社会调查", "危机传播", "数据新闻", "媒介伦理", "人工智能",
+        "经济", "金融", "教育", "法律", "医疗", "基层", "党建", "政策评估",
+    ]
+    hits = [word for word in keywords if word in text]
+    return " / ".join(hits[:3]) if hits else "综合研究"
+
+
+def _compact_text(text: str, limit: int = 600) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    return compact[:limit]
+
+
 def _synthetic_metric_formulas() -> Dict[str, str]:
     return {
         "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.18, 0.18]，避免初始立场过于极化",
@@ -589,6 +1073,109 @@ def _drop_sensitive_columns(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, An
     return [{key: value for key, value in row.items() if key not in SENSITIVE_COLUMNS} for row in rows]
 
 
+def _build_user_defined_agent_profile(
+    agent_id: int,
+    row: Dict[str, Any],
+    profile_id: str,
+) -> RealisticAgentProfile:
+    rng = np.random.default_rng(_stable_seed(profile_id, agent_id, row))
+    name = _text(row.get("name")) or f"资料成员 #{agent_id + 1}"
+    department = _text(row.get("department")) or "用户自定义群体"
+    notes = _text(row.get("notes"))
+    specialty = _text(row.get("specialty")) or _infer_specialty_from_text(notes)
+    title = _text(row.get("title")) or "资料画像成员"
+    admin_role = _text(row.get("admin_role"))
+    party_role = _text(row.get("party_role"))
+    education = _text(row.get("education"))
+    degree = _text(row.get("degree"))
+    age = _number(row.get("age"), default=40.0)
+    org_years = _number(row.get("org_years"), default=5.0)
+    work_years = _number(row.get("work_years"), default=max(1.0, age - 25.0))
+    source_file = _text(row.get("source_file"))
+
+    seniority_score = _seniority_score(age, work_years, org_years, title, admin_role)
+    seniority_label = _seniority_label(seniority_score)
+    role_label = _role_label(seniority_label, title, admin_role, specialty)
+
+    evidence_bonus = min(len(notes) / 2000.0, 0.12)
+    influence = float(np.clip(0.23 + seniority_score * 0.48 + (0.14 if admin_role else 0.0) + evidence_bonus, 0.1, 1.0))
+    susceptibility = float(np.clip(0.58 - seniority_score * 0.22 - (0.06 if "博士" in degree + education else 0.0) - evidence_bonus * 0.5, 0.12, 0.78))
+    belief_strength = float(np.clip(0.42 + seniority_score * 0.28 + evidence_bonus + rng.normal(0, 0.04), 0.2, 0.9))
+    fear_of_isolation = float(np.clip(0.44 + (0.13 if admin_role or party_role else 0.0) + rng.normal(0, 0.05), 0.15, 0.9))
+    conviction = float(np.clip(0.43 + seniority_score * 0.24 + evidence_bonus + rng.normal(0, 0.05), 0.2, 0.9))
+    opinion = float(np.clip(rng.normal(0.0, 0.08), -0.2, 0.2))
+    community_id = _community_id(specialty, department)
+    is_influencer = bool(influence >= 0.72 or admin_role)
+    generation_trace = _build_generation_trace(
+        source="user_profile_library",
+        inputs={
+            "source_file": source_file,
+            "age": age,
+            "age_band": _age_band(age),
+            "work_years": work_years,
+            "work_years_band": _years_band(work_years),
+            "org_years": org_years,
+            "org_years_band": _years_band(org_years),
+            "title": title,
+            "admin_role": admin_role,
+            "party_role": party_role,
+            "education": education,
+            "degree": degree,
+            "specialty": specialty,
+            "notes_excerpt": notes[:240],
+        },
+        seniority_score=seniority_score,
+        metrics={
+            "opinion": opinion,
+            "belief_strength": belief_strength,
+            "influence": influence,
+            "susceptibility": susceptibility,
+            "fear_of_isolation": fear_of_isolation,
+            "conviction": conviction,
+        },
+        formulas=_user_metric_formulas(),
+        community_id=community_id,
+        is_influencer=is_influencer,
+    )
+    persona = {
+        "type": "用户资料画像",
+        "desc": (
+            f"{role_label}。资料来源：{source_file or '用户资料库'}。"
+            "该画像由用户提供的离线资料抽取和规则化生成，不代表本人真实态度。"
+        ),
+        "profile_mode": "realistic",
+        "role_label": role_label,
+        "specialty": specialty,
+        "seniority": seniority_label,
+        "privacy_note": "user-provided offline profile cache; sensitive columns are excluded when recognized",
+    }
+    public_evidence = []
+    if source_file:
+        public_evidence.append({"type": "local_source", "title": source_file, "url": ""})
+
+    return RealisticAgentProfile(
+        agent_id=agent_id,
+        name=name,
+        role_label=role_label,
+        department=department,
+        specialty=specialty,
+        title=title,
+        seniority_label=seniority_label,
+        community_id=community_id,
+        is_influencer=is_influencer,
+        opinion=opinion,
+        belief_strength=belief_strength,
+        influence=influence,
+        susceptibility=susceptibility,
+        fear_of_isolation=fear_of_isolation,
+        conviction=conviction,
+        persona=persona,
+        public_evidence=public_evidence,
+        search_queries=[],
+        generation_trace=generation_trace,
+    )
+
+
 def _build_agent_profile(
     agent_id: int,
     row: Dict[str, Any],
@@ -693,6 +1280,22 @@ def _build_agent_profile(
             search_queries=queries,
             generation_trace=generation_trace,
         )
+
+
+def _user_metric_formulas() -> Dict[str, str]:
+    return {
+        "opinion": "以中性为中心叠加小幅稳定扰动，并限制在[-0.20, 0.20]，避免根据资料预设明确立场",
+        "belief_strength": "以资历分和资料丰富度为基础，再叠加小幅稳定扰动，形成初始信念强度",
+        "influence": "资历分、管理职责和资料丰富度共同影响影响力，最后限制在0.1到1.0之间",
+        "susceptibility": "资历分越高通常越不容易受影响；高学历和资料丰富度会略微降低易感性，最后限制在0.12到0.78之间",
+        "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加小幅稳定扰动，最后限制在0.15到0.9之间",
+        "conviction": "资历分和资料丰富度越高通常越坚定，再叠加小幅稳定扰动，最后限制在0.2到0.9之间",
+    }
+
+
+def _stable_seed(profile_id: str, agent_id: int, row: Dict[str, Any]) -> int:
+    payload = json.dumps({"profile_id": profile_id, "agent_id": agent_id, "row": row}, ensure_ascii=False, sort_keys=True)
+    return int(hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8], 16)
 
 
 def _build_search_queries(row: Dict[str, Any], specialty: str) -> List[str]:

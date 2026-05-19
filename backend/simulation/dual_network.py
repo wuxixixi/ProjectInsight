@@ -28,7 +28,7 @@ class DualLayerNetwork:
     ):
         self.size = size
         self.public_m = public_m
-        self.num_communities = min(num_communities, size // 10)  # 确保每个社群至少10人
+        self.num_communities = max(1, min(num_communities, max(1, size // 10)))  # 小样本至少1个社群
         self.intra_community_prob = intra_community_prob
         self.inter_community_prob = inter_community_prob
         self.seed = seed
@@ -52,7 +52,10 @@ class DualLayerNetwork:
         - 存在少数拥有大量连接的"超级节点"（大V）
         - 符合真实社交媒体的幂律分布
         """
-        G = nx.barabasi_albert_graph(self.size, self.public_m, seed=self.seed)
+        if self.size <= 1:
+            return nx.empty_graph(self.size)
+        m = max(1, min(self.public_m, self.size - 1))
+        G = nx.barabasi_albert_graph(self.size, m, seed=self.seed)
         return G
 
     def _build_private_network(self) -> nx.Graph:

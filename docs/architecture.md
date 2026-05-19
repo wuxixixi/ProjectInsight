@@ -1,307 +1,351 @@
-# 系统架构说明
+# 系统架构
 
-## 整体架构
+更新时间：2026-05-11
 
-觉测·洞鉴采用前后端分离架构，支持双模式推演（沙盘/新闻），通过 WebSocket 实现实时推演状态同步：
+## 总览
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Vue 3 Frontend                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐  │
-│  │ 控制面板    │  │ 可视化面板  │  │ 预测面板    │  │ 智能体透视面板    │  │
-│  │ (沙盘/新闻) │  │ (观点分布)  │  │ (轨迹展示)  │  │ (决策过程)        │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────────┬─────────┘  │
-│         │                │                │                   │            │
-│         └────────────────┴────────────────┴───────────────────┘            │
-│                                   │                                         │
-│                     WebSocket + REST API                                    │
-└───────────────────────────────────┼─────────────────────────────────────────┘
-                                    │
-┌───────────────────────────────────┼─────────────────────────────────────────┐
-│                          FastAPI Backend                                    │
-│                                                                            │
-│  ┌────────────────────────────────────────────────────────────────────┐   │
-│  │                         API Layer                                   │   │
-│  │  /api/simulation/*  /api/agent/*  /api/report/*  /api/prediction/* │   │
-│  │  /api/event/*       /api/docs/*                                    │   │
-│  └────────────────────────────────┬───────────────────────────────────┘   │
-│                                   │                                        │
-│  ┌────────────────────────────────┼────────────────────────────────────┐  │
-│  │                  Simulation Engine Layer                            │  │
-│  │                                                                     │  │
-│  │  ┌──────────────────────────────────────────────────────────────┐  │  │
-│  │  │                 双模式引擎架构                                │  │  │
-│  │  │                                                              │  │  │
-│  │  │   ┌─────────────────┐       ┌─────────────────────────────┐ │  │  │
-│  │  │   │   沙盘模式       │       │       新闻模式              │ │  │  │
-│  │  │   │ (Sandbox Mode)  │       │    (News Mode)              │ │  │  │
-│  │  │   │                 │       │                             │ │  │  │
-│  │  │   │ • 参数驱动      │       │ • 真实分布锚定              │ │  │  │
-│  │  │   │ • 快速探索      │       │ • 预测区间                  │ │  │  │
-│  │  │   │ • 机制研究      │       │ • 风险预警                  │ │  │  │
-│  │  │   │                 │       │ • 干预建议                  │ │  │  │
-│  │  │   └─────────────────┘       └─────────────────────────────┘ │  │  │
-│  │  │                                                              │  │  │
-│  │  └──────────────────────────────────────────────────────────────┘  │  │
-│  │                                                                     │  │
-│  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────────┐   │  │
-│  │  │ Engine (数学)  │  │ EngineDual     │  │ KnowledgeDriven    │   │  │
-│  │  │               │  │ (双层网络)     │  │ Evolution          │   │  │
-│  │  └───────┬───────┘  └───────┬────────┘  └──────────┬─────────┘   │  │
-│  │          │                  │                       │             │  │
-│  │  ┌───────┴──────────────────┴───────────────────────┴────────┐   │  │
-│  │  │                    Agent Population                        │   │  │
-│  │  │  ┌─────────────┐  ┌───────────────┐  ┌─────────────────┐  │   │  │
-│  │  │  │  agents.py  │  │ llm_agents.py │  │ llm_agents_     │  │   │  │
-│  │  │  │  (数学模型) │  │ (LLM驱动)     │  │ dual.py(双层)   │  │   │  │
-│  │  │  └─────────────┘  └───────────────┘  └─────────────────┘  │   │  │
-│  │  └────────────────────────────────────────────────────────────┘   │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌────────────────────────────────────────────────────────────────────┐  │
-│  │                       LLM Layer                                    │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌───────────────────┐  │  │
-│  │  │  LLM Client     │  │ GraphParser     │  │ Analyst Agent     │  │  │
-│  │  │  (DeepSeek)     │  │ (知识图谱解析)  │  │ (智库专报生成)    │  │  │
-│  │  └─────────────────┘  └─────────────────┘  └───────────────────┘  │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌────────────────────────────────────────────────────────────────────┐  │
-│  │                    Prediction Layer                                │  │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌───────────────────┐  │  │
-│  │  │ TrajectoryModel │  │ RiskAlertSystem │  │ InterventionPlanner│  │  │
-│  │  │ (轨迹预测)      │  │ (风险预警)      │  │ (干预建议)        │  │  │
-│  │  └─────────────────┘  └─────────────────┘  └───────────────────┘  │  │
-│  └────────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────────────────┘
+ProjectInsight 采用 Vue 3 前端 + FastAPI 后端。后端通过 REST API、WebSocket 和 SSE 提供推演、事件注入、Agent 透视、预测风险和报告生成能力。
+
+```text
+Vue 3 App
+  ├─ 控制面板：模式、参数、人设来源、事件注入
+  ├─ 可视化：观点分布、传播网络、趋势曲线、预测轨迹
+  ├─ 微观行为透视：Agent 决策链路、现实画像、数值来源
+  └─ 报告：基础报告、智库专报、历史报告
+
+FastAPI
+  ├─ /api/simulation/*：启动、单步、状态、结束、Agent inspect
+  ├─ /api/event/*：新闻解析、事件注入、知识图谱
+  ├─ /api/prediction、/api/risk-alerts：预测与风险
+  ├─ /api/profiles/*：用户自定义资料画像的上传、构建和列表
+  ├─ /api/report/*：报告生成、流式生成、读取、下载、打开
+  └─ /ws/simulation：LLM 推演和实时状态推送
+
+Simulation Layer
+  ├─ SimulationEngine：单层网络，数学模型 + LLM 模式
+  ├─ SimulationEngineDual：双层网络，公域 + 私域
+  ├─ RealisticPopulation：内置现实画像、用户资料画像加载、缓存、数值来源
+  ├─ LLM Agents：微观决策与快照
+  ├─ Knowledge Graph：事件实体关系解析与演化影响
+  └─ Report Utils / Analyst Agent：报告口径、样本抽取、LLM 专报
 ```
 
-## 核心组件
+## 后端入口
 
-### 后端组件
+### `backend/app.py`
 
-#### 1. API Layer (`backend/app.py`)
+职责：
 
-- **FastAPI 应用**：提供 REST API 和 WebSocket 接口
-- **路由处理**：simulation、agent、report、prediction、event、docs 六大模块
-- **CORS 中间件**：支持前端跨域访问
-- **双模式管理**：沙盘/新闻模式切换和状态管理
-- **向后兼容层**：API同时接受新旧参数名（如 `response_delay` / `debunk_delay`）
+- 创建 FastAPI 应用；
+- 注册 `simulation`、`event`、`prediction`、`profiles`、`report` 路由；
+- 提供健康检查 `GET /`；
+- 提供 WebSocket `/ws/simulation`；
+- 控制同一客户端主机只保留一个活动 WebSocket；
+- 在自动推演中处理事件注入暂停、LLM 进度推送和断连清理。
 
-#### 2. Simulation Engine
+WebSocket 支持动作：
 
-| 组件 | 文件 | 说明 |
-|------|------|------|
-| SimulationEngine | `simulation/engine.py` | 单层网络引擎（数学模型/LLM） |
-| SimulationEngineDual | `simulation/engine_dual.py` | 双层网络引擎（公域+私域） |
-| AgentPopulation | `simulation/agents.py` | 数学模型智能体群体 |
-| LLMAgentPopulation | `simulation/llm_agents.py` | LLM 驱动智能体 |
-| LLMAgentPopulationDual | `simulation/llm_agents_dual.py` | LLM 驱动智能体（双层网络） |
-| KnowledgeDrivenEvolution | `simulation/knowledge_evolution.py` | 知识图谱驱动演化器 |
-| GraphParserAgent | `simulation/graph_parser_agent.py` | 知识图谱解析器 |
-| AnalystAgent | `simulation/analyst_agent.py` | 智库专报生成 |
+| action | 说明 |
+| --- | --- |
+| `start` | 启动推演，可传完整启动参数 |
+| `step` | 执行一步 |
+| `auto` | 自动推演 |
+| `pause` | 暂停自动推演，保留引擎状态 |
+| `resume` | 恢复自动推演 |
+| `stop` | 停止自动推演 |
+| `finish` | 生成基础报告 |
 
-#### 3. LLM Layer
+### `backend/state.py`
 
-| 组件 | 文件 | 说明 |
-|------|------|------|
-| LLM Client | `llm/client.py` | DeepSeek API 封装，支持并发控制 |
-| GraphParserAgent | `simulation/graph_parser_agent.py` | 知识图谱解析（实体/关系抽取） |
+全局状态使用自定义 `_StateModule` 替换模块对象并通过 `RLock` 保护访问。主要状态包括：
 
-#### 4. Prediction Layer（新闻模式专用）
+- `state.engine`
+- `state.injection_in_progress`
+- `state.pending_knowledge_graph`
+- `state.pending_event_content`
+- `state.prediction_model`
 
-| 组件 | 文件 | 说明 |
-|------|------|------|
-| TrajectoryModel | `simulation/prediction.py` | 轨迹预测，输出置信区间 |
-| RiskAlertSystem | `simulation/risk_alert.py` | 风险预警系统 |
-| InterventionPlanner | `simulation/prediction.py` | 干预时机和策略建议 |
+测试必须使用 `reset_global_state` fixture，避免引擎、LLM 单例、图谱解析器和 Agent 快照泄漏。
 
-#### 5. Knowledge Graph Pipeline
+## 推演引擎
 
+### `SimulationEngine`
+
+文件：`backend/simulation/engine.py`
+
+- 单层社交网络；
+- 支持数学模型和 LLM 模式；
+- `use_llm=False` 时可用同步 `step()`；
+- `use_llm=True` 时应使用 `async_step()`；
+- 支持事件注入、知识图谱、基础报告生成和现实画像初始化。
+
+### `SimulationEngineDual`
+
+文件：`backend/simulation/engine_dual.py`
+
+- 默认引擎；
+- 公域使用无标度网络，用于模拟微博式传播；
+- 私域使用社群网络，用于模拟微信式群组传播；
+- 返回 `public_edges`、`private_edges`、`public_negative_rate`、`private_negative_rate` 等双层指标；
+- 支持现实画像和 LLM Agent 快照。
+
+## Agent 层
+
+### 理论人设
+
+理论人设由 Agent 类根据内置参数生成，适合机制演示和参数实验。常见属性：
+
+- `opinion`
+- `belief_strength`
+- `susceptibility`
+- `influence`
+- `fear_of_isolation`
+- `conviction`
+- `persona`
+
+### LLM Agent
+
+文件：
+
+- `backend/simulation/llm_agents.py`
+- `backend/simulation/llm_agents_dual.py`
+
+LLM Agent 决策后会保存快照，供 `/api/agent/{id}/inspect` 读取。快照包含：
+
+- 旧观点、新观点；
+- 接收到的新闻和邻居观点；
+- 情绪、行动、评论、推理；
+- 邻居舆论气候；
+- 现实画像 `realistic_profile`。
+
+## 现实组织画像与资料库画像
+
+文件：`backend/simulation/realistic_population.py`
+
+当前支持画像：
+
+```text
+shass_news_institute
+上海社科院新闻所
+news_institute
 ```
-   新闻文本输入
-         │
-         ▼
-┌─────────────────┐
-│ GraphParserAgent│
-│   (LLM Prompt)  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  LLM API 调用 (10-60秒)                                              │
-│  • 实体提取: 人物、组织、地点、事件、概念                             │
-│  • 关系抽取: 动作类型、关系类型                                       │
-│  • 语义摘要: 事件核心内容                                            │
-│  • 情感分析: 正面/负面/中性/争议                                      │
-│  • 可信度评估: 高可信/低可信/不确定                                   │
-└─────────────────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  知识图谱 JSON                                                      │
-│  {                                                                  │
-│    "entities": [{"name": "", "type": "", "importance": 1-5}],       │
-│    "relations": [{"source": "", "target": "", "action": ""}],       │
-│    "summary": "...",                                                │
-│    "sentiment": "中性",                                              │
-│    "credibility_hint": "不确定"                                      │
-│  }                                                                  │
-└─────────────────────────────────────────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Agent 决策上下文 + 知识驱动演化                                     │
-│  • 实体影响力计算                                                   │
-│  • 关系立场映射                                                     │
-│  • 观点增量计算                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+
+内置现实组织画像加载流程：
+
+```text
+启动参数 population_profile_id
+  ├─ 解析工作簿路径：realistic_profile_source_path
+  │                  SHASS_NEWS_INSTITUTE_XLSX
+  │                  默认本地路径
+  ├─ 如果缓存存在且未 refresh，则读取 data/realistic_profiles/*.sanitized.json
+  ├─ 如果工作簿存在，则从工作簿构造并刷新缓存
+  └─ 如果工作簿和缓存都不存在，则生成匿名合成画像兜底
 ```
 
-### 前端组件
+用户自定义资料画像使用同一个 `RealisticPopulationProfile` 数据结构，但来源改为本地资料库：
 
+```text
+前端上传资料
+  ├─ POST /api/profiles/upload
+  ├─ 写入 data/user_profiles/<profile_id>/sources/
+  ├─ POST /api/profiles/build
+  ├─ 解析 CSV/TSV/JSON/JSONL/TXT/MD/Markdown/Excel
+  ├─ 生成 data/realistic_profiles/<profile_id>.sanitized.json
+  └─ 启动推演时 population_profile_id=<profile_id> 直接复用缓存
 ```
+
+资料库元数据保存在：
+
+```text
+data/user_profiles/<profile_id>/profile.meta.json
+```
+
+现实画像应用位置：
+
+- `apply_realistic_profile_to_llm_population()`：覆盖 LLM Agent 的初始参数与 `persona`；
+- `apply_realistic_profile_to_math_population()`：覆盖数学人口数组；
+- `/api/agent/{id}/inspect`：无论快照是否存在，都会尝试附加 `realistic_profile`。
+
+现实画像公开字段：
+
+- `name`
+- `role_label`
+- `department`
+- `specialty`
+- `title`
+- `seniority_label`
+- `community_id`
+- `is_influencer`
+- `generation_trace`
+- `public_evidence`
+- `search_queries`
+
+敏感字段不会进入缓存和接口：身份证号、手机、邮箱、联系地址、健康、婚姻、血型、户口所在地、出生日期等。
+
+用户自定义资料画像会优先识别这些字段：
+
+- `姓名/name`
+- `部门/单位/机构/department`
+- `职称/职务/岗位/title`
+- `研究方向/专业/领域/specialty`
+- `年龄/age`
+- `工龄/工作年限/work_years`
+- `本单位工龄/本单位年限/org_years`
+- `简介/摘要/内容/报道/文章/notes`
+
+识别不到姓名时，系统会生成稳定的“资料成员”编号；识别不到研究方向时，会从正文关键词中推断。
+
+## 数值来源
+
+现实画像中的 `generation_trace` 是前端“数值来源”的数据根：
+
+```json
+{
+  "source": "workbook",
+  "inputs": {
+    "age_band": "45-54岁",
+    "work_years_band": "20-30年",
+    "title": "研究员",
+    "education": "研究生",
+    "degree": "博士",
+    "specialty": "舆情治理"
+  },
+  "derived": {
+    "seniority_score": 0.855,
+    "community_id": 1,
+    "is_influencer": true
+  },
+  "metrics": {
+    "opinion": 0.0819,
+    "belief_strength": 0.7144,
+    "influence": 0.8275,
+    "susceptibility": 0.255
+  },
+  "formulas": {
+    "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间"
+  }
+}
+```
+
+前端应将内部变量解释为中文：
+
+| 内部字段 | 前端建议文案 |
+| --- | --- |
+| `seniority_score` | 资历分 |
+| `clip` | 把结果限制在合理范围内 |
+| `opinion` | 初始态度 |
+| `belief_strength` | 信念强度 |
+| `influence` | 影响力 |
+| `susceptibility` | 易感性 |
+| `fear_of_isolation` | 孤立担忧 |
+| `conviction` | 立场坚定度 |
+
+## 事件与知识图谱
+
+文件：
+
+- `backend/routers/event.py`
+- `backend/simulation/graph_parser_agent.py`
+- `backend/simulation/knowledge_evolution.py`
+
+事件注入分三段：
+
+1. 解析：完整模式调用 LLM 提取知识图谱；快速模式构造简化图谱。
+2. 封装：写入事件内容、来源、可信度、情感和图谱。
+3. 广播：根据 `source` 注入公域、私域或全部网络。
+
+如果推演尚未启动，事件会进入 `state.pending_*`，下一次启动时自动注入。
+
+## 预测与风险
+
+文件：
+
+- `backend/simulation/prediction.py`
+- `backend/simulation/risk_alert.py`
+- `backend/routers/prediction.py`
+
+预测依赖历史状态，少于 3 条历史时返回 `available=false`。当前预测输出包括：
+
+- 当前步数；
+- 指标预测区间；
+- 未来轨迹；
+- 干预建议；
+- 风险预警。
+
+## 报告链路
+
+### 基础报告
+
+由 `engine.generate_report()` 生成，保存到 `reports/report_*.md` 或 `reports/report_dual_*.md`。报告会使用 `report_utils.py` 中的统一口径：
+
+- 新闻可信度决定“误信/正确认知”语义；
+- 汇总事件池、知识图谱、趋势、风险、权威回应效果；
+- 现实画像样本会显示姓名、角色和研究方向。
+
+### 智库专报
+
+文件：
+
+- `backend/simulation/analyst_agent.py`
+- `backend/routers/report.py`
+
+`POST /api/report/generate` 一次性生成，`GET /api/report/stream` 流式生成。流式生成完成后会保存完整 Markdown 并发送：
+
+```json
+{"done": true, "filename": "...", "path": "..."}
+```
+
+报告生成条件：
+
+- 引擎已初始化；
+- LLM 模式；
+- 已至少推演一步；
+- `llm_population` 可用。
+
+## 前端结构
+
+当前前端是单文件 Vue SPA：
+
+```text
 frontend/src/
-├── App.vue              # 主应用组件（含双模式控制、预测面板）
-├── main.js             # 入口文件
-├── assets/
-│   └── main.css        # 全局样式
-├── components/
-│   ├── ControlPanel.vue    # 参数控制面板（沙盘/新闻配置）
-│   ├── OpinionChart.vue    # 观点分布图
-│   ├── NetworkGraph.vue    # 网络拓扑图
-│   ├── TrendChart.vue      # 趋势曲线图
-│   ├── PredictionChart.vue # 预测轨迹图
-│   └── AgentDetail.vue     # 智能体透视面板
-├── utils/
-│   ├── websocket.js    # WebSocket 客户端
-│   └── api.js          # REST API 封装
-└── public/
-    └── sass-logo.png   # 上海社会科学院Logo
+  App.vue
+  main.js
+  assets/
 ```
 
-## 数据模型
+主要交互：
 
-### 核心语义抽象
+- 通过 WebSocket `/ws/simulation` 启动和推进 LLM 推演；
+- 通过 REST 获取 Agent 透视、预测、风险和报告；
+- ECharts 绘制观点分布、传播网络和趋势；
+- 点击网络节点触发 `/api/agent/{id}/inspect`；
+- 现实画像模式在节点、弹窗和微观透视中显示姓名。
 
-系统采用语义抽象设计，将特定领域术语映射为通用概念：
+## 配置与环境变量
 
-| UI文案 | 内部命名 | 英文标识 | 说明 |
-|--------|----------|----------|------|
-| 误信 | 负面信念 | `negative_belief` | 用户相信的错误/有害信息 |
-| 正确认知 | 正面信念 | `positive_belief` | 官方正确/有益信息 |
-| 权威回应 | 权威回应 | `authority_response` | 官方发布的纠正信息 |
+| 变量 | 说明 |
+| --- | --- |
+| `LLM_BASE_URL` | OpenAI 兼容 LLM 服务地址 |
+| `LLM_API_KEY` | LLM API Key |
+| `LLM_MODEL` | 模型名 |
+| `LLM_CONCURRENCY_PROFILE` | `auto`、`local`、`remote` |
+| `LLM_MAX_CONCURRENT` | LLM 最大并发，留空自动计算 |
+| `LLM_TIMEOUT` | LLM 请求超时 |
+| `SHASS_NEWS_INSTITUTE_XLSX` | 上海社科院新闻所人员工作簿路径 |
+| `REALISTIC_PROFILE_CACHE_DIR` | 现实画像和自定义资料画像缓存目录，默认 `data/realistic_profiles` |
+| `USER_PROFILE_LIBRARY_DIR` | 用户资料库目录，默认 `data/user_profiles` |
+| `PUBLIC_EVIDENCE_QUEUE_DIR` | 公开证据候选队列目录 |
+| `REPORT_LLM_TIMEOUT` | 智库专报 LLM 超时 |
+| `REPORT_LLM_MAX_TOKENS` | 智库专报单次输出长度 |
+| `REPORT_LLM_TEMPERATURE` | 智库专报温度 |
+| `INJECTION_TIMEOUT` | 推演中事件注入等待超时 |
+| `WS_RATE_LIMIT` | WebSocket 每分钟消息限制 |
 
-### SimulationParams 核心字段
+## 架构注意事项
 
-| 字段名 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `mode` | str | "sandbox" | 推演模式 |
-| `cocoon_strength` | float | 0.5 | 算法茧房强度 |
-| `response_delay` | int | 10 | 权威回应延迟步数 |
-| `initial_negative_spread` | float | 0.3 | 初始负面信念传播率 |
-| `response_credibility` | float | 0.7 | 权威回应可信度 |
-| `population_size` | int | 200 | Agent 数量 |
-| `use_llm` | bool | true | 是否使用 LLM |
-| `use_dual_network` | bool | true | 是否使用双层网络 |
-
-> **向后兼容**：旧参数名（如 `debunk_delay`、`initial_rumor_spread`）仍然有效，API会自动映射到新参数名。
-
-### SimulationState 核心字段
-
-| 字段名 | 类型 | 说明 |
-|--------|------|------|
-| `negative_belief_rate` | float | 负面信念率（API同时返回 `rumor_spread_rate`） |
-| `positive_belief_rate` | float | 正面信念率（API同时返回 `truth_acceptance_rate`） |
-| `avg_opinion` | float | 平均观点值 |
-| `polarization_index` | float | 极化指数 |
-| `silence_rate` | float | 沉默率 |
-| `public_negative_rate` | float | 公域负面信念率 |
-| `private_negative_rate` | float | 私域负面信念率 |
-
-## 双层网络模型
-
-系统支持模拟公域与私域信息传播的差异：
-
-```
-┌─────────────────────────────────────────────┐
-│              Public Domain (公域)           │
-│   ┌─────────────────────────────────────┐   │
-│   │  微博式信息传播                       │   │
-│   │  • 无标度网络 (Scale-Free)           │   │
-│   │  • 存在超级节点 (大V/官媒)           │   │
-│   │  • 信息传播速度快、范围广            │   │
-│   └─────────────────────────────────────┘   │
-└──────────────────┬──────────────────────────┘
-                   │ 跨域传播
-┌──────────────────┴──────────────────────────┐
-│             Private Domain (私域)           │
-│   ┌─────────────────────────────────────┐   │
-│   │  微信式社群传播                       │   │
-│   │  • 多个独立社群 (Community)          │   │
-│   │  • 社群内部连接紧密                  │   │
-│   │  • 跨社群传播较难                    │   │
-│   └─────────────────────────────────────┘   │
-└─────────────────────────────────────────────┘
-```
-
-## 配置管理
-
-### 环境变量
-
-在 `.env` 文件中配置：
-
-```bash
-# DeepSeek API 配置
-DEEPSEEK_API_KEY=your_api_key
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
-
-# LLM 并发配置
-LLM_CONCURRENCY_PROFILE=auto  # local/remote/auto
-
-# 服务器配置
-HOST=0.0.0.0
-PORT=8000
-```
-
-### 推演参数
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| mode | sandbox | 推演模式（sandbox/news） |
-| cocoon_strength | 0.5 | 算法茧房强度 |
-| response_delay | 10 | 权威回应延迟步数 |
-| population_size | 200 | Agent 数量 |
-| initial_negative_spread | 0.3 | 初始误信率（沙盘模式） |
-| init_distribution | null | 真实分布锚定（新闻模式） |
-| use_llm | true | 是否使用 LLM 模式 |
-| use_dual_network | true | 是否使用双层网络 |
-| num_communities | 8 | 私域社群数量 |
-
-## 扩展开发
-
-### 添加新的推演模式
-
-1. 在 `simulation/` 目录创建新的引擎类，继承基础接口
-2. 实现 `initialize()`, `step()`, `current_state` 方法
-3. 在 `app.py` 添加新的路由或扩展现有路由
-4. 在前端 `ControlPanel.vue` 添加模式切换选项
-
-### 添加新的 LLM Provider
-
-1. 修改 `llm/client.py`，添加新的 provider 支持
-2. 在 `LLMConfig` 中添加配置选项
-3. 更新 Agent 类的 prompt 模板以适配新 provider
-
-### 添加新的可视化图表
-
-1. 在 `frontend/src/components/` 创建新的 Vue 组件
-2. 在 `App.vue` 中引入并布局
-3. 实现 WebSocket 状态监听和数据绑定
-
-### 添加新的预测模型
-
-1. 在 `simulation/prediction.py` 中扩展 `TrajectoryModel`
-2. 添加新的预测算法（如时间序列、蒙特卡洛等）
-3. 在 API 层暴露新的预测接口
+- 后端重启会清空内存态推演。
+- `SimulationEngineDual` 是默认路径，测试单层网络需显式 `use_dual_network=false`。
+- LLM 模式必须用异步推演，不能调用同步 `step()`。
+- 报告打开接口只允许打开 `reports/` 下的 `.md` 文件。
+- 现实画像和自定义资料画像中的姓名当前按演示验证需求展示；新增画像时仍应最小化采集和输出字段。
+- `data/user_profiles/` 和用户自定义缓存默认视为本地资料，不应提交到公开仓库。

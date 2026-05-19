@@ -42,6 +42,9 @@ htmlcov/
 .tox/
 .hypothesis/
 data/test_realistic_profiles/
+data/user_profiles/
+data/realistic_profiles/*.sanitized.json
+!data/realistic_profiles/shass_news_institute.sanitized.json
 
 # 日志和报告（生成的）
 reports/*.md

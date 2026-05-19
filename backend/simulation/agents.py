@@ -103,21 +103,30 @@ class AgentPopulation:
 
     def _build_network(self, network_type: str) -> nx.Graph:
         """构建社交网络"""
+        if self.size <= 1:
+            return nx.empty_graph(self.size)
+
         if network_type == "small_world":
             # 小世界网络 - 模拟真实社交网络
-            G = nx.watts_strogatz_graph(
+            k = min(6, self.size - 1)
+            if k % 2 == 1:
+                k -= 1
+            G = nx.path_graph(self.size) if k < 2 else nx.watts_strogatz_graph(
                 self.size,
-                k=6,           # 每人平均6个连接
+                k=k,
                 p=0.3,         # 30%重连概率
                 seed=42
             )
         elif network_type == "scale_free":
             # 无标度网络 - 存在意见领袖
-            G = nx.barabasi_albert_graph(self.size, m=3, seed=42)
+            G = nx.barabasi_albert_graph(self.size, m=min(3, self.size - 1), seed=42)
         elif network_type == "random":
             G = nx.erdos_renyi_graph(self.size, p=0.05, seed=42)
         else:
-            G = nx.watts_strogatz_graph(self.size, k=6, p=0.3, seed=42)
+            k = min(6, self.size - 1)
+            if k % 2 == 1:
+                k -= 1
+            G = nx.path_graph(self.size) if k < 2 else nx.watts_strogatz_graph(self.size, k=k, p=0.3, seed=42)
 
         return G
 

@@ -19,6 +19,7 @@ from .routers import simulation as sim_router
 from .routers import report as report_router
 from .routers import event as event_router
 from .routers import prediction as pred_router
+from .routers import profiles as profiles_router
 from .llm.client import LLMConfig
 from .simulation.engine import SimulationEngine
 from .simulation.engine_dual import SimulationEngineDual
@@ -71,6 +72,7 @@ app.include_router(sim_router.router)
 app.include_router(report_router.router)
 app.include_router(event_router.router)
 app.include_router(pred_router.router)
+app.include_router(profiles_router.router)
 
 
 @app.get("/")
