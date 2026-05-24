@@ -222,7 +222,7 @@ async def get_usage_docs():
     """获取使用说明文档"""
     try:
         import os
-        docs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs", "README.md")
+        docs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "docs", "README.md")
         with open(docs_path, "r", encoding="utf-8") as f:
             content = f.read()
         return {"success": True, "content": content}

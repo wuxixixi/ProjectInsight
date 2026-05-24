@@ -1,0 +1,12 @@
+{
+  "simulation_llm": {
+    "base_url": "http://sim/v1",
+    "api_key": "sim-key",
+    "model": "DeepSeek-V3.2"
+  },
+  "report_llm": {
+    "base_url": "http://report/v1",
+    "api_key": "report-key",
+    "model": "DeepSeek-R1-0528-64k"
+  }
+}

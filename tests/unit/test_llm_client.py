@@ -7,7 +7,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 import json
 
-from backend.llm.client import LLMClient, LLMConfig
+from backend.llm.client import LLMClient, LLMConfig, create_llm_config_from_env
 
 
 class TestLLMConfig:
@@ -39,6 +39,32 @@ class TestLLMConfig:
         assert config.api_key == "test-key"
         assert config.model == "custom-model"
         assert config.max_concurrent == 5
+
+    def test_prefixed_report_config(self):
+        """测试按前缀读取专报配置"""
+        with patch.dict("os.environ", {
+            "LLM_BASE_URL": "http://main/v1",
+            "LLM_API_KEY": "main-key",
+            "LLM_MODEL": "DeepSeek-V3.2",
+            "LLM_TIMEOUT": "60",
+            "LLM_MAX_RETRIES": "5",
+            "REPORT_LLM_BASE_URL": "http://report/v1",
+            "REPORT_LLM_API_KEY": "report-key",
+            "REPORT_LLM_MODEL": "DeepSeek-R1-0528-64k",
+            "REPORT_LLM_TIMEOUT": "120",
+            "REPORT_LLM_MAX_RETRIES": "2",
+            "REPORT_LLM_TEMPERATURE": "0.5",
+            "REPORT_LLM_MAX_TOKENS": "2000",
+        }, clear=False):
+            config = create_llm_config_from_env("REPORT_LLM")
+
+        assert config.base_url == "http://report/v1"
+        assert config.api_key == "report-key"
+        assert config.model == "DeepSeek-R1-0528-64k"
+        assert config.timeout == 120
+        assert config.max_retries == 2
+        assert config.temperature == 0.5
+        assert config.max_tokens == 2000
 
 
 class TestLLMClientInit:

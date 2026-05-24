@@ -129,11 +129,11 @@
         {{ connectionStatus }}
       </div>
 
-      <!-- 调试信息 (临时) -->
-      <div style="background:#1a1a2e;padding:8px;margin:4px 0;border-radius:6px;font-size:11px;color:#94a3b8;font-family:monospace;">
-        <div>WS: {{ isConnected ? '✅' : '❌' }} | Running: {{ isRunning ? '🔄' : '⏸' }} | Paused: {{ isPaused ? '⏸' : '▶' }}</div>
-        <div>Step: {{ currentStep }}/{{ maxSteps }} | Events: {{ pendingEvents.length }} | Stopped: {{ hasStopped }}</div>
-        <div>Profile: {{ populationProfile }} | Mode: {{ simulationMode }} | LLM: {{ useLLM }}</div>
+      <!-- LLM 状态 -->
+      <div class="llm-status" :class="'llm-' + llmStatus" @click="checkLlmStatus" :title="llmStatusMessage || '点击刷新 LLM 状态'">
+        <span class="llm-dot"></span>
+        <span class="llm-label">LLM</span>
+        <span class="llm-text">{{ llmStatusText }}</span>
       </div>
 
       <!-- 推演模式 -->
@@ -996,597 +996,92 @@
     </main>
 
     <!-- 高级设置抽屉 -->
-    <div v-if="showSettingsDrawer" class="drawer-overlay" @click.self="showSettingsDrawer = false">
-      <div class="settings-drawer">
-        <div class="drawer-header">
-          <h3>⚙️ 高级设置</h3>
-          <button class="drawer-close" @click="showSettingsDrawer = false">✕</button>
-        </div>
-        <div class="drawer-body">
-          <h4 class="drawer-section-title">LLM 并发配置</h4>
-
-          <div class="setting-item">
-            <div class="setting-header">
-              <span class="setting-label">并发数上限</span>
-              <span class="setting-value">{{ maxConcurrent }}</span>
-            </div>
-            <input type="range" v-model.number="maxConcurrent" min="50" max="500" step="50" :disabled="isRunning" />
-            <p class="setting-desc">同时请求LLM的Agent数量</p>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-header">
-              <span class="setting-label">连接池大小</span>
-              <span class="setting-value">{{ connectionPoolSize }}</span>
-            </div>
-            <input type="range" v-model.number="connectionPoolSize" min="100" max="800" step="100" :disabled="isRunning" />
-            <p class="setting-desc">应大于并发数上限</p>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-header">
-              <span class="setting-label">请求超时</span>
-              <span class="setting-value">{{ timeout }} 秒</span>
-            </div>
-            <input type="range" v-model.number="timeout" min="30" max="120" step="10" :disabled="isRunning" />
-            <p class="setting-desc">单个请求最长等待时间</p>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-header">
-              <span class="setting-label">最大重试次数</span>
-              <span class="setting-value">{{ maxRetries }} 次</span>
-            </div>
-            <input type="range" v-model.number="maxRetries" min="1" max="10" step="1" :disabled="isRunning" />
-            <p class="setting-desc">失败后自动重试</p>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-header">
-              <span class="setting-label">推演间隔</span>
-              <span class="setting-value">{{ autoInterval / 1000 }} 秒</span>
-            </div>
-            <input type="range" v-model.number="autoInterval" min="1000" max="10000" step="1000" :disabled="isRunning" />
-            <p class="setting-desc">LLM模式建议3秒以上</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <SettingsDrawer
+      v-model="showSettingsDrawer"
+      v-model:simulationLlm="simulationLlm"
+      v-model:reportLlm="reportLlm"
+      v-model:maxConcurrent="maxConcurrent"
+      v-model:connectionPoolSize="connectionPoolSize"
+      v-model:timeout="timeout"
+      v-model:maxRetries="maxRetries"
+      v-model:autoInterval="autoInterval"
+      :is-running="isRunning"
+      :settings-saving="settingsSaving"
+      :settings-message="settingsMessage"
+      :settings-error="settingsError"
+      @reload="loadSystemSettings"
+      @save="saveSystemSettings"
+    />
 
     <!-- 数学模型说明抽屉 -->
-    <div v-if="showMathModelDrawer" class="drawer-overlay" @click.self="showMathModelDrawer = false">
-      <div class="math-model-drawer">
-        <div class="drawer-header">
-          <h3>📐 数学模型说明</h3>
-          <button class="drawer-close" @click="showMathModelDrawer = false">✕</button>
-        </div>
-        <div class="drawer-body">
-          <div v-if="mathModelLoading" class="loading-container">
-            <div class="loading-spinner"></div>
-            <p>加载模型说明...</p>
-          </div>
-          <div v-else-if="mathModelExplanation" class="math-model-content">
-            <!-- 理论机制 -->
-            <h4 class="section-title">🔬 社会心理学机制</h4>
-            <div v-for="(theory, key) in mathModelExplanation.theories" :key="key" class="theory-card">
-              <div class="theory-header">
-                <span class="theory-name">{{ theory.name }}</span>
-                <span class="theory-source">{{ theory.theory }}</span>
-              </div>
-              <div class="theory-formula">
-                <code>{{ theory.formula }}</code>
-              </div>
-              <p class="theory-explanation" v-if="theory.explanation">{{ theory.explanation }}</p>
-              <ul v-if="theory.enhancements" class="theory-enhancements">
-                <li v-for="(enh, idx) in theory.enhancements" :key="idx">{{ enh }}</li>
-              </ul>
-            </div>
-
-            <!-- 参数说明 -->
-            <h4 class="section-title">🎛️ 参数说明</h4>
-            <div class="params-table">
-              <div v-for="(param, key) in mathModelExplanation.parameters" :key="key" class="param-row">
-                <div class="param-name">{{ param.name }}</div>
-                <div class="param-meta">
-                  <span class="param-range">{{ param.range }}</span>
-                  <span class="param-default">默认: {{ param.default }}</span>
-                </div>
-                <div class="param-effect">{{ param.effect }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <MathModelDrawer v-model="showMathModelDrawer" :explanation="mathModelExplanation" :loading="mathModelLoading" />
 
     <!-- 使用说明抽屉 -->
-    <div v-if="showUsageDrawer" class="drawer-overlay" @click.self="showUsageDrawer = false">
-      <div class="usage-drawer">
-        <div class="drawer-header">
-          <h3>📋 使用说明</h3>
-          <button class="drawer-close" @click="showUsageDrawer = false">✕</button>
-        </div>
-        <div class="drawer-body">
-          <div v-if="usageLoading" class="loading-container">
-            <div class="loading-spinner"></div>
-            <p>加载使用说明...</p>
-          </div>
-          <div v-else class="usage-content" v-html="usageContent"></div>
-        </div>
-      </div>
-    </div>
+    <UsageDrawer v-model="showUsageDrawer" :content="usageContent" :loading="usageLoading" />
 
     <!-- Agent透视弹窗 -->
-    <div v-if="showAgentModal" class="agent-modal-overlay" @click.self="closeAgentModal">
-      <div class="agent-modal">
-        <div class="modal-header">
-          <h3><span class="icon">🔍</span> {{ inspectedAgentTitle }}</h3>
-          <button class="close-btn" @click="closeAgentModal">✕</button>
-        </div>
-
-        <div v-if="agentLoading" class="modal-loading">
-          <div class="loading-spinner"></div>
-          <p>正在获取决策链路...</p>
-        </div>
-
-        <div v-else-if="agentSnapshot && agentSnapshot.error" class="modal-error">
-          <p>{{ agentSnapshot.error }}</p>
-        </div>
-
-        <div v-else-if="agentSnapshot" class="modal-content">
-          <!-- 区块A: Agent基础人设 -->
-          <div class="info-block persona-block">
-            <div class="block-title"><span class="block-icon">👤</span> 基础人设</div>
-            <div class="block-content">
-              <div class="info-grid">
-                <div class="info-item">
-                  <span class="label">Agent ID</span>
-                  <span class="value">#{{ agentSnapshot.agent_id }}</span>
-                </div>
-                <div class="info-item" v-if="agentSnapshot.realistic_profile?.name">
-                  <span class="label">姓名</span>
-                  <span class="value highlight">{{ agentSnapshot.realistic_profile.name }}</span>
-                </div>
-                <div class="info-item" v-if="agentSnapshot.realistic_profile?.role_label">
-                  <span class="label">现实角色</span>
-                  <span class="value">{{ agentSnapshot.realistic_profile.role_label }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">人设类型</span>
-                  <span class="value highlight">{{ agentSnapshot.persona?.type || '未知' }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">人设描述</span>
-                  <span class="value desc">{{ agentSnapshot.persona?.desc || '-' }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">信念强度</span>
-                  <span class="value">{{ (agentSnapshot.belief_strength * 100).toFixed(0) }}%</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">易感性</span>
-                  <span class="value">{{ (agentSnapshot.susceptibility * 100).toFixed(0) }}%</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">当前立场</span>
-                  <span :class="['value', 'status-badge', agentOpinionClass]">{{ agentOpinionLabel }}</span>
-                </div>
-                <!-- 沉默的螺旋：新增属性 -->
-                <div class="info-item">
-                  <span class="label">孤立恐惧感</span>
-                  <span :class="['value', agentSnapshot.fear_of_isolation > 0.6 ? 'warning' : '']">{{ (agentSnapshot.fear_of_isolation * 100).toFixed(0) }}%</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">沉默状态</span>
-                  <span :class="['value', 'status-badge', agentSnapshot.is_silent ? 'silent' : 'active']">{{ agentSnapshot.is_silent ? '🤫 沉默' : '🔊 发声' }}</span>
-                </div>
-                <!-- v3.0 新增字段 -->
-                <div class="info-item" v-if="agentSnapshot.rumor_trust !== undefined">
-                  <span class="label">谣言信任度</span>
-                  <span :class="['value', agentSnapshot.rumor_trust > 0.5 ? 'warning' : '']">{{ (agentSnapshot.rumor_trust * 100).toFixed(1) }}%</span>
-                </div>
-                <div class="info-item" v-if="agentSnapshot.truth_trust !== undefined">
-                  <span class="label">真相信任度</span>
-                  <span :class="['value', agentSnapshot.truth_trust > 0.5 ? 'success' : '']">{{ (agentSnapshot.truth_trust * 100).toFixed(1) }}%</span>
-                </div>
-                <div class="info-item" v-if="agentSnapshot.dominant_need">
-                  <span class="label">主导需求</span>
-                  <span class="value highlight">{{ needLabel(agentSnapshot.dominant_need) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <details v-if="generationTrace" class="info-block trace-block">
-            <summary class="trace-toggle">
-              <span class="trace-toggle-title"><span class="block-icon">🧩</span> 数值来源</span>
-              <span class="trace-toggle-meta">
-                <span class="trace-badge">{{ generationTraceSourceLabel }}</span>
-                <span class="trace-badge" v-if="generationTrace?.derived?.seniority_score !== undefined">资历分 {{ generationTrace.derived.seniority_score }}</span>
-                <span class="trace-badge" v-if="generationTrace?.derived?.is_influencer !== undefined">{{ generationTrace.derived.is_influencer ? '意见领袖' : '普通成员' }}</span>
-                <span class="trace-chevron"></span>
-              </span>
-            </summary>
-            <div class="block-content">
-              <div class="trace-summary">{{ generationTraceSummary }}</div>
-
-              <div v-if="generationTraceInputs.length" class="trace-section">
-                <div class="trace-section-title">输入依据</div>
-                <div class="trace-grid">
-                  <div v-for="item in generationTraceInputs" :key="item.key" class="trace-item">
-                    <span class="label">{{ item.label }}</span>
-                    <span class="value">{{ item.value }}<template v-if="item.suffix">{{ item.suffix }}</template></span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="generationTraceDerived.length" class="trace-section">
-                <div class="trace-section-title">中间结果</div>
-                <div class="trace-grid">
-                  <div v-for="item in generationTraceDerived" :key="item.key" class="trace-item" :title="item.tooltip">
-                    <span class="label">{{ item.label }}</span>
-                    <span class="value">{{ typeof item.value === 'boolean' ? (item.value ? '是' : '否') : item.value }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="generationTraceMetrics.length" class="trace-section">
-                <div class="trace-section-title">最终数值</div>
-                <div class="trace-grid">
-                  <div v-for="item in generationTraceMetrics" :key="item.key" class="trace-item" :title="item.tooltip">
-                    <span class="label">{{ item.label }}</span>
-                    <span class="value">{{ typeof item.value === 'number' ? item.value.toFixed(3) : item.value }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <!-- v3.0 新增：行为预测区块 -->
-          <div v-if="agentSnapshot.predicted_behavior" class="info-block behavior-block">
-            <div class="block-title"><span class="block-icon">🎯</span> 行为预测 (TPB)</div>
-            <div class="block-content">
-              <div class="info-grid">
-                <div class="info-item">
-                  <span class="label">预测行为</span>
-                  <span :class="['value', 'status-badge', behaviorClass(agentSnapshot.predicted_behavior)]">{{ behaviorLabel(agentSnapshot.predicted_behavior) }}</span>
-                </div>
-                <div class="info-item" v-if="agentSnapshot.behavior_confidence !== undefined">
-                  <span class="label">行为意向强度</span>
-                  <span class="value">{{ (agentSnapshot.behavior_confidence * 100).toFixed(0) }}%</span>
-                </div>
-                <div class="info-item" v-if="agentSnapshot.cognitive_closed_need">
-                  <span class="label">认知闭合需求</span>
-                  <span class="value">{{ (agentSnapshot.cognitive_closed_need * 100).toFixed(0) }}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 区块B: 心理博弈过程 (沉默的螺旋) -->
-          <div v-if="normalizedClimate" class="info-block psychology-block">
-            <div class="block-title"><span class="block-icon">🌀</span> 心理博弈过程</div>
-            <div class="block-content">
-              <div class="psychology-analysis">
-                <div class="climate-info">
-                  <div class="climate-item">
-                    <span class="label">邻居数量</span>
-                    <span class="value">{{ normalizedClimate.total }}</span>
-                  </div>
-                  <div class="climate-item">
-                    <span class="label">误信比例</span>
-                    <span class="value rumor">{{ (normalizedClimate.pro_rumor_ratio * 100).toFixed(0) }}%</span>
-                  </div>
-                  <div class="climate-item">
-                    <span class="label">正确认知比例</span>
-                    <span class="value truth">{{ (normalizedClimate.pro_truth_ratio * 100).toFixed(0) }}%</span>
-                  </div>
-                  <div class="climate-item">
-                    <span class="label">沉默比例</span>
-                    <span class="value silent">{{ (normalizedClimate.silent_ratio * 100).toFixed(0) }}%</span>
-                  </div>
-                </div>
-                <!-- 心理博弈结论 -->
-                <div v-if="agentSnapshot.is_silent" class="psychology-conclusion silent">
-                  <div class="conclusion-icon">🤫</div>
-                  <div class="conclusion-text">
-                    <strong>选择沉默</strong>
-                    <p>"虽然我不完全认同周围人的观点，但大家都这样想，我怕被孤立/被骂/被攻击，所以选择保持沉默。"</p>
-                  </div>
-                </div>
-                <div v-else class="psychology-conclusion active">
-                  <div class="conclusion-icon">🔊</div>
-                  <div class="conclusion-text">
-                    <strong>选择发声</strong>
-                    <p v-if="normalizedClimate.pro_rumor_ratio > normalizedClimate.pro_truth_ratio && agentSnapshot.new_opinion > 0">
-                      "虽然周围误信的人更多，但我有足够的勇气和信念表达我的观点。"
-                    </p>
-                    <p v-else-if="normalizedClimate.pro_truth_ratio > normalizedClimate.pro_rumor_ratio && agentSnapshot.new_opinion < 0">
-                      "虽然周围持正确认知的人更多，但我坚持自己的判断，不会轻易改变。"
-                    </p>
-                    <p v-else>
-                      "舆论环境相对宽松，我可以自由表达我的观点。"
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 区块C: 信息刺激 -->
-          <div class="info-block stimulus-block">
-            <div class="block-title"><span class="block-icon">📡</span> 信息刺激</div>
-            <div class="block-content">
-              <div v-if="agentSnapshot.received_news?.length" class="news-list">
-                <div v-for="(news, idx) in agentSnapshot.received_news" :key="idx" class="news-item">{{ news }}</div>
-              </div>
-              <div v-else class="empty-state">暂无新信息刺激</div>
-            </div>
-          </div>
-
-          <!-- 区块D: LLM决策输出 -->
-          <div class="info-block decision-block">
-            <div class="block-title"><span class="block-icon">🧠</span> LLM 决策引擎输出</div>
-            <div class="block-content">
-              <div v-if="agentSnapshot.has_decided" class="decision-output">
-                <div class="decision-summary">
-                  <div class="summary-item">
-                    <span class="label">情绪状态</span>
-                    <span class="value emotion">{{ agentSnapshot.emotion || '-' }}</span>
-                  </div>
-                  <div class="summary-item">
-                    <span class="label">行动选择</span>
-                    <span class="value action">{{ agentSnapshot.action || '-' }}</span>
-                  </div>
-                  <div class="summary-item">
-                    <span class="label">沉默决策</span>
-                    <span :class="['value', agentSnapshot.is_silent ? 'silent-status' : 'active-status']">{{ agentSnapshot.is_silent ? '是' : '否' }}</span>
-                  </div>
-                </div>
-                <div class="summary-row">
-                  <span class="label">观点变化</span>
-                  <span class="value opinion-change">{{ agentSnapshot.old_opinion?.toFixed(3) }} → {{ agentSnapshot.new_opinion?.toFixed(3) }}</span>
-                </div>
-                <div v-if="agentSnapshot.generated_comment" class="generated-comment">
-                  <span class="label">生成评论</span>
-                  <p class="comment-text">"{{ agentSnapshot.generated_comment }}"</p>
-                </div>
-                <div class="reasoning">
-                  <span class="label">决策理由</span>
-                  <p class="reasoning-text">{{ agentSnapshot.reasoning || '-' }}</p>
-                </div>
-                <div class="raw-response">
-                  <span class="label">LLM 原始响应 (JSON)</span>
-                  <pre class="json-code">{{ formatJson(agentSnapshot.llm_raw_response) }}</pre>
-                </div>
-              </div>
-              <div v-else class="empty-state">
-                <span class="icon">⏳</span>
-                <p>{{ agentSnapshot.reasoning || '该Agent尚未参与本轮推演' }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <AgentModal
+      v-model="showAgentModal"
+      :agent-loading="agentLoading"
+      :agent-snapshot="agentSnapshot"
+      :normalized-climate="normalizedClimate"
+      :generation-trace="generationTrace"
+      :generation-trace-source-label="generationTraceSourceLabel"
+      :generation-trace-summary="generationTraceSummary"
+      :generation-trace-inputs="generationTraceInputs"
+      :generation-trace-derived="generationTraceDerived"
+      :generation-trace-metrics="generationTraceMetrics"
+    />
 
     <!-- 图表放大弹窗 -->
-    <div v-if="chartModalOpen" class="chart-modal-overlay" @click.self="closeChartModal">
-      <div class="chart-modal">
-        <div class="chart-modal-header">
-          <h3>{{ chartModalTitle }}</h3>
-          <button class="chart-modal-close" @click="closeChartModal">✕</button>
-        </div>
-        <div class="chart-modal-body" ref="chartModalBody"></div>
-      </div>
-    </div>
+    <ChartModal v-model="chartModalOpen" :title="chartModalTitle" ref="chartModal" />
 
     <!-- 推演完成引导弹窗 -->
-    <div v-if="showCompletionModal" class="completion-modal-overlay" @click.self="showCompletionModal = false">
-      <div class="completion-modal">
-        <div class="completion-icon">🎉</div>
-        <h3 class="completion-title">推演完成</h3>
-        <p class="completion-desc">已完成 {{ maxSteps }} 步推演，可以生成分析报告查看完整结果</p>
-        <div class="completion-stats" v-if="prediction && prediction.recommendation">
-          <div class="completion-stat-item">
-            <span class="stat-label">风险等级</span>
-            <span :class="['stat-value', 'risk-' + prediction.recommendation.risk_level]">{{ prediction.recommendation.risk_level.toUpperCase() }}</span>
-          </div>
-          <div class="completion-stat-item">
-            <span class="stat-label">误信率</span>
-            <span class="stat-value">{{ (rumorSpreadRate * 100).toFixed(1) }}%</span>
-          </div>
-          <div class="completion-stat-item">
-            <span class="stat-label">正确认知率</span>
-            <span class="stat-value truth">{{ (truthAcceptanceRate * 100).toFixed(1) }}%</span>
-          </div>
-        </div>
-        <div class="completion-actions">
-          <button class="btn-completion btn-report" @click="showCompletionModal = false; generateReport()">
-            <span>📄</span> 生成推演报告
-          </button>
-          <button v-if="useLLM" class="btn-completion btn-intelligence" @click="showCompletionModal = false; generateIntelligenceReport()" :disabled="reportGenerating">
-            <span>🧠</span> {{ reportGenerating ? '撰写中...' : '生成智库专报' }}
-          </button>
-          <button class="btn-completion btn-later" @click="showCompletionModal = false">
-            稍后查看
-          </button>
-        </div>
-      </div>
-    </div>
+    <CompletionModal
+      v-model="showCompletionModal"
+      :max-steps="maxSteps"
+      :prediction="prediction"
+      :rumor-spread-rate="rumorSpreadRate"
+      :truth-acceptance-rate="truthAcceptanceRate"
+      :use-l-l-m="useLLM"
+      :report-generating="reportGenerating"
+      @generate-report="generateReport"
+      @generate-intelligence="generateIntelligenceReport"
+    />
 
     <!-- 报告弹窗 -->
-    <div v-if="reportGenerated" class="report-modal-overlay" @click.self="closeReport">
-      <div class="report-modal">
-        <div class="report-modal-header">
-          <h3>📄 推演报告</h3>
-          <button class="report-close-btn" @click="closeReport">✕</button>
-        </div>
-        <div class="report-modal-body">
-          <div v-if="reportLoading" class="report-loading">
-            <div class="loading-spinner"></div>
-            <p>加载报告中...</p>
-          </div>
-          <div v-else-if="reportContent" class="report-content">
-            <pre>{{ reportContent }}</pre>
-          </div>
-          <div v-else class="report-placeholder">
-            <p>报告加载失败</p>
-          </div>
-        </div>
-        <div class="report-modal-footer">
-          <button class="btn-download" @click="downloadReport">⬇ 下载报告</button>
-        </div>
-      </div>
-    </div>
+    <ReportModal
+      v-model="reportGenerated"
+      :loading="reportLoading"
+      :content="reportContent"
+      :filename="reportFilename"
+      @download="downloadReport"
+    />
 
     <!-- 历史报告列表弹窗 -->
-    <div v-if="showReportList" class="report-modal-overlay" @click.self="showReportList = false">
-      <div class="report-modal report-modal-enhanced">
-        <div class="report-modal-header">
-          <h3>📚 历史报告</h3>
-          <button class="report-close-btn" @click="showReportList = false">✕</button>
-        </div>
-        <div class="report-modal-body">
-          <div v-if="reportListLoading" class="report-loading">
-            <div class="loading-spinner"></div>
-            <p>加载报告列表...</p>
-          </div>
-          <template v-else>
-            <!-- 搜索和排序工具栏 -->
-            <div class="report-toolbar">
-              <div class="report-search-box">
-                <input
-                  type="text"
-                  v-model="reportSearchKeyword"
-                  @input="onReportSearchInput"
-                  placeholder="搜索报告..."
-                  class="report-search-input"
-                />
-                <span class="report-search-icon">🔍</span>
-              </div>
-              <div class="report-sort-btns">
-                <button
-                  :class="['sort-btn', { active: reportSortBy === 'modified' }]"
-                  @click="changeReportSort('modified')"
-                  title="按时间排序">
-                  🕐 {{ reportSortBy === 'modified' ? (reportSortOrder === 'desc' ? '↓' : '↑') : '' }}
-                </button>
-                <button
-                  :class="['sort-btn', { active: reportSortBy === 'size' }]"
-                  @click="changeReportSort('size')"
-                  title="按大小排序">
-                  📊 {{ reportSortBy === 'size' ? (reportSortOrder === 'desc' ? '↓' : '↑') : '' }}
-                </button>
-                <button
-                  :class="['sort-btn', { active: reportSortBy === 'name' }]"
-                  @click="changeReportSort('name')"
-                  title="按名称排序">
-                  🔤 {{ reportSortBy === 'name' ? (reportSortOrder === 'desc' ? '↓' : '↑') : '' }}
-                </button>
-              </div>
-            </div>
-
-            <!-- 报告统计 -->
-            <div class="report-stats">
-              共 <strong>{{ reportCounts.total }}</strong> 份报告
-              （推演 <strong>{{ reportCounts.simulation }}</strong> 份，
-              智库专报 <strong>{{ reportCounts.intelligence }}</strong> 份）
-            </div>
-
-            <!-- 双栏布局 -->
-            <div class="report-columns">
-              <!-- 左栏：推演报告 -->
-              <div class="report-column">
-                <div class="column-header">
-                  <span class="column-icon">📄</span>
-                  <span class="column-title">推演报告</span>
-                  <span class="column-count">{{ simulationReports.length }}</span>
-                </div>
-                <div class="column-body">
-                  <div v-if="simulationReports.length > 0" class="report-list">
-                    <div
-                      v-for="report in simulationReports"
-                      :key="report.filename"
-                      class="report-item"
-                      @click="viewHistoryReport(report)">
-                      <div class="report-item-icon">📄</div>
-                      <div class="report-item-info">
-                        <div class="report-item-name">{{ report.filename }}</div>
-                        <div class="report-item-meta">{{ formatFileSize(report.size) }} · {{ formatDate(report.modified) }}</div>
-                      </div>
-                      <div class="report-item-action">查看</div>
-                    </div>
-                  </div>
-                  <div v-else class="report-placeholder">
-                    <p>暂无推演报告</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 右栏：智库专报 -->
-              <div class="report-column">
-                <div class="column-header">
-                  <span class="column-icon">🧠</span>
-                  <span class="column-title">智库专报</span>
-                  <span class="column-count">{{ intelligenceReports.length }}</span>
-                </div>
-                <div class="column-body">
-                  <div v-if="intelligenceReports.length > 0" class="report-list">
-                    <div
-                      v-for="report in intelligenceReports"
-                      :key="report.filename"
-                      class="report-item report-item-intelligence"
-                      @click="viewHistoryReport(report)">
-                      <div class="report-item-icon">🧠</div>
-                      <div class="report-item-info">
-                        <div class="report-item-name">{{ report.filename }}</div>
-                        <div class="report-item-meta">{{ formatFileSize(report.size) }} · {{ formatDate(report.modified) }}</div>
-                      </div>
-                      <div class="report-item-action">查看</div>
-                    </div>
-                  </div>
-                  <div v-else class="report-placeholder">
-                    <p>暂无智库专报</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </div>
+    <ReportListModal
+      v-model="showReportList"
+      :report-list-loading="reportListLoading"
+      :report-search-keyword="reportSearchKeyword"
+      :report-sort-by="reportSortBy"
+      :report-sort-order="reportSortOrder"
+      :report-counts="reportCounts"
+      :simulation-reports="simulationReports"
+      :intelligence-reports="intelligenceReports"
+      @update:reportSearchKeyword="reportSearchKeyword = $event"
+      @search-input="onReportSearchInput"
+      @change-sort="changeReportSort"
+      @view-report="viewHistoryReport"
+    />
 
     <!-- 智库专报弹窗 -->
-    <div v-if="showIntelligenceModal" class="intelligence-modal-overlay" @click.self="closeIntelligenceModal">
-      <div class="intelligence-modal">
-        <div class="intelligence-modal-header">
-          <h3>🧠 智库专报</h3>
-          <button class="report-close-btn" @click="closeIntelligenceModal">✕</button>
-        </div>
-        <div class="intelligence-modal-body">
-          <!-- 流式输出时显示原始内容 -->
-          <div v-if="reportGenerating && intelligenceContent" class="intelligence-content intelligence-streaming">
-            <pre>{{ intelligenceContent }}</pre>
-            <div class="streaming-cursor">▌</div>
-          </div>
-          <!-- 生成中但无内容 -->
-          <div v-else-if="reportGenerating" class="intelligence-loading">
-            <div class="loading-spinner"></div>
-            <p>分析师智能体正在撰写专报，请稍候...</p>
-            <p class="loading-tip">预计需要10-20秒</p>
-          </div>
-          <!-- 生成完成后渲染Markdown -->
-          <div v-else-if="intelligenceContent" class="intelligence-content markdown-body" v-html="renderedIntelligence"></div>
-          <div v-else class="report-placeholder">
-            <p>专报生成失败</p>
-          </div>
-        </div>
-        <div class="intelligence-modal-footer">
-          <button class="btn-download-intelligence" @click="downloadIntelligenceReport">📥 导出 Markdown</button>
-        </div>
-      </div>
-    </div>
+    <IntelligenceModal
+      v-model="showIntelligenceModal"
+      :report-generating="reportGenerating"
+      :intelligence-content="intelligenceContent"
+      :rendered-intelligence="renderedIntelligence"
+      @download-intelligence="downloadIntelligenceReport"
+    />
 
     <!-- 知识图谱弹窗 -->
     <div v-if="showKnowledgeGraph" class="kg-modal-overlay" @click.self="showKnowledgeGraph = false">
@@ -1704,7 +1199,7 @@
                 <li><b>事件冲击：</b>推演开始时触发一次观点偏移</li>
                 <li><b>知识演化：</b>每步推演中实体持续影响Agent</li>
               </ul>
-              <p class="impact-desc" style="margin-top:8px">实体影响力权重：</p>
+              <p class="impact-desc mt-8">实体影响力权重：</p>
               <ul class="impact-list">
                 <li>媒体(1.0) > 官方(0.95) > 专家(0.85) > 组织(0.7) > 人物(0.5)</li>
               </ul>
@@ -1719,7 +1214,7 @@
                 <li><b>即时冲击：</b>全网Agent观点一次性偏移</li>
                 <li><b>持续演化：</b>知识图谱每步持续影响推演</li>
               </ul>
-              <p class="impact-desc" style="margin-top:8px">冲击强度计算：</p>
+              <p class="impact-desc mt-8">冲击强度计算：</p>
               <ul class="impact-list">
                 <li><span class="impact-tag negative">负面新闻</span> 向误信方向偏移（基础0.15）</li>
                 <li><span class="impact-tag positive">正面新闻</span> 向正确认知方向偏移（基础0.10）</li>
@@ -1733,10 +1228,30 @@
           <!-- 输入区域 -->
           <div class="kg-section" v-if="!airdropLoading">
             <h4>📰 事件内容</h4>
+            <!-- 热点新闻速选 -->
+            <div class="hot-news-panel">
+              <button class="btn-fetch-news" @click="fetchHotNews" :disabled="hotNewsLoading">
+                {{ hotNewsLoading ? '⏳ 获取中...' : '🔍 获取今日热点新闻' }}
+              </button>
+              <div v-if="hotNewsItems.length" class="hot-news-list">
+                <div v-for="(item, idx) in hotNewsItems" :key="idx" class="hot-news-item">
+                  <div class="hot-news-meta">
+                    <span class="hot-news-category">{{ item.category }}</span>
+                    <span class="hot-news-source">{{ item.source }}</span>
+                  </div>
+                  <div class="hot-news-title">{{ item.title }}</div>
+                  <div class="hot-news-actions">
+                    <button class="btn-use-news" @click="useHotNews(item)">使用</button>
+                    <a v-if="item.url" :href="item.url" target="_blank" class="hot-news-link">原文</a>
+                  </div>
+                </div>
+              </div>
+            </div>
             <textarea
+              ref="airdropInput"
               v-model="airdropContent"
-              class="news-input"
-              placeholder="请输入要注入的事件内容，例如：'某科技公司被曝数据泄露，涉及百万用户隐私信息...'"
+              :class="['news-input', { 'news-input-highlight': airdropHighlight }]"
+              placeholder="请输入要注入的事件内容，或从上方热点新闻中选择"
               rows="5"
             ></textarea>
           </div>
@@ -1754,9 +1269,9 @@
                 <span>🏠 私域 (微信群)</span>
               </label>
             </div>
-            <div class="airdrop-options-row" style="margin-top: 12px;">
-              <label class="source-option" style="font-size: 12px; color: #888;">
-                <input type="checkbox" v-model="airdropSkipParse" style="width: 14px; height: 14px;" />
+            <div class="airdrop-options-row mt-12">
+              <label class="source-option source-option-compact">
+                <input type="checkbox" v-model="airdropSkipParse" class="checkbox-compact" />
                 <span>⚡ 快速注入（跳过图谱解析，秒级响应）</span>
               </label>
             </div>
@@ -1765,7 +1280,7 @@
           <!-- 新闻可信度选择 -->
           <div class="kg-section" v-if="!airdropLoading">
             <h4>🔍 新闻可信度</h4>
-            <p class="impact-desc" style="margin-bottom:8px">可信度决定"误信/正确认知"的判定方向：</p>
+            <p class="impact-desc mb-8">可信度决定"误信/正确认知"的判定方向：</p>
             <div class="airdrop-source-options">
               <label class="source-option">
                 <input type="radio" v-model="airdropCredibility" value="低可信" />
@@ -1831,6 +1346,11 @@
             </div>
           </div>
           
+          <!-- LLM 降级警告 -->
+          <div v-if="airdropWarning && !airdropLoading" class="kg-section">
+            <p class="kg-warning">{{ airdropWarning }}</p>
+          </div>
+
           <!-- 错误显示 -->
           <div v-if="airdropError" class="kg-section">
             <p class="kg-error">❌ {{ airdropError }}</p>
@@ -1861,8 +1381,19 @@ const WS_BASE = IS_DEV_SERVER
   ? `ws://${window.location.hostname}:8000`
   : `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`
 
+import UsageDrawer from './components/UsageDrawer.vue'
+import MathModelDrawer from './components/MathModelDrawer.vue'
+import ChartModal from './components/ChartModal.vue'
+import CompletionModal from './components/CompletionModal.vue'
+import ReportModal from './components/ReportModal.vue'
+import IntelligenceModal from './components/IntelligenceModal.vue'
+import SettingsDrawer from './components/SettingsDrawer.vue'
+import ReportListModal from './components/ReportListModal.vue'
+import AgentModal from './components/AgentModal.vue'
+
 export default {
   name: 'App',
+  components: { UsageDrawer, MathModelDrawer, ChartModal, CompletionModal, ReportModal, IntelligenceModal, SettingsDrawer, ReportListModal, AgentModal },
 
   data() {
     return {
@@ -1913,6 +1444,19 @@ export default {
       connectionPoolSize: 600,
       timeout: 60,
       maxRetries: 5,
+      simulationLlm: {
+        base_url: '',
+        api_key: '',
+        model: ''
+      },
+      reportLlm: {
+        base_url: '',
+        api_key: '',
+        model: ''
+      },
+      settingsSaving: false,
+      settingsMessage: '',
+      settingsError: '',
 
       // 推演参数
       maxSteps: 50,
@@ -2004,7 +1548,6 @@ export default {
       // 报告相关
       reportGenerated: false,
       reportFilename: '',
-      reportPath: '',
       reportContent: '',
       reportLoading: false,
 
@@ -2012,7 +1555,6 @@ export default {
       showReportList: false,
       reportList: [],
       reportListLoading: false,
-      reportTypeFilter: 'all',  // all / simulation / intelligence
       reportSearchKeyword: '',
       reportSortBy: 'modified',  // modified / size / name
       reportSortOrder: 'desc',   // desc / asc
@@ -2036,15 +1578,21 @@ export default {
       // 事件注入
       showEventAirdrop: false,
       airdropContent: '',
+      airdropHighlight: false,
       airdropSource: 'public',
       airdropCredibility: '不确定',  // 新闻可信度选择
       airdropSkipParse: false,  // 快速注入模式（跳过图谱解析）
       airdropLoading: false,
       airdropLoadingStage: '',  // Loading阶段提示
       airdropError: '',
+      airdropWarning: '',       // 降级警告（LLM 不可用时）
       airdropSuccess: false,    // 是否成功
       parsedGraphDisplay: null, // 解析后的图谱数据（用于展示）
-      
+
+      // 热点新闻
+      hotNewsItems: [],
+      hotNewsLoading: false,
+
       // 事件日志（透明化展示）
       eventLogs: [],  // 存储所有注入事件的日志
       hasStopped: false,  // 是否已停止推演（用于显示"重新推演"按钮）
@@ -2077,7 +1625,12 @@ export default {
       // 使用说明抽屉
       showUsageDrawer: false,
       usageContent: '',
-      usageLoading: false
+      usageLoading: false,
+
+      // LLM 连接状态
+      llmStatus: 'unknown',       // ok | unreachable | not_configured | error | unknown
+      llmStatusMessage: '',
+      llmStatusModel: ''
     }
   },
 
@@ -2087,6 +1640,16 @@ export default {
     },
     connectionStatus() {
       return this.isConnected ? '已连接' : '未连接'
+    },
+    llmStatusText() {
+      const map = {
+        'ok': this.llmStatusModel ? `可用 (${this.llmStatusModel})` : '可用',
+        'unreachable': '不可达',
+        'not_configured': '未配置',
+        'error': '异常',
+        'unknown': '检测中…'
+      }
+      return map[this.llmStatus] || '未知'
     },
     userProfiles() {
       return this.profileOptions.filter(profile => profile.kind !== 'built_in' && profile.profile_id !== 'shass_news_institute')
@@ -2139,7 +1702,7 @@ export default {
     generationTraceSummary() {
       return this.generationTrace?.summary || (
         this.generationTrace?.source === 'workbook'
-          ? '先根据年龄、工龄、本单位工龄、职称和管理/党内职务计算资历分，再映射到信念强度、影响力、易感性、孤立恐惧感和初始观点。'
+          ? '六个维度由不同输入组合独立驱动：专业类型影响初始立场，职称等级和年龄段影响信念强度，行政/党内职务影响影响力和孤立恐惧感，学历影响易感性。'
           : '先根据资历档位和角色标签生成基础画像，再叠加小幅随机扰动，避免初始立场过于极化。'
       )
     },
@@ -2157,7 +1720,10 @@ export default {
         { key: 'party_role', label: '党内职务' },
         { key: 'education', label: '学历' },
         { key: 'degree', label: '学位' },
-        { key: 'specialty', label: '专业' }
+        { key: 'specialty', label: '专业' },
+        { key: 'title_rank', label: '职称等级编码', tooltip: '正高=1.0, 副高=0.67, 中级=0.33, 其他=0.15' },
+        { key: 'age_band_code', label: '年龄段编码', tooltip: '<35=0.0, 35-44=0.33, 45-54=0.67, ≥55=1.0' },
+        { key: 'specialty_type', label: '专业类型编码', tooltip: '社科/新闻=0.3, 哲学/文学=0.5, 管理/经济=0.7, 技术/信息=0.9' }
       ]
       return items
         .map(item => ({
@@ -2420,6 +1986,8 @@ export default {
     this.initCharts()
     this.connectWebSocket()
     this.fetchProfiles()
+    this.loadSystemSettings()
+    this.checkLlmStatus()
     window.addEventListener('resize', this.handleResize)
   },
 
@@ -2435,6 +2003,64 @@ export default {
 
   methods: {
     // ==================== UI 辅助方法 ====================
+
+    applySystemSettings(data) {
+      const simulation = data?.simulation_llm || {}
+      const report = data?.report_llm || {}
+      this.simulationLlm = {
+        base_url: simulation.base_url || '',
+        api_key: simulation.api_key || '',
+        model: simulation.model || ''
+      }
+      this.reportLlm = {
+        base_url: report.base_url || '',
+        api_key: report.api_key || '',
+        model: report.model || ''
+      }
+    },
+
+    async loadSystemSettings() {
+      this.settingsError = ''
+      this.settingsMessage = ''
+      try {
+        const response = await fetch(API_BASE + '/api/settings/llm', { cache: 'no-store' })
+        const payload = await response.json()
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || `接口返回 ${response.status}`)
+        }
+        this.applySystemSettings(payload.data)
+      } catch (error) {
+        console.error('加载系统设置失败:', error)
+        this.settingsError = `加载系统设置失败：${error.message}`
+      }
+    },
+
+    async saveSystemSettings() {
+      this.settingsSaving = true
+      this.settingsError = ''
+      this.settingsMessage = ''
+      try {
+        const response = await fetch(API_BASE + '/api/settings/llm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            simulation_llm: this.simulationLlm,
+            report_llm: this.reportLlm
+          })
+        })
+        const payload = await response.json()
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || `接口返回 ${response.status}`)
+        }
+        this.applySystemSettings(payload.data)
+        this.settingsMessage = '系统设置已保存，后续推演、事件解析和专报生成将使用新配置。'
+      } catch (error) {
+        console.error('保存系统设置失败:', error)
+        this.settingsError = `保存系统设置失败：${error.message}`
+      } finally {
+        this.settingsSaving = false
+      }
+    },
 
     readableTraceRule(key, rawRule) {
       const fallback = {
@@ -2719,7 +2345,6 @@ export default {
           if (msg.data.success) {
             this.reportGenerated = true
             this.reportFilename = msg.data.report_filename
-            this.reportPath = msg.data.report_path
             // 自动加载报告内容
             this.loadReportContent()
           }
@@ -3061,6 +2686,15 @@ export default {
         if (data.success) {
           this.parsedKnowledgeGraph = data.data
           this.knowledgeGraph = data.data
+
+          // 检查 LLM 解析是否降级
+          if (data.data && data.data.parse_error) {
+            const errMsg = data.data.error_message || ''
+            this.newsParseError = errMsg
+              ? `⚠️ LLM 解析不可用，已使用降级图谱（${errMsg}）`
+              : '⚠️ LLM 解析不可用，已使用降级图谱，结果可能不够精确'
+            this.checkLlmStatus()
+          }
         } else {
           this.newsParseError = data.error || '解析失败'
         }
@@ -3077,7 +2711,49 @@ export default {
       this.showKnowledgeGraph = true
     },
 
+    // ==================== LLM 状态检测 ====================
+
+    async checkLlmStatus() {
+      try {
+        const resp = await fetch(API_BASE + '/api/health/llm')
+        const data = await resp.json()
+        this.llmStatus = data.status || 'unknown'
+        this.llmStatusMessage = data.message || ''
+        this.llmStatusModel = data.model || ''
+      } catch {
+        this.llmStatus = 'unreachable'
+        this.llmStatusMessage = '无法连接后端服务'
+      }
+    },
+
     // ==================== 事件注入功能 ====================
+
+    async fetchHotNews() {
+      this.hotNewsLoading = true
+      this.hotNewsItems = []
+      try {
+        const resp = await fetch(API_BASE + '/api/event/hot-news')
+        const data = await resp.json()
+        this.hotNewsItems = data.items || []
+      } catch (e) {
+        console.error('获取热点新闻失败:', e)
+      } finally {
+        this.hotNewsLoading = false
+      }
+    },
+
+    useHotNews(item) {
+      this.airdropContent = item.content || item.title
+      this.$nextTick(() => {
+        const el = this.$refs.airdropInput
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+          this.airdropHighlight = true
+          setTimeout(() => { this.airdropHighlight = false }, 1500)
+        }
+      })
+    },
 
     async injectEvent() {
       if (!this.airdropContent.trim()) return
@@ -3085,6 +2761,7 @@ export default {
       this.airdropLoading = true
       this.airdropLoadingStage = this.airdropSkipParse ? '正在快速注入事件...' : '正在调用大模型解析事件图谱...'
       this.airdropError = ''
+      this.airdropWarning = ''
       this.airdropSuccess = false
       this.parsedGraphDisplay = null
 
@@ -3126,6 +2803,15 @@ export default {
           if (data.data && data.data.knowledge_graph) {
             this.parsedGraphDisplay = data.data.knowledge_graph
             this.knowledgeGraph = data.data.knowledge_graph
+
+            // 检查 LLM 解析是否降级
+            if (data.data.knowledge_graph.parse_error) {
+              const errMsg = data.data.knowledge_graph.error_message || ''
+              this.airdropWarning = errMsg
+                ? `⚠️ LLM 解析不可用，已使用降级图谱（${errMsg}）。解析结果可能不够精确。`
+                : '⚠️ LLM 解析不可用，已使用降级图谱。解析结果可能不够精确。'
+              this.checkLlmStatus()  // 刷新 LLM 状态指示器
+            }
           }
 
           // 更新Loading状态到第三阶段
@@ -3303,16 +2989,9 @@ export default {
       this.fetchReportList()
     },
 
-    // 切换类型筛选
-    changeReportTypeFilter(type) {
-      this.reportTypeFilter = type
-      this.fetchReportList()
-    },
-
     async viewHistoryReport(report) {
       this.showReportList = false
       this.reportFilename = report.filename
-      this.reportPath = report.path
       this.reportGenerated = true
       await this.loadReportContent()
     },
@@ -3358,10 +3037,7 @@ export default {
               if (data.filename) {
                 this.intelligenceFilename = data.filename
               }
-              if (data.path) {
-                this.reportPath = data.path
-              }
-              this.loadReportList()
+              this.fetchReportList()
               eventSource.close()
               this.reportGenerating = false
             } else if (data.error) {
@@ -3423,23 +3099,6 @@ export default {
         link.download = `intelligence_report_${new Date().toISOString().slice(0,10)}.md`
         link.click()
         URL.revokeObjectURL(url)
-      }
-    },
-
-    async openReportInApp() {
-      try {
-        const response = await fetch(API_BASE + '/api/report/open', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: this.reportPath })
-        })
-        const data = await response.json()
-        if (!data.success) {
-          alert('打开报告失败: ' + (data.error || '未知错误'))
-        }
-      } catch (error) {
-        console.error('打开报告失败:', error)
-        alert('打开报告失败: ' + error.message)
       }
     },
 
@@ -3686,8 +3345,8 @@ export default {
             this.chartModalInstance.dispose()
             this.chartModalInstance = null
           }
-          if (!this.$refs.chartModalBody) return
-          this.chartModalInstance = echarts.init(this.$refs.chartModalBody)
+          if (!this.$refs.chartModal || !this.$refs.chartModal.modalBody) return
+          this.chartModalInstance = echarts.init(this.$refs.chartModal.modalBody)
           this.renderModalChart()
         } catch (error) {
           console.error('打开图表放大弹窗失败:', error)
@@ -3843,6 +3502,7 @@ export default {
       const edges = this.useDualNetwork
         ? (this.activeNetworkTab === 'public' ? this.publicEdges : this.privateEdges)
         : (this.edges || [])
+      const actualEdges = edges.length > 0 ? edges : (this.edges || [])
 
       const communityColors = [
         '#60a5fa', '#a78bfa', '#f472b6', '#fb923c',
@@ -3870,6 +3530,9 @@ export default {
           symbolSize = 5 + (agent.influence || 0) * 10
         }
 
+        const showLabel = agent.realistic_profile?.name
+          || (agent.is_influencer && this.useDualNetwork && this.activeNetworkTab === 'public')
+
         return {
           id: agent.id.toString(),
           name: displayName,
@@ -3889,24 +3552,39 @@ export default {
             borderRadius: 4,
             padding: [2, 4],
             position: 'right'
+          } : agent.is_influencer && this.useDualNetwork && this.activeNetworkTab === 'public' ? {
+            show: true,
+            formatter: 'V',
+            fontSize: 10,
+            color: '#fcd34d'
           } : null,
           x: Math.random() * 800,
           y: Math.random() * 500
         }
       })
 
-      const sampledEdges = edges
+      const isPublic = this.useDualNetwork ? this.activeNetworkTab === 'public' : true
+      const sampledEdges = actualEdges
         .filter(() => Math.random() < 0.3)
         .slice(0, 500)
-        .map(([source, target]) => ({ source: source.toString(), target: target.toString() }))
+        .map(([source, target]) => ({
+          source: source.toString(),
+          target: target.toString(),
+          lineStyle: {
+            color: isPublic
+              ? 'rgba(100, 181, 246, 0.2)'
+              : 'rgba(167, 139, 250, 0.15)',
+            width: 0.5
+          }
+        }))
 
       return {
         backgroundColor: 'transparent',
         tooltip: {
           trigger: 'item',
-          backgroundColor: 'rgba(30, 41, 59, 0.9)',
+          backgroundColor: 'rgba(20, 25, 40, 0.95)',
           borderColor: 'rgba(100, 181, 246, 0.3)',
-          textStyle: { color: '#e2e8f0' },
+          textStyle: { color: '#e0e0e0' },
           formatter: (params) => {
             if (params.dataType === 'node') {
               const agent = this.agents.find(a => a.id.toString() === params.data.id)
@@ -3916,12 +3594,10 @@ export default {
                 const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
                 const tag = this.useDualNetwork && this.activeNetworkTab === 'public' ? influencerTag : communityTag
                 const silenceTag = agent.is_silent ? ' [沉默]' : ''
-                // v3.0 新增字段
                 const rumorTrust = agent.rumor_trust !== undefined ? `<div style="color: #f87171;">谣言信任: ${(agent.rumor_trust * 100).toFixed(1)}%</div>` : ''
                 const truthTrust = agent.truth_trust !== undefined ? `<div style="color: #4ade80;">真相信任: ${(agent.truth_trust * 100).toFixed(1)}%</div>` : ''
                 const dominantNeed = agent.dominant_need ? `<div style="color: #a78bfa;">主导需求: ${this.needLabel(agent.dominant_need)}</div>` : ''
                 const predictedBehavior = agent.predicted_behavior ? `<div style="color: #facc15;">预测行为: ${this.behaviorLabel(agent.predicted_behavior)}</div>` : ''
-                // 发布渠道映射（仅双层网络模式有意义）
                 const channelMap = { 'public': '📢 公域', 'private': '🔒 私域', 'both': '📤 双渠道', 'none': '🔇 未发布' }
                 const publishChannel = agent.publish_channel && agent.publish_channel !== 'none'
                   ? `<div style="color: #94a3b8;">发布渠道: ${channelMap[agent.publish_channel] || agent.publish_channel}</div>`
@@ -3930,6 +3606,7 @@ export default {
                   <div style="font-weight: bold;">${displayName} (#${agent.id})${tag}${silenceTag}</div>
                   <div>观点: ${agent.opinion.toFixed(3)}</div>
                   ${rumorTrust}${truthTrust}${dominantNeed}${predictedBehavior}${publishChannel}
+                  <div style="color: #64b5f6; margin-top: 4px;">点击查看详情</div>
                 </div>`
               }
             }
@@ -3942,24 +3619,26 @@ export default {
           data: nodes,
           links: sampledEdges,
           roam: true,
+          draggable: true,
           label: { show: false },
           force: {
-            repulsion: 100,
-            gravity: 0.1,
-            edgeLength: 30
+            repulsion: isPublic ? 100 : 50,
+            edgeLength: isPublic ? 60 : 30,
+            gravity: 0.1
           },
-          lineStyle: {
-            color: 'rgba(100, 181, 246, 0.2)',
-            width: 0.5,
-            curveness: 0.1
-          }
+          emphasis: {
+            focus: 'adjacency',
+            lineStyle: { width: 2, color: '#64b5f6' },
+            itemStyle: { shadowBlur: 20, shadowColor: 'rgba(100, 181, 246, 0.5)' }
+          },
+          lineStyle: { opacity: 0.2 }
         }]
       }
     },
 
     getTrendChartOption() {
       const hasDualData = this.trendHistory.publicRumorRates.length > 0 &&
-                          this.publicRumorRates !== this.trendHistory.rumorRates
+                          this.trendHistory.publicRumorRates !== this.trendHistory.rumorRates
 
       return {
         backgroundColor: 'transparent',
@@ -4119,80 +3798,7 @@ export default {
 
     renderOpinionChart() {
       if (!this.opinionDist || !this.opinionDist.counts) return
-      const data = this.opinionDist.counts.map((count, i) => ({
-        value: count,
-        center: this.opinionDist.centers?.[i] || i
-      }))
-
-      const option = {
-        backgroundColor: 'transparent',
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: 'rgba(20, 25, 40, 0.95)',
-          borderColor: 'rgba(100, 181, 246, 0.3)',
-          textStyle: { color: '#e0e0e0' }
-        },
-        grid: {
-          left: '8%',
-          right: '4%',
-          top: '10%',
-          bottom: '12%'
-        },
-        xAxis: {
-          type: 'category',
-          data: this.opinionDist.centers?.map(c => c.toFixed(2)) || [],
-          axisLabel: { color: '#6b7280', fontSize: 10 },
-          axisLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.2)' } },
-          name: '观点值',
-          nameTextStyle: { color: '#6b7280', fontSize: 11 }
-        },
-        yAxis: {
-          type: 'value',
-          axisLabel: { color: '#6b7280' },
-          splitLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.1)' } },
-          axisLine: { show: false }
-        },
-        series: [{
-          type: 'bar',
-          data: data.map((d, i) => {
-            const center = d.center
-            let color
-            // 根据新闻可信度动态调整颜色语义
-            // center < 0 → 拒绝新闻, center > 0 → 相信新闻
-            // 中立区间: |center| <= 0.05
-            if (Math.abs(center) <= 0.05) color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#f59e0b' },
-              { offset: 1, color: '#d97706' }
-            ])
-            else {
-              // 根据新闻可信度判定"误信/正确认知"
-              const isBelieve = center > 0  // 相信新闻
-              let isMislead
-              if (this.newsCredibility === '低可信') {
-                // 低可信新闻：相信=误信
-                isMislead = isBelieve
-              } else if (this.newsCredibility === '高可信') {
-                // 高可信新闻：拒绝=误信
-                isMislead = !isBelieve
-              } else {
-                // 不确定时：恢复传统语义，负值=误信(红色)，正值=正确认知(绿色)
-                isMislead = !isBelieve
-              }
-              color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: isMislead ? '#ef4444' : '#22c55e' },
-                { offset: 1, color: isMislead ? '#dc2626' : '#16a34a' }
-              ])
-            }
-            return {
-              value: d.value,
-              itemStyle: { color, borderRadius: [4, 4, 0, 0] }
-            }
-          }),
-          barWidth: '70%'
-        }]
-      }
-
-      this.opinionChartInstance?.setOption(option)
+      this.opinionChartInstance?.setOption(this.getOpinionChartOption())
     },
 
     renderKnowledgeGraphChart() {
@@ -4356,142 +3962,7 @@ export default {
 
     renderNetworkChart() {
       if (!this.agents.length) return
-
-      // 根据当前 Tab 选择边数据
-      const edges = this.activeNetworkTab === 'public' ? this.publicEdges : this.privateEdges
-      const actualEdges = edges.length > 0 ? edges : this.edges
-
-      // 社群颜色
-      const communityColors = [
-        '#60a5fa', '#a78bfa', '#f472b6', '#fb923c',
-        '#4ade80', '#22d3ee', '#facc15', '#e879f9'
-      ]
-
-      const nodes = this.agents.map(agent => {
-        const displayName = this.getAgentDisplayName(agent)
-        let color
-        if (agent.opinion < 0) color = '#ef4444'
-        else if (agent.opinion > 0) color = '#22c55e'
-        else color = '#f59e0b'
-
-        // 沉默的节点透明度降低
-        const opacity = agent.is_silent ? 0.3 : 1.0
-
-        // 公域网络 vs 私域网络样式
-        let symbolSize
-        if (this.activeNetworkTab === 'public') {
-          // 公域：按影响力大小，大V节点更大
-          symbolSize = agent.is_influencer
-            ? 12 + agent.influence * 15
-            : 4 + agent.influence * 6
-        } else {
-          // 私域：按社群颜色区分
-          color = communityColors[agent.community_id % 8] || color
-          symbolSize = agent.is_silent ? 3 : 5
-        }
-
-        return {
-          id: agent.id.toString(),
-          name: displayName,
-          symbolSize: symbolSize,
-          itemStyle: {
-            color: color,
-            opacity: opacity,
-            borderColor: agent.is_influencer ? '#fcd34d' : null,
-            borderWidth: agent.is_influencer ? 2 : 0
-          },
-          label: agent.realistic_profile?.name ? {
-            show: true,
-            formatter: displayName,
-            fontSize: 10,
-            color: '#e2e8f0',
-            backgroundColor: 'rgba(15, 23, 42, 0.72)',
-            borderRadius: 4,
-            padding: [2, 4],
-            position: 'right'
-          } : agent.is_influencer && this.activeNetworkTab === 'public' ? {
-            show: true,
-            formatter: 'V',
-            fontSize: 10,
-            color: '#fcd34d'
-          } : null,
-          x: Math.random() * 800,
-          y: Math.random() * 500
-        }
-      })
-
-      const sampledEdges = actualEdges
-        .filter(() => Math.random() < 0.3)
-        .slice(0, 500)
-        .map(([source, target]) => ({
-          source: source.toString(),
-          target: target.toString(),
-          lineStyle: {
-            color: this.activeNetworkTab === 'public'
-              ? 'rgba(100, 181, 246, 0.2)'
-              : 'rgba(167, 139, 250, 0.15)',
-            width: 0.5
-          }
-        }))
-
-      const option = {
-        backgroundColor: 'transparent',
-        tooltip: {
-          formatter: (params) => {
-            if (params.dataType === 'node') {
-              const agent = this.agents.find(a => a.id.toString() === params.data.id)
-              if (agent) {
-                const displayName = this.getAgentDisplayName(agent)
-                const influencerTag = agent.is_influencer ? ' [大V]' : ''
-                const communityTag = ` [社群${(agent.community_id || 0) + 1}]`
-                const tag = this.activeNetworkTab === 'public' ? influencerTag : communityTag
-                const silenceTag = agent.is_silent ? ' [沉默]' : ''
-                // v3.0 新增字段
-                const rumorTrust = agent.rumor_trust !== undefined ? `<div style="color: #f87171;">谣言信任: ${(agent.rumor_trust * 100).toFixed(1)}%</div>` : ''
-                const truthTrust = agent.truth_trust !== undefined ? `<div style="color: #4ade80;">真相信任: ${(agent.truth_trust * 100).toFixed(1)}%</div>` : ''
-                const dominantNeed = agent.dominant_need ? `<div style="color: #a78bfa;">主导需求: ${this.needLabel(agent.dominant_need)}</div>` : ''
-                const predictedBehavior = agent.predicted_behavior ? `<div style="color: #facc15;">预测行为: ${this.behaviorLabel(agent.predicted_behavior)}</div>` : ''
-                // 发布渠道（仅双层网络模式有意义）
-                const channelMap = { 'public': '📢 公域', 'private': '🔒 私域', 'both': '📤 双渠道', 'none': '🔇 未发布' }
-                const publishChannel = agent.publish_channel && agent.publish_channel !== 'none'
-                  ? `<div style="color: #94a3b8;">发布渠道: ${channelMap[agent.publish_channel] || agent.publish_channel}</div>`
-                  : ''
-                return `<div style="padding: 8px;">
-                  <div style="font-weight: bold;">${displayName} (#${agent.id})${tag}${silenceTag}</div>
-                  <div>观点: ${agent.opinion.toFixed(3)}</div>
-                  ${rumorTrust}${truthTrust}${dominantNeed}${predictedBehavior}${publishChannel}
-                  <div style="color: #64b5f6; margin-top: 4px;">点击查看详情</div>
-                </div>`
-              }
-            }
-            return ''
-          },
-          backgroundColor: 'rgba(20, 25, 40, 0.95)',
-          borderColor: 'rgba(100, 181, 246, 0.3)',
-          textStyle: { color: '#e0e0e0' }
-        },
-        series: [{
-          type: 'graph',
-          layout: 'force',
-          data: nodes,
-          links: sampledEdges,
-          roam: true,
-          draggable: true,
-          force: {
-            repulsion: this.activeNetworkTab === 'public' ? 100 : 50,
-            edgeLength: this.activeNetworkTab === 'public' ? 60 : 30,
-            gravity: 0.1
-          },
-          emphasis: {
-            focus: 'adjacency',
-            lineStyle: { width: 2, color: '#64b5f6' },
-            itemStyle: { shadowBlur: 20, shadowColor: 'rgba(100, 181, 246, 0.5)' }
-          },
-          lineStyle: { opacity: 0.2 }
-        }]
-      }
-
-      this.networkChartInstance?.setOption(option)
+      this.networkChartInstance?.setOption(this.getNetworkChartOption())
 
       this.networkChartInstance?.off('click')
       this.networkChartInstance?.on('click', (params) => {
@@ -4503,159 +3974,7 @@ export default {
     },
 
     renderTrendChart() {
-      // 判断是否有双层数据
-      const hasDualData = this.trendHistory.publicRumorRates.length > 0 &&
-                          this.publicRumorRates !== this.trendHistory.rumorRates
-
-      const option = {
-        backgroundColor: 'transparent',
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: 'rgba(20, 25, 40, 0.95)',
-          borderColor: 'rgba(100, 181, 246, 0.3)',
-          textStyle: { color: '#e0e0e0' }
-        },
-        legend: {
-          data: ['误信率', '正确认知率', '平均观点', '极化指数', '沉默率', '公域误信率', '私域误信率'],
-          textStyle: { color: '#6b7280', fontSize: 11 },
-          top: 5,
-          itemWidth: 16,
-          itemHeight: 8,
-          selectedMode: 'multiple',
-          selector: true,
-          selectorPosition: 'end',
-          triggerEvent: true
-        },
-        grid: {
-          left: '6%',
-          right: '6%',
-          top: '22%',
-          bottom: '10%'
-        },
-        xAxis: {
-          type: 'category',
-          data: this.trendHistory.steps,
-          axisLabel: { color: '#6b7280', fontSize: 10 },
-          axisLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.2)' } },
-          name: '步数',
-          nameTextStyle: { color: '#6b7280', fontSize: 11 }
-        },
-        yAxis: [
-          {
-            type: 'value',
-            position: 'left',
-            axisLabel: { color: '#6b7280', fontSize: 10 },
-            splitLine: { lineStyle: { color: 'rgba(100, 181, 246, 0.1)' } },
-            axisLine: { show: false },
-            min: -1,
-            max: 1
-          },
-          {
-            type: 'value',
-            position: 'right',
-            axisLabel: { color: '#6b7280', fontSize: 10 },
-            splitLine: { show: false },
-            axisLine: { show: false },
-            min: 0,
-            max: 1
-          }
-        ],
-        series: [
-          {
-            name: '误信率',
-            type: 'line',
-            yAxisIndex: 1,
-            data: this.trendHistory.rumorRates,
-            lineStyle: { color: '#ef4444', width: 2 },
-            itemStyle: { color: '#ef4444' },
-            smooth: true,
-            symbol: 'none',
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: 'rgba(239, 68, 68, 0.3)' },
-                { offset: 1, color: 'rgba(239, 68, 68, 0.05)' }
-              ])
-            }
-          },
-          {
-            name: '正确认知率',
-            type: 'line',
-            yAxisIndex: 1,
-            data: this.trendHistory.truthRates,
-            lineStyle: { color: '#22c55e', width: 2 },
-            itemStyle: { color: '#22c55e' },
-            smooth: true,
-            symbol: 'none',
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: 'rgba(34, 197, 94, 0.3)' },
-                { offset: 1, color: 'rgba(34, 197, 94, 0.05)' }
-              ])
-            }
-          },
-          {
-            name: '平均观点',
-            type: 'line',
-            yAxisIndex: 0,
-            data: this.trendHistory.avgOpinions,
-            lineStyle: { color: '#3b82f6', width: 2 },
-            itemStyle: { color: '#3b82f6' },
-            smooth: true,
-            symbol: 'none'
-          },
-          {
-            name: '极化指数',
-            type: 'line',
-            yAxisIndex: 1,
-            data: this.trendHistory.polarization,
-            lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
-            itemStyle: { color: '#f59e0b' },
-            smooth: true,
-            symbol: 'none'
-          },
-          {
-            name: '沉默率',
-            type: 'line',
-            yAxisIndex: 1,
-            data: this.trendHistory.silenceRates,
-            lineStyle: { color: '#8b5cf6', width: 2, type: 'dotted' },
-            itemStyle: { color: '#8b5cf6' },
-            smooth: true,
-            symbol: 'none',
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: 'rgba(139, 92, 246, 0.2)' },
-                { offset: 1, color: 'rgba(139, 92, 246, 0.02)' }
-              ])
-            }
-          },
-          // 双层网络：公域/私域误信率曲线
-          {
-            name: '公域误信率',
-            type: 'line',
-            yAxisIndex: 1,
-            data: this.trendHistory.publicRumorRates,
-            lineStyle: { color: '#f97316', width: 2, type: 'dashed' },
-            itemStyle: { color: '#f97316' },
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 4
-          },
-          {
-            name: '私域误信率',
-            type: 'line',
-            yAxisIndex: 1,
-            data: this.trendHistory.privateRumorRates,
-            lineStyle: { color: '#dc2626', width: 2, type: 'solid' },
-            itemStyle: { color: '#dc2626' },
-            smooth: true,
-            symbol: 'diamond',
-            symbolSize: 4
-          }
-        ]
-      }
-
-      this.trendChartInstance?.setOption(option)
+      this.trendChartInstance?.setOption(this.getTrendChartOption())
     },
 
     // ==================== v3.0 图表渲染 ====================
@@ -4866,7 +4185,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-workflow);
 }
 
 .workflow-steps {
@@ -5244,6 +4563,14 @@ export default {
   overflow: hidden;
   background: linear-gradient(135deg, #0a0f1a 0%, #0f172a 50%, #1e1b4b 100%);
   font-family: 'Inter', 'PingFang SC', -apple-system, sans-serif;
+
+  --z-workflow: 100;
+  --z-drawer: 200;
+  --z-modal-low: 350;
+  --z-modal: 400;
+  --z-modal-high: 500;
+  --z-kg-modal: 600;
+  --z-overlay-top: 1000;
 }
 
 /* ==================== 左侧控制面板 ==================== */
@@ -5372,6 +4699,80 @@ export default {
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mb-8 { margin-bottom: 8px; }
+.source-option-compact { font-size: 12px; color: #888; }
+.checkbox-compact { width: 14px; height: 14px; }
+
+/* LLM 状态指示器 */
+.llm-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.llm-status:hover {
+  filter: brightness(1.15);
+}
+
+.llm-status.llm-ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.llm-status.llm-unreachable,
+.llm-status.llm-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.llm-status.llm-not_configured {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+.llm-status.llm-unknown {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.llm-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.llm-status.llm-ok .llm-dot {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.llm-label {
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.llm-text {
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
 }
 
 /* 控制区块 */
@@ -6700,1864 +6101,9 @@ export default {
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
-  z-index: 100;
+  z-index: var(--z-drawer);
   display: flex;
   justify-content: flex-end;
-}
-
-.settings-drawer {
-  width: 380px;
-  height: 100%;
-  background: rgba(15, 23, 42, 0.98);
-  border-left: 1px solid rgba(100, 181, 246, 0.2);
-  display: flex;
-  flex-direction: column;
-}
-
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid rgba(100, 181, 246, 0.1);
-}
-
-.drawer-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
-.drawer-close {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(100, 181, 246, 0.1);
-  border: 1px solid rgba(100, 181, 246, 0.2);
-  border-radius: 8px;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.drawer-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-.drawer-body {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-.drawer-section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 16px;
-}
-
-.setting-item {
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 12px;
-  border: 1px solid rgba(100, 181, 246, 0.08);
-}
-
-.setting-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.setting-label {
-  font-size: 13px;
-  color: #cbd5e1;
-  font-weight: 500;
-}
-
-.setting-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #60a5fa;
-}
-
-.setting-item input[type="range"] {
-  width: 100%;
-  height: 6px;
-  -webkit-appearance: none;
-  background: rgba(100, 181, 246, 0.2);
-  border-radius: 3px;
-  outline: none;
-}
-
-.setting-item input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
-}
-
-.setting-desc {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 8px;
-}
-
-/* ==================== 数学模型说明抽屉 ==================== */
-.math-model-drawer {
-  width: 520px;
-  height: 100%;
-  background: rgba(15, 23, 42, 0.98);
-  border-left: 1px solid rgba(100, 181, 246, 0.2);
-  display: flex;
-  flex-direction: column;
-}
-
-.math-model-content {
-  padding: 0;
-}
-
-.math-model-content .section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #60a5fa;
-  margin: 20px 0 12px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
-}
-
-.math-model-content .section-title:first-child {
-  margin-top: 0;
-}
-
-.theory-card {
-  background: rgba(30, 41, 59, 0.5);
-  border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 12px;
-  border: 1px solid rgba(100, 181, 246, 0.1);
-}
-
-.theory-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.theory-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
-.theory-source {
-  font-size: 11px;
-  color: #6b7280;
-  background: rgba(100, 181, 246, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.theory-formula {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  overflow-x: auto;
-}
-
-.theory-formula code {
-  font-family: 'Fira Code', 'Monaco', monospace;
-  font-size: 12px;
-  color: #a5b4fc;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.theory-explanation {
-  font-size: 12px;
-  color: #94a3b8;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.theory-enhancements {
-  font-size: 11px;
-  color: #78716c;
-  margin: 8px 0 0 0;
-  padding-left: 16px;
-}
-
-.theory-enhancements li {
-  margin-bottom: 4px;
-}
-
-.params-table {
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.param-row {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(100, 181, 246, 0.08);
-}
-
-.param-row:last-child {
-  border-bottom: none;
-}
-
-.param-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: #e2e8f0;
-  margin-bottom: 6px;
-}
-
-.param-meta {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 6px;
-}
-
-.param-range {
-  font-size: 11px;
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.param-default {
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-.param-effect {
-  font-size: 11px;
-  color: #78716c;
-  line-height: 1.5;
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  color: #94a3b8;
-}
-
-.btn-theory {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #c4b5fd;
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-}
-
-.btn-theory:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.3) 100%);
-  border-color: rgba(139, 92, 246, 0.5);
-}
-
-/* ==================== 使用说明抽屉 ==================== */
-.usage-drawer {
-  width: 640px;
-  height: 100%;
-  background: rgba(15, 23, 42, 0.98);
-  border-left: 1px solid rgba(100, 181, 246, 0.2);
-  display: flex;
-  flex-direction: column;
-}
-
-/* usage-content 样式已统一到 Markdown 统一样式部分 */
-
-/* ==================== Agent透视弹窗 ==================== */
-.agent-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  z-index: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.agent-modal {
-  width: 520px;
-  max-height: 85vh;
-  background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 100%);
-  border: 1px solid rgba(100, 181, 246, 0.25);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 0 60px rgba(100, 181, 246, 0.15);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: rgba(100, 181, 246, 0.1);
-  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
-}
-
-.modal-header h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #60a5fa;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.close-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-.modal-loading {
-  padding: 60px 20px;
-  text-align: center;
-  color: #6b7280;
-}
-
-.loading-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(100, 181, 246, 0.2);
-  border-top-color: #60a5fa;
-  border-radius: 50%;
-  margin: 0 auto 16px;
-  animation: spin 1s linear infinite;
-}
-
-.modal-error {
-  padding: 40px 20px;
-  text-align: center;
-  color: #ef4444;
-}
-
-.modal-content {
-  padding: 16px;
-  max-height: calc(85vh - 60px);
-  overflow-y: auto;
-}
-
-.info-block {
-  margin-bottom: 14px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(100, 181, 246, 0.1);
-  overflow: hidden;
-}
-
-.trace-block {
-  border-color: rgba(96, 165, 250, 0.22);
-  background: rgba(15, 23, 42, 0.82);
-}
-
-.trace-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 0;
-  background: rgba(100, 181, 246, 0.05);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-
-.trace-toggle::-webkit-details-marker {
-  display: none;
-}
-
-.trace-toggle::marker {
-  content: "";
-}
-
-.trace-toggle-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #cbd5e1;
-}
-
-.trace-toggle-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.trace-chevron {
-  font-size: 11px;
-  color: #93c5fd;
-}
-
-.trace-chevron::after {
-  content: "展开";
-}
-
-.trace-block[open] .trace-chevron::after {
-  content: "收起";
-}
-
-.trace-summary {
-  color: #cbd5e1;
-  font-size: 12px;
-  line-height: 1.6;
-  margin-bottom: 10px;
-}
-
-.trace-badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.trace-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(96, 165, 250, 0.16);
-  color: #93c5fd;
-  font-size: 11px;
-}
-
-.trace-section {
-  margin-top: 12px;
-}
-
-.trace-section-title {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-bottom: 8px;
-}
-
-.trace-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 12px;
-}
-
-.trace-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 10px;
-  background: rgba(30, 41, 59, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 8px;
-}
-
-.trace-item .label {
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-.trace-item .value {
-  font-size: 12px;
-  color: #e2e8f0;
-  word-break: break-word;
-}
-
-.block-title {
-  padding: 10px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #94a3b8;
-  background: rgba(100, 181, 246, 0.05);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.block-content {
-  padding: 14px;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.info-item .label {
-  font-size: 10px;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.info-item .value {
-  font-size: 13px;
-  color: #e2e8f0;
-}
-
-.info-item .value.highlight {
-  color: #60a5fa;
-  font-weight: 600;
-}
-
-.info-item .value.desc {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.status-badge.positive {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-}
-
-.status-badge.negative {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
-
-.status-badge.neutral {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-}
-
-/* 沉默状态徽章 */
-.status-badge.silent {
-  background: rgba(139, 92, 246, 0.15);
-  color: #a78bfa;
-}
-
-.status-badge.active {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-}
-
-/* 心理博弈区块 */
-.psychology-block {
-  border-color: rgba(139, 92, 246, 0.25);
-  background: linear-gradient(145deg, rgba(139, 92, 246, 0.05) 0%, rgba(0, 0, 0, 0.3) 100%);
-}
-
-.psychology-block .block-title {
-  background: rgba(139, 92, 246, 0.1);
-  color: #a78bfa;
-}
-
-.psychology-analysis {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.climate-info {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-
-.climate-item {
-  text-align: center;
-  padding: 10px;
-  background: rgba(139, 92, 246, 0.08);
-  border-radius: 6px;
-}
-
-.climate-item .label {
-  display: block;
-  font-size: 10px;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.climate-item .value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-
-.climate-item .value.rumor { color: #f87171; }
-.climate-item .value.truth { color: #4ade80; }
-.climate-item .value.silent { color: #a78bfa; }
-
-.psychology-conclusion {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  align-items: flex-start;
-}
-
-.psychology-conclusion.silent {
-  background: rgba(139, 92, 246, 0.1);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-}
-
-.psychology-conclusion.active {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-}
-
-.conclusion-icon {
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.conclusion-text strong {
-  display: block;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.psychology-conclusion.silent .conclusion-text strong { color: #a78bfa; }
-.psychology-conclusion.active .conclusion-text strong { color: #4ade80; }
-
-.conclusion-text p {
-  margin: 0;
-  font-size: 12px;
-  color: #94a3b8;
-  font-style: italic;
-  line-height: 1.5;
-}
-
-/* 沉默决策状态 */
-.value.warning { color: #fbbf24; }
-.value.silent-status { color: #a78bfa; font-weight: 600; }
-.value.active-status { color: #4ade80; font-weight: 600; }
-
-.summary-row {
-  margin-top: 10px;
-  padding: 10px;
-  background: rgba(100, 181, 246, 0.05);
-  border-radius: 6px;
-}
-
-.summary-row .label {
-  display: block;
-  font-size: 10px;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.summary-row .value {
-  font-size: 13px;
-  color: #e2e8f0;
-}
-
-.decision-block {
-  border-color: rgba(100, 181, 246, 0.25);
-  background: linear-gradient(145deg, rgba(100, 181, 246, 0.05) 0%, rgba(0, 0, 0, 0.3) 100%);
-}
-
-.decision-block .block-title {
-  background: rgba(100, 181, 246, 0.1);
-  color: #60a5fa;
-}
-
-.news-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.news-item {
-  padding: 8px 12px;
-  background: rgba(100, 181, 246, 0.08);
-  border-radius: 6px;
-  font-size: 12px;
-  color: #cbd5e1;
-  border-left: 3px solid #60a5fa;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: #4b5563;
-}
-
-.empty-state .icon {
-  font-size: 20px;
-  display: block;
-  margin-bottom: 6px;
-}
-
-.decision-output {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.decision-summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.summary-item {
-  text-align: center;
-  padding: 12px;
-  background: rgba(100, 181, 246, 0.05);
-  border-radius: 8px;
-}
-
-.summary-item .label {
-  display: block;
-  font-size: 10px;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-.summary-item .value {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.summary-item .value.emotion { color: #c084fc; }
-.summary-item .value.action { color: #38bdf8; }
-.summary-item .value.opinion-change { color: #fbbf24; font-size: 12px; }
-
-.generated-comment {
-  padding: 12px;
-  background: rgba(251, 191, 36, 0.08);
-  border-radius: 8px;
-  border: 1px solid rgba(251, 191, 36, 0.2);
-}
-
-.generated-comment .label {
-  display: block;
-  font-size: 10px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.comment-text {
-  margin: 0;
-  font-size: 13px;
-  color: #fcd34d;
-  font-style: italic;
-}
-
-.reasoning {
-  padding: 12px;
-  background: rgba(100, 181, 246, 0.05);
-  border-radius: 8px;
-}
-
-.reasoning .label {
-  display: block;
-  font-size: 10px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.reasoning-text {
-  margin: 0;
-  font-size: 12px;
-  color: #cbd5e1;
-  line-height: 1.5;
-}
-
-.raw-response {
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 8px;
-  border: 1px solid rgba(100, 181, 246, 0.1);
-}
-
-.raw-response .label {
-  display: block;
-  font-size: 10px;
-  color: #6b7280;
-  margin-bottom: 8px;
-}
-
-.json-code {
-  margin: 0;
-  padding: 10px;
-  background: #0a0f1a;
-  border-radius: 6px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 10px;
-  color: #86efac;
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-/* ==================== 图表放大弹窗 ==================== */
-.chart-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(8px);
-  z-index: 400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chart-modal {
-  width: 90vw;
-  height: 80vh;
-  background: rgba(15, 23, 42, 0.98);
-  border: 1px solid rgba(100, 181, 246, 0.3);
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.chart-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(100, 181, 246, 0.2);
-}
-
-.chart-modal-header h3 {
-  font-size: 18px;
-  color: #e2e8f0;
-  margin: 0;
-}
-
-.chart-modal-close {
-  background: transparent;
-  border: none;
-  color: #9ca3af;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.chart-modal-close:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-}
-
-.chart-modal-body {
-  flex: 1;
-  width: 100%;
-  padding: 16px;
-}
-
-/* ==================== 图表放大按钮 ==================== */
-.chart-zoom-btn {
-  background: transparent;
-  border: 1px solid rgba(100, 181, 246, 0.3);
-  color: #9ca3af;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-  margin-left: auto;
-}
-
-.chart-zoom-btn:hover {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.5);
-  color: #60a5fa;
-}
-
-/* ==================== 报告弹窗 ==================== */
-/* 推演完成引导弹窗 */
-.completion-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  z-index: 350;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.3s ease;
-}
-
-.completion-modal {
-  width: 420px;
-  background: linear-gradient(145deg, #0f172a, #1e1b4b);
-  border: 1px solid rgba(100, 181, 246, 0.3);
-  border-radius: 16px;
-  padding: 32px 28px;
-  text-align: center;
-  box-shadow: 0 0 60px rgba(100, 181, 246, 0.25);
-  animation: slideUp 0.4s ease;
-}
-
-.completion-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.completion-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #e2e8f0;
-  margin: 0 0 8px;
-}
-
-.completion-desc {
-  font-size: 14px;
-  color: #94a3b8;
-  margin: 0 0 20px;
-  line-height: 1.5;
-}
-
-.completion-stats {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  padding: 14px 0;
-  margin-bottom: 20px;
-  border-top: 1px solid rgba(100, 181, 246, 0.15);
-  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
-}
-
-.completion-stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.completion-stat-item .stat-label {
-  font-size: 11px;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.completion-stat-item .stat-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #f97316;
-}
-
-.completion-stat-item .stat-value.truth {
-  color: #34d399;
-}
-
-.completion-stat-item .stat-value.risk-low { color: #34d399; }
-.completion-stat-item .stat-value.risk-medium { color: #fbbf24; }
-.completion-stat-item .stat-value.risk-high { color: #f97316; }
-.completion-stat-item .stat-value.risk-critical { color: #ef4444; }
-
-.completion-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.btn-completion {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-completion:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-report {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: #fff;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-}
-
-.btn-report:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
-}
-
-.btn-intelligence {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  color: #fff;
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
-}
-
-.btn-intelligence:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
-}
-
-.btn-later {
-  background: rgba(100, 116, 139, 0.15);
-  color: #94a3b8;
-  border: 1px solid rgba(100, 116, 139, 0.2);
-}
-
-.btn-later:hover:not(:disabled) {
-  background: rgba(100, 116, 139, 0.25);
-  color: #cbd5e1;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.report-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  z-index: 300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.report-modal {
-  width: 700px;
-  max-height: 85vh;
-  background: linear-gradient(145deg, #0f172a, #1e1b4b);
-  border: 1px solid rgba(100, 181, 246, 0.25);
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 0 60px rgba(100, 181, 246, 0.2);
-}
-
-/* 增强版历史报告弹窗 */
-.report-modal-enhanced {
-  width: 900px;
-  max-height: 80vh;
-}
-
-.report-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  background: rgba(30, 41, 59, 0.5);
-  border-radius: 10px;
-  margin-bottom: 16px;
-}
-
-.report-search-box {
-  flex: 1;
-  position: relative;
-}
-
-.report-search-input {
-  width: 100%;
-  padding: 8px 12px 8px 36px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(100, 181, 246, 0.2);
-  border-radius: 8px;
-  color: #e2e8f0;
-  font-size: 13px;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.report-search-input:focus {
-  border-color: rgba(100, 181, 246, 0.5);
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.report-search-input::placeholder {
-  color: #6b7280;
-}
-
-.report-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  pointer-events: none;
-}
-
-.report-sort-btns {
-  display: flex;
-  gap: 6px;
-}
-
-.sort-btn {
-  padding: 6px 10px;
-  background: rgba(100, 181, 246, 0.1);
-  border: 1px solid rgba(100, 181, 246, 0.2);
-  border-radius: 6px;
-  color: #94a3b8;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 36px;
-}
-
-.sort-btn:hover {
-  background: rgba(100, 181, 246, 0.2);
-  color: #e2e8f0;
-}
-
-.sort-btn.active {
-  background: rgba(100, 181, 246, 0.25);
-  border-color: rgba(100, 181, 246, 0.4);
-  color: #60a5fa;
-}
-
-.report-stats {
-  padding: 8px 12px;
-  background: rgba(100, 181, 246, 0.08);
-  border-radius: 6px;
-  font-size: 12px;
-  color: #94a3b8;
-  margin-bottom: 16px;
-}
-
-.report-stats strong {
-  color: #60a5fa;
-  font-weight: 600;
-}
-
-.report-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.report-column {
-  display: flex;
-  flex-direction: column;
-  background: rgba(30, 41, 59, 0.3);
-  border-radius: 10px;
-  border: 1px solid rgba(100, 181, 246, 0.1);
-  overflow: hidden;
-}
-
-.column-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(100, 181, 246, 0.1);
-  border-bottom: 1px solid rgba(100, 181, 246, 0.1);
-}
-
-.column-icon {
-  font-size: 16px;
-}
-
-.column-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e2e8f0;
-  flex: 1;
-}
-
-.column-count {
-  padding: 2px 8px;
-  background: rgba(100, 181, 246, 0.2);
-  border-radius: 10px;
-  font-size: 11px;
-  color: #60a5fa;
-}
-
-.column-body {
-  flex: 1;
-  padding: 12px;
-  max-height: 350px;
-  overflow-y: auto;
-}
-
-.column-body .report-list {
-  max-height: none;
-}
-
-.column-body .report-placeholder {
-  height: 150px;
-}
-
-.report-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: rgba(100, 181, 246, 0.1);
-  border-bottom: 1px solid rgba(100, 181, 246, 0.15);
-}
-
-.report-modal-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #60a5fa;
-}
-
-.report-close-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.report-close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-.report-modal-body {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-  min-height: 300px;
-}
-
-.report-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: #6b7280;
-}
-
-.report-loading .loading-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid rgba(100, 181, 246, 0.2);
-  border-top-color: #60a5fa;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 12px;
-}
-
-.report-content {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid rgba(100, 181, 246, 0.1);
-}
-
-.report-content pre {
-  margin: 0;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 13px;
-  color: #e2e8f0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-}
-
-.report-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: #6b7280;
-}
-
-.report-modal-footer {
-  display: flex;
-  gap: 12px;
-  padding: 16px 20px;
-  background: rgba(100, 181, 246, 0.05);
-  border-top: 1px solid rgba(100, 181, 246, 0.1);
-}
-
-.btn-download, .btn-view-file {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-download {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  border: none;
-  color: white;
-}
-
-.btn-download:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
-}
-
-.btn-view-file {
-  background: rgba(100, 181, 246, 0.15);
-  border: 1px solid rgba(100, 181, 246, 0.3);
-  color: #60a5fa;
-}
-
-.btn-view-file:hover {
-  background: rgba(100, 181, 246, 0.25);
-}
-
-/* 历史报告列表样式 */
-.report-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.report-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(100, 181, 246, 0.15);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.report-item:hover {
-  background: rgba(100, 181, 246, 0.1);
-  border-color: rgba(100, 181, 246, 0.3);
-}
-
-.report-item-intelligence {
-  border-color: rgba(168, 85, 247, 0.2);
-}
-
-.report-item-intelligence:hover {
-  background: rgba(168, 85, 247, 0.1);
-  border-color: rgba(168, 85, 247, 0.3);
-}
-
-.report-item-icon {
-  font-size: 24px;
-}
-
-.report-item-info {
-  flex: 1;
-}
-
-.report-item-name {
-  font-size: 13px;
-  color: #e2e8f0;
-  font-weight: 500;
-}
-
-.report-item-meta {
-  font-size: 11px;
-  color: #6b7280;
-  margin-top: 2px;
-}
-
-.report-item-action {
-  font-size: 12px;
-  color: #60a5fa;
-  padding: 4px 12px;
-  background: rgba(100, 181, 246, 0.15);
-  border-radius: 4px;
-}
-
-.btn-history {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px;
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(100, 181, 246, 0.2);
-  border-radius: 8px;
-  color: #94a3b8;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-history:hover {
-  background: rgba(100, 181, 246, 0.1);
-  color: #60a5fa;
-}
-
-/* 智库专报按钮 */
-.btn-intelligence {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px;
-  background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.2));
-  border: 1px solid rgba(167, 139, 250, 0.3);
-  border-radius: 8px;
-  color: #c4b5fd;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-intelligence:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(167, 139, 250, 0.3), rgba(139, 92, 246, 0.3));
-  border-color: rgba(167, 139, 250, 0.5);
-  color: #ddd6fe;
-}
-
-.btn-intelligence:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 智库专报模态框 */
-.intelligence-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  z-index: 400;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.intelligence-modal {
-  width: 70%;
-  max-width: 1000px;
-  max-height: 90vh;
-  background: linear-gradient(145deg, #0f172a, #1e1b4b);
-  border: 1px solid rgba(167, 139, 250, 0.25);
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 0 80px rgba(167, 139, 250, 0.15);
-}
-
-.intelligence-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background: rgba(167, 139, 250, 0.1);
-  border-bottom: 1px solid rgba(167, 139, 250, 0.15);
-}
-
-.intelligence-modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #c4b5fd;
-}
-
-.intelligence-modal-body {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-  min-height: 300px;
-}
-
-.intelligence-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  color: #94a3b8;
-}
-
-.intelligence-loading .loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 3px solid rgba(167, 139, 250, 0.2);
-  border-top-color: #a78bfa;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-.loading-tip {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 8px;
-}
-
-.intelligence-content {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-  padding: 24px;
-  border: 1px solid rgba(100, 181, 246, 0.1);
-  color: #e2e8f0;
-  line-height: 1.8;
-}
-
-/* 流式输出样式 */
-.intelligence-streaming {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.intelligence-streaming pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin: 0;
-  font-family: 'Inter', 'JetBrains Mono', monospace;
-  font-size: 14px;
-  line-height: 1.7;
-  color: #a5b4fc;
-}
-
-.streaming-cursor {
-  display: inline;
-  animation: blink 1s infinite;
-  color: #60a5fa;
-  font-size: 16px;
-}
-
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-/* ==================== Markdown 统一样式 ==================== */
-/* 适用于 .intelligence-content 和 .usage-content */
-
-.intelligence-content,
-.usage-content {
-  font-size: 14px;
-  line-height: 1.8;
-  color: #e2e8f0;
-}
-
-.intelligence-content h1,
-.usage-content h1 {
-  font-size: 22px;
-  font-weight: 700;
-  color: #f0abfc;
-  margin: 24px 0 16px 0;
-  padding-bottom: 10px;
-  border-bottom: 2px solid rgba(240, 171, 252, 0.3);
-  background: linear-gradient(90deg, rgba(240, 171, 252, 0.1), transparent);
-  padding-left: 12px;
-  border-radius: 4px 4px 0 0;
-}
-
-.intelligence-content h2,
-.usage-content h2 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #c4b5fd;
-  margin: 20px 0 12px 0;
-  padding: 8px 12px;
-  background: rgba(196, 181, 253, 0.08);
-  border-left: 3px solid #c4b5fd;
-  border-radius: 0 6px 6px 0;
-}
-
-.intelligence-content h3,
-.usage-content h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #a78bfa;
-  margin: 16px 0 10px 0;
-  padding-left: 10px;
-}
-
-.intelligence-content h4,
-.usage-content h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #818cf8;
-  margin: 12px 0 8px 0;
-}
-
-.intelligence-content p,
-.usage-content p {
-  margin: 0 0 14px 0;
-  line-height: 1.75;
-  color: #cbd5e1;
-}
-
-.intelligence-content ul,
-.usage-content ul,
-.intelligence-content ol,
-.usage-content ol {
-  margin: 0 0 14px 0;
-  padding-left: 20px;
-}
-
-.intelligence-content li,
-.usage-content li {
-  margin-bottom: 6px;
-  line-height: 1.6;
-  color: #e2e8f0;
-}
-
-.intelligence-content li::marker,
-.usage-content li::marker {
-  color: #a78bfa;
-}
-
-.intelligence-content table,
-.usage-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 16px 0;
-  font-size: 13px;
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.intelligence-content th,
-.usage-content th {
-  background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.1));
-  color: #f0abfc;
-  font-weight: 600;
-  padding: 12px 16px;
-  text-align: left;
-  border-bottom: 2px solid rgba(167, 139, 250, 0.3);
-}
-
-.intelligence-content td,
-.usage-content td {
-  padding: 10px 16px;
-  border-bottom: 1px solid rgba(100, 181, 246, 0.1);
-  color: #e2e8f0;
-}
-
-.intelligence-content tr:last-child td,
-.usage-content tr:last-child td {
-  border-bottom: none;
-}
-
-.intelligence-content tr:nth-child(even) td,
-.usage-content tr:nth-child(even) td {
-  background: rgba(0, 0, 0, 0.15);
-}
-
-.intelligence-content blockquote,
-.usage-content blockquote {
-  border-left: 4px solid #8b5cf6;
-  margin: 16px 0;
-  padding: 12px 16px;
-  background: rgba(139, 92, 246, 0.08);
-  border-radius: 0 8px 8px 0;
-  color: #a5b4fc;
-}
-
-.intelligence-content blockquote p,
-.usage-content blockquote p {
-  margin: 0;
-  color: #a5b4fc;
-}
-
-.intelligence-content code,
-.usage-content code {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 13px;
-}
-
-.intelligence-content pre,
-.usage-content pre {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(100, 181, 246, 0.15);
-  border-radius: 8px;
-  padding: 16px;
-  margin: 16px 0;
-  overflow-x: auto;
-}
-
-.intelligence-content pre code,
-.usage-content pre code {
-  background: none;
-  padding: 0;
-  color: #86efac;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.intelligence-content strong,
-.usage-content strong {
-  color: #fcd34d;
-  font-weight: 600;
-}
-
-.intelligence-content em,
-.usage-content em {
-  color: #a5b4fc;
-}
-
-.intelligence-content a,
-.usage-content a {
-  color: #60a5fa;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(96, 165, 250, 0.3);
-  transition: all 0.2s;
-}
-
-.intelligence-content a:hover,
-.usage-content a:hover {
-  color: #93c5fd;
-  border-bottom-color: #93c5fd;
-}
-
-.intelligence-content hr,
-.usage-content hr {
-  border: none;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.4), transparent);
-  margin: 24px 0;
-}
-
-.intelligence-content img,
-.usage-content img {
-  max-width: 100%;
-  border-radius: 8px;
-  margin: 12px 0;
-}
-
-/* 删除旧的重复定义，保留 intelligence-modal-footer 和按钮样式 */
-
-.intelligence-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  background: rgba(167, 139, 250, 0.05);
-  border-top: 1px solid rgba(167, 139, 250, 0.1);
-}
-
-.btn-download-intelligence {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-download-intelligence:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
-}
-
-/* ==================== 响应式适配 ==================== */
-@media (max-width: 1600px) {
-  .kpi-cards {
-    grid-template-columns: repeat(5, 1fr);
-  }
-
-  .kpi-value {
-    font-size: 20px;
-  }
-}
-
-@media (max-width: 1400px) {
-  .control-panel {
-    width: 280px;
-    min-width: 280px;
-  }
-
-  .kpi-cards {
-    grid-template-columns: repeat(5, 1fr);
-  }
-
-  .kpi-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 16px;
-  }
 }
 
 /* ==================== 知识图谱模态框 ==================== */
@@ -8571,7 +6117,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-kg-modal);
 }
 
 .kg-modal {
@@ -8922,6 +6468,12 @@ export default {
   color: #6b7280;
 }
 
+.news-input-highlight {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3), 0 0 20px rgba(96, 165, 250, 0.2);
+  transition: all 0.3s ease;
+}
+
 .btn-parse-news {
   margin-top: 12px;
   background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
@@ -8945,12 +6497,127 @@ export default {
   cursor: not-allowed;
 }
 
+/* 热点新闻速选面板 */
+.hot-news-panel {
+  margin-bottom: 10px;
+}
+
+.btn-fetch-news {
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.btn-fetch-news:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+}
+
+.btn-fetch-news:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hot-news-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+}
+
+.hot-news-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.15s;
+}
+
+.hot-news-item:last-child {
+  border-bottom: none;
+}
+
+.hot-news-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.hot-news-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.hot-news-category {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.hot-news-source {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.hot-news-title {
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.hot-news-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-use-news {
+  padding: 2px 10px;
+  font-size: 12px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-use-news:hover {
+  background: rgba(34, 197, 94, 0.35);
+}
+
+.hot-news-link {
+  font-size: 12px;
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.hot-news-link:hover {
+  text-decoration: underline;
+}
+
 .kg-error {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
   padding: 12px;
   border-radius: 8px;
   border-left: 3px solid #ef4444;
+}
+
+.kg-warning {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid #f59e0b;
+  font-size: 13px;
 }
 
 /* ==================== 事件注入三段式管线样式 ==================== */
@@ -9343,7 +7010,7 @@ export default {
   flex-direction: column;
   transition: width 0.3s ease;
   overflow: hidden;
-  z-index: 1000;
+  z-index: var(--z-overlay-top);
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
 }
 

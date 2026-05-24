@@ -1,6 +1,6 @@
 # 觉测·洞鉴 - 信息茧房推演系统
 
-更新时间：2026-05-11
+更新时间：2026-05-24
 
 本系统是一个多智能体舆论认知推演平台，用于观察新闻事件、信息源可信度、算法茧房、社交网络结构和权威回应对群体态度的影响。当前系统同时支持“理论人设”“内置现实组织画像”和“用户自定义资料画像”三类 Agent 群体。
 
@@ -117,26 +117,58 @@ http://localhost:3000
 backend/
   app.py                         FastAPI 入口与 WebSocket
   state.py                       线程安全全局状态
+  config/
+    runtime_settings.py          运行时 LLM 与并发配置
+    persona_config.py            人设配置
+  llm/
+    client.py                    LLM API 客户端封装
   routers/
     simulation.py                推演、状态、Agent 透视
     event.py                     新闻解析与事件注入
     prediction.py                预测与风险
     report.py                    报告生成、读取、下载、打开
+    profiles.py                  画像管理 API
+    settings.py                  系统设置 API
   simulation/
     engine.py                    单层网络引擎，数学 + LLM
     engine_dual.py               双层网络引擎
+    engine_v3.py                 v3 引擎（知识演化）
     realistic_population.py      现实组织画像、自定义资料画像加载与数值来源
     llm_agents.py                单层 LLM Agent
     llm_agents_dual.py           双层 LLM Agent
+    agents.py                    数学模型 Agent
+    persona.py                   人设生成
+    analyst_agent.py             智库专报分析师
+    knowledge_evolution.py       知识演化模型
+    dual_network.py              双层网络拓扑
+    graph_parser_agent.py        新闻知识图谱解析
     report_utils.py              报告共享口径与格式化工具
+    psychology/                  心理学模型（沉默螺旋等）
+    agent/                       Agent 行为模块
+    message/                     消息传递模块
+    env/                         环境模块
+    storage/                     存储模块
 frontend/
-  src/App.vue                    Vue 3 单文件前端
+  src/
+    App.vue                      Vue 3 主页面
+    components/
+      UsageDrawer.vue            使用说明抽屉
+      MathModelDrawer.vue        数学模型说明抽屉
+      ChartModal.vue             图表放大弹窗
+      CompletionModal.vue        推演完成引导弹窗
+      ReportModal.vue            推演报告弹窗
+      IntelligenceModal.vue      智库专报弹窗
+      SettingsDrawer.vue         高级设置抽屉
+      ReportListModal.vue        历史报告列表弹窗
+      AgentModal.vue             Agent 透视弹窗
 data/
   realistic_profiles/            现实画像缓存
   user_profiles/                 用户上传资料库，默认不提交 Git
   public_evidence_queue/         公开证据候选队列
 reports/                         生成的 Markdown 报告
-tests/                           测试套件
+tests/
+  unit/                          单元测试
+  integration/                   集成测试
 ```
 
 ## 当前注意事项

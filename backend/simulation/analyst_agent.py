@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime, timezone
 import logging
 
-from ..llm.client import LLMClient, LLMConfig
+from ..llm.client import LLMClient, LLMConfig, create_llm_config_from_env
 from .report_utils import (
     credibility_rule_text,
     event_pool_summary,
@@ -441,10 +441,10 @@ class AnalystAgent:
         max_display_relations: int = 15
     ):
         if llm_config is None:
-            llm_config = LLMConfig()
-            llm_config.timeout = 120
-            llm_config.max_tokens = max_tokens
-            llm_config.temperature = temperature
+            llm_config = create_llm_config_from_env("REPORT_LLM")
+        llm_config.timeout = llm_config.timeout or 120
+        llm_config.max_tokens = max_tokens if llm_config.max_tokens == 150 else llm_config.max_tokens
+        llm_config.temperature = temperature if llm_config.temperature == 0.7 else llm_config.temperature
         self.llm_config = llm_config
         self.llm_client: Optional[LLMClient] = None
         self.max_display_entities = max_display_entities
@@ -770,7 +770,7 @@ async def generate_intelligence_report(engine, population) -> str:
     context = DataSampler.build_context(engine, population)
 
     # 生成报告
-    async with AnalystAgent() as agent:
+    async with AnalystAgent(create_llm_config_from_env("REPORT_LLM")) as agent:
         report = await agent.generate_report(context)
 
     return report

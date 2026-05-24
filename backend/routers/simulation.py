@@ -120,7 +120,8 @@ async def start_simulation(params: StartRequest):
             population_profile_id=params.population_profile_id,
             realistic_profile_source_path=params.realistic_profile_source_path,
             refresh_realistic_profile=params.refresh_realistic_profile,
-            include_public_enrichment=params.include_public_enrichment
+            include_public_enrichment=params.include_public_enrichment,
+            include_llm_enrichment=params.include_llm_enrichment
         )
     else:
         state.engine = SimulationEngine(
@@ -158,6 +159,10 @@ async def start_simulation(params: StartRequest):
             logger.info(f"已根据新闻内容设置初始分布")
 
     initial_state = state.engine.initialize()
+
+    # LLM persona enrichment（在 initialize 后异步执行）
+    if hasattr(state.engine, 'async_enrich_personas'):
+        await state.engine.async_enrich_personas()
 
     # ==================== 自动注入待处理的事件 ====================
     if state.pending_knowledge_graph and state.pending_event_content:

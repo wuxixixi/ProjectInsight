@@ -1,0 +1,11 @@
+{
+  "profile_id": "demo_team",
+  "display_name": "演示团队",
+  "source_count": 2,
+  "updated_at": "2026-05-21T09:39:37.194369+00:00",
+  "source_dir": "data\\test_profile_api\\15a5bc45b5a64f2dac559ea910521452\\library\\demo_team\\sources",
+  "record_count": 2,
+  "size": 2,
+  "cache_path": "data\\test_profile_api\\15a5bc45b5a64f2dac559ea910521452\\profiles\\demo_team.sanitized.json",
+  "warnings": []
+}

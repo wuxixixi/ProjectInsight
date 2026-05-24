@@ -32,6 +32,7 @@ class StartRequest(BaseModel):
     realistic_profile_source_path: Optional[str] = None
     refresh_realistic_profile: bool = False
     include_public_enrichment: bool = False
+    include_llm_enrichment: bool = False
 
     # LLM并发参数（留空则自动计算）
     max_concurrent: Optional[int] = None  # None 表示根据 population_size 自动计算

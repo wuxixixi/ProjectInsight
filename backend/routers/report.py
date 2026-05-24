@@ -14,7 +14,7 @@ from typing import Optional
 
 from .. import state
 from ..simulation.analyst_agent import generate_intelligence_report, AnalystAgent, DataSampler
-from ..llm.client import LLMConfig
+from ..llm.client import create_llm_config_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -299,10 +299,7 @@ async def stream_intelligence_report(request: Request):
             context = DataSampler.build_context(state.engine, state.engine.llm_population)
 
             # 创建 AnalystAgent 实例
-            llm_config = LLMConfig()
-            llm_config.timeout = int(os.environ.get("REPORT_LLM_TIMEOUT", "120"))
-            llm_config.max_tokens = int(os.environ.get("REPORT_LLM_MAX_TOKENS", "2000"))
-            llm_config.temperature = float(os.environ.get("REPORT_LLM_TEMPERATURE", "0.5"))
+            llm_config = create_llm_config_from_env("REPORT_LLM")
 
             chunks = []
             async with AnalystAgent(llm_config) as agent:

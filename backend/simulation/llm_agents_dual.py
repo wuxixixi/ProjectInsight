@@ -44,6 +44,11 @@ AGENT_PROMPT_TEMPLATE_DUAL = """你是一个社交媒体用户，正在关注一
 - 易感性: {susceptibility:.2f} (越强越容易受他人影响)
 - 孤立恐惧感: {fear_of_isolation:.2f} (越高越害怕被社交孤立)
 - 是否为大V: {is_influencer}
+- 你的身份: {persona_desc}
+- 性格特点: {personality}
+- 信息习惯: {media_habit}
+- 社交风格: {social_style}
+- 对权威态度: {authority_stance}
 
 ## 观点变化限制规则（重要）
 - 你的信念强度为 {belief_strength:.2f}，因此你本轮观点最大变化幅度为 {max_change:.2f}
@@ -481,6 +486,7 @@ class LLMAgent:
             "pro_truth_ratio": pro_positive_ratio_all,
         }
 
+        persona = self.persona if isinstance(self.persona, dict) else {}
         prompt = AGENT_PROMPT_TEMPLATE_DUAL.format(
             opinion=self.opinion,
             belief_strength=self.belief_strength,
@@ -490,6 +496,11 @@ class LLMAgent:
             max_change=max_change,
             max_change_silent=max_change_silent,
             is_influencer="是（大V）" if self.is_influencer else "否",
+            persona_desc=persona.get("desc", "普通社交媒体用户"),
+            personality=persona.get("personality", "未指定"),
+            media_habit=persona.get("media_habit", "未指定"),
+            social_style=persona.get("social_style", "未指定"),
+            authority_stance=persona.get("authority_stance", "未指定"),
             graph_section=graph_section,
             info_section=info_section,
             source_section=source_section,

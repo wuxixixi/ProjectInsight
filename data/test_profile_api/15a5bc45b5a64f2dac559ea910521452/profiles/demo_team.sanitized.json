@@ -1,0 +1,158 @@
+{
+  "profile_id": "demo_team",
+  "display_name": "演示团队",
+  "source_path": "data\\test_profile_api\\15a5bc45b5a64f2dac559ea910521452\\library\\demo_team\\sources",
+  "warnings": [],
+  "cache_path": "data\\test_profile_api\\15a5bc45b5a64f2dac559ea910521452\\profiles\\demo_team.sanitized.json",
+  "generated_at": "2026-05-21T09:39:37.194369+00:00",
+  "agents": [
+    {
+      "agent_id": 0,
+      "name": "李四",
+      "role_label": "青年研究员 / 国际传播",
+      "department": "传播室",
+      "specialty": "国际传播",
+      "title": "副研究员",
+      "seniority_label": "青年",
+      "community_id": 1,
+      "is_influencer": false,
+      "public_evidence": [
+        {
+          "type": "local_source",
+          "title": "notes.md",
+          "url": ""
+        }
+      ],
+      "search_queries": [],
+      "generation_trace": {
+        "source": "user_profile_library",
+        "inputs": {
+          "source_file": "notes.md",
+          "age": 39.0,
+          "age_band": "35-44岁",
+          "work_years": 12.0,
+          "work_years_band": "10-20年",
+          "org_years": 5.0,
+          "org_years_band": "5-10年",
+          "title": "副研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "",
+          "degree": "",
+          "specialty": "国际传播",
+          "notes_excerpt": "# 成员 姓名: 李四 部门: 传播室 职称: 副研究员 研究方向: 国际传播 年龄: 39 工龄: 12"
+        },
+        "derived": {
+          "seniority_score": 0.441,
+          "community_id": 1,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.1093,
+          "belief_strength": 0.6074,
+          "influence": 0.468,
+          "susceptibility": 0.4698,
+          "fear_of_isolation": 0.3987,
+          "conviction": 0.5595
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅稳定扰动，并限制在[-0.20, 0.20]，避免根据资料预设明确立场",
+          "belief_strength": "以资历分和资料丰富度为基础，再叠加小幅稳定扰动，形成初始信念强度",
+          "influence": "资历分、管理职责和资料丰富度共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响；高学历和资料丰富度会略微降低易感性，最后限制在0.12到0.78之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加小幅稳定扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分和资料丰富度越高通常越坚定，再叠加小幅稳定扰动，最后限制在0.2到0.9之间"
+        }
+      },
+      "opinion": -0.10932977493551871,
+      "belief_strength": 0.607399207244437,
+      "influence": 0.46804285714285715,
+      "susceptibility": 0.4697928571428571,
+      "fear_of_isolation": 0.39873603866549073,
+      "conviction": 0.5594530689409166,
+      "persona": {
+        "type": "用户资料画像",
+        "desc": "青年研究员 / 国际传播。资料来源：notes.md。该画像由用户提供的离线资料抽取和规则化生成，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "青年研究员 / 国际传播",
+        "specialty": "国际传播",
+        "seniority": "青年",
+        "privacy_note": "user-provided offline profile cache; sensitive columns are excluded when recognized"
+      }
+    },
+    {
+      "agent_id": 1,
+      "name": "张三",
+      "role_label": "中坚研究员 / 舆情治理",
+      "department": "新闻所",
+      "specialty": "舆情治理",
+      "title": "研究员",
+      "seniority_label": "中坚",
+      "community_id": 0,
+      "is_influencer": false,
+      "public_evidence": [
+        {
+          "type": "local_source",
+          "title": "people.csv",
+          "url": ""
+        }
+      ],
+      "search_queries": [],
+      "generation_trace": {
+        "source": "user_profile_library",
+        "inputs": {
+          "source_file": "people.csv",
+          "age": 48.0,
+          "age_band": "45-54岁",
+          "work_years": 24.0,
+          "work_years_band": "20-30年",
+          "org_years": 5.0,
+          "org_years_band": "5-10年",
+          "title": "研究员",
+          "admin_role": "",
+          "party_role": "",
+          "education": "",
+          "degree": "",
+          "specialty": "舆情治理",
+          "notes_excerpt": "长期研究舆情治理。"
+        },
+        "derived": {
+          "seniority_score": 0.601,
+          "community_id": 0,
+          "is_influencer": false
+        },
+        "metrics": {
+          "opinion": -0.0807,
+          "belief_strength": 0.6078,
+          "influence": 0.5232,
+          "susceptibility": 0.4454,
+          "fear_of_isolation": 0.4236,
+          "conviction": 0.5795
+        },
+        "formulas": {
+          "opinion": "以中性为中心叠加小幅稳定扰动，并限制在[-0.20, 0.20]，避免根据资料预设明确立场",
+          "belief_strength": "以资历分和资料丰富度为基础，再叠加小幅稳定扰动，形成初始信念强度",
+          "influence": "资历分、管理职责和资料丰富度共同影响影响力，最后限制在0.1到1.0之间",
+          "susceptibility": "资历分越高通常越不容易受影响；高学历和资料丰富度会略微降低易感性，最后限制在0.12到0.78之间",
+          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加小幅稳定扰动，最后限制在0.15到0.9之间",
+          "conviction": "资历分和资料丰富度越高通常越坚定，再叠加小幅稳定扰动，最后限制在0.2到0.9之间"
+        }
+      },
+      "opinion": -0.0807285795794214,
+      "belief_strength": 0.6078223570515027,
+      "influence": 0.5231857142857143,
+      "susceptibility": 0.44543571428571427,
+      "fear_of_isolation": 0.4236039043384778,
+      "conviction": 0.5795208169369733,
+      "persona": {
+        "type": "用户资料画像",
+        "desc": "中坚研究员 / 舆情治理。资料来源：people.csv。该画像由用户提供的离线资料抽取和规则化生成，不代表本人真实态度。",
+        "profile_mode": "realistic",
+        "role_label": "中坚研究员 / 舆情治理",
+        "specialty": "舆情治理",
+        "seniority": "中坚",
+        "privacy_note": "user-provided offline profile cache; sensitive columns are excluded when recognized"
+      }
+    }
+  ]
+}

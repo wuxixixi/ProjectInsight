@@ -7,7 +7,7 @@
     "Sensitive columns were detected and excluded: Email, 健康状况, 公民身份号码, 出生日期, 婚姻状况, 户口所在地, 手机, 联系地址, 血型"
   ],
   "cache_path": "data\\realistic_profiles\\shass_news_institute.sanitized.json",
-  "generated_at": "2026-05-08T08:48:57.013635+00:00",
+  "generated_at": "2026-05-23T08:13:10.478895+00:00",
   "agents": [
     {
       "agent_id": 0,
@@ -39,7 +39,10 @@
           "party_role": "新闻所支部统战委员",
           "education": "研究生毕业",
           "degree": "经济学博士",
-          "specialty": "哲学"
+          "specialty": "哲学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.855,
@@ -47,28 +50,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.0819,
-          "belief_strength": 0.7144,
-          "influence": 0.8277,
-          "susceptibility": 0.2562,
-          "fear_of_isolation": 0.6465,
-          "conviction": 0.5998
+          "opinion": 0.0294,
+          "belief_strength": 0.7768,
+          "influence": 0.8126,
+          "susceptibility": 0.4609,
+          "fear_of_isolation": 0.7183,
+          "conviction": 0.7097
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.08191814616855558,
-      "belief_strength": 0.7143688192542078,
-      "influence": 0.8276666666666667,
-      "susceptibility": 0.2561666666666667,
-      "fear_of_isolation": 0.6464965328814289,
-      "conviction": 0.5997834019097901,
+      "opinion": 0.029422048135519494,
+      "belief_strength": 0.7768137774011907,
+      "influence": 0.8125933881944988,
+      "susceptibility": 0.46093860962641664,
+      "fear_of_isolation": 0.7182923781045575,
+      "conviction": 0.7097044537871441,
       "persona": {
         "type": "现实组织画像",
         "desc": "资深研究员 / 管理职责 / 哲学。专业背景：哲学；学历/学位：研究生毕业经济学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -109,7 +112,10 @@
           "party_role": "新闻所支部组织委员兼工青妇委员",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.804,
@@ -117,28 +123,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.0724,
-          "belief_strength": 0.6557,
-          "influence": 0.8022,
-          "susceptibility": 0.2689,
-          "fear_of_isolation": 0.5966,
-          "conviction": 0.7137
+          "opinion": -0.103,
+          "belief_strength": 0.7251,
+          "influence": 0.9012,
+          "susceptibility": 0.4538,
+          "fear_of_isolation": 0.7215,
+          "conviction": 0.7314
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.0723744931975384,
-      "belief_strength": 0.6556964837560052,
-      "influence": 0.8021666666666667,
-      "susceptibility": 0.2689166666666667,
-      "fear_of_isolation": 0.5966325408531803,
-      "conviction": 0.7136928220887419,
+      "opinion": -0.10300879060998705,
+      "belief_strength": 0.7250604507109836,
+      "influence": 0.9011709243376601,
+      "susceptibility": 0.45378086989815375,
+      "fear_of_isolation": 0.7214583559425709,
+      "conviction": 0.7313551845799535,
       "persona": {
         "type": "现实组织画像",
         "desc": "资深研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -179,7 +185,10 @@
           "party_role": "工会主席 新闻所支部纪检委员",
           "education": "研究生毕业",
           "degree": "管理学硕士",
-          "specialty": "情报学"
+          "specialty": "情报学",
+          "title_rank": 0.15,
+          "age_band_code": 0.67,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.567,
@@ -187,28 +196,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.0055,
-          "belief_strength": 0.6253,
-          "influence": 0.6837,
-          "susceptibility": 0.4082,
-          "fear_of_isolation": 0.6,
-          "conviction": 0.5596
+          "opinion": 0.0727,
+          "belief_strength": 0.5105,
+          "influence": 0.596,
+          "susceptibility": 0.5886,
+          "fear_of_isolation": 0.7564,
+          "conviction": 0.5246
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.005459147010791209,
-      "belief_strength": 0.6253074162247021,
-      "influence": 0.6836904761904762,
-      "susceptibility": 0.40815476190476196,
-      "fear_of_isolation": 0.5999873979349458,
-      "conviction": 0.5595915432808592,
+      "opinion": 0.07273282627604082,
+      "belief_strength": 0.5104656887553121,
+      "influence": 0.5960422822437349,
+      "susceptibility": 0.5885943602580933,
+      "fear_of_isolation": 0.7563813952088171,
+      "conviction": 0.5246022774400477,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚科研人员 / 管理职责 / 情报学。专业背景：情报学；学历/学位：研究生毕业管理学硕士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -249,7 +258,10 @@
           "party_role": "新闻所妇委会主任",
           "education": "大学毕业",
           "degree": "无学位",
-          "specialty": "会计"
+          "specialty": "会计",
+          "title_rank": 0.15,
+          "age_band_code": 0.67,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.577,
@@ -257,28 +269,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": -0.0712,
-          "belief_strength": 0.6505,
-          "influence": 0.6885,
-          "susceptibility": 0.4058,
-          "fear_of_isolation": 0.665,
-          "conviction": 0.6478
+          "opinion": 0.1284,
+          "belief_strength": 0.5666,
+          "influence": 0.6671,
+          "susceptibility": 0.5311,
+          "fear_of_isolation": 0.8124,
+          "conviction": 0.5549
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.07115518771122288,
-      "belief_strength": 0.6504574457268367,
-      "influence": 0.6884761904761905,
-      "susceptibility": 0.4057619047619048,
-      "fear_of_isolation": 0.6650052488194996,
-      "conviction": 0.6478260242641237,
+      "opinion": 0.12842932860280631,
+      "belief_strength": 0.5665615168733926,
+      "influence": 0.6671084384589179,
+      "susceptibility": 0.5311336092165827,
+      "fear_of_isolation": 0.8123760870512302,
+      "conviction": 0.554866288420563,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚科研人员 / 管理职责 / 会计。专业背景：会计；学历/学位：大学毕业无学位。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -319,7 +331,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "经济学硕士",
-          "specialty": "学术秘书"
+          "specialty": "学术秘书",
+          "title_rank": 0.15,
+          "age_band_code": 0.33,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.4,
@@ -327,28 +342,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": -0.1397,
-          "belief_strength": 0.6442,
-          "influence": 0.6002,
-          "susceptibility": 0.4499,
-          "fear_of_isolation": 0.5423,
-          "conviction": 0.6357
+          "opinion": 0.2,
+          "belief_strength": 0.395,
+          "influence": 0.5486,
+          "susceptibility": 0.5308,
+          "fear_of_isolation": 0.6323,
+          "conviction": 0.4386
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.13966500652046185,
-      "belief_strength": 0.6442276418652308,
-      "influence": 0.6002380952380952,
-      "susceptibility": 0.44988095238095244,
-      "fear_of_isolation": 0.5423018676675708,
-      "conviction": 0.6357112177585498,
+      "opinion": 0.2,
+      "belief_strength": 0.3950134611515471,
+      "influence": 0.5485927837306493,
+      "susceptibility": 0.5307512451096535,
+      "fear_of_isolation": 0.6322988327988038,
+      "conviction": 0.43861999610637453,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年科研人员 / 管理职责 / 学术秘书。专业背景：学术秘书；学历/学位：研究生毕业经济学硕士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -389,7 +404,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.607,
@@ -397,28 +415,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.1116,
-          "belief_strength": 0.5677,
-          "influence": 0.7037,
-          "susceptibility": 0.3182,
-          "fear_of_isolation": 0.6772,
-          "conviction": 0.6487
+          "opinion": -0.1754,
+          "belief_strength": 0.7188,
+          "influence": 0.7394,
+          "susceptibility": 0.5342,
+          "fear_of_isolation": 0.5726,
+          "conviction": 0.5977
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.11162231827993785,
-      "belief_strength": 0.5676641047841238,
-      "influence": 0.7036904761904762,
-      "susceptibility": 0.31815476190476194,
-      "fear_of_isolation": 0.6772393216865175,
-      "conviction": 0.6487412796874161,
+      "opinion": -0.17537545232540497,
+      "belief_strength": 0.7188422918816217,
+      "influence": 0.7393620713689804,
+      "susceptibility": 0.5342167387099533,
+      "fear_of_isolation": 0.5725708056480376,
+      "conviction": 0.5976760329415168,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -459,7 +477,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "管理学博士",
-          "specialty": "互联网治理"
+          "specialty": "互联网治理",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.407,
@@ -467,28 +488,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.0976,
-          "belief_strength": 0.5666,
-          "influence": 0.4537,
-          "susceptibility": 0.3681,
-          "fear_of_isolation": 0.4914,
-          "conviction": 0.5771
+          "opinion": -0.004,
+          "belief_strength": 0.649,
+          "influence": 0.472,
+          "susceptibility": 0.3773,
+          "fear_of_isolation": 0.4301,
+          "conviction": 0.6072
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.09761356665533492,
-      "belief_strength": 0.5666429862799568,
-      "influence": 0.45371428571428574,
-      "susceptibility": 0.36814285714285716,
-      "fear_of_isolation": 0.49141269494511386,
-      "conviction": 0.5770668524036163,
+      "opinion": -0.0039639628715365475,
+      "belief_strength": 0.6489962934066426,
+      "influence": 0.47202491049432166,
+      "susceptibility": 0.37728982500849884,
+      "fear_of_isolation": 0.4301023336726097,
+      "conviction": 0.607232001038275,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 互联网治理。专业背景：互联网治理；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -529,7 +550,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "管理学博士",
-          "specialty": "互联网治理"
+          "specialty": "互联网治理",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.498,
@@ -537,28 +561,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.0321,
-          "belief_strength": 0.6227,
-          "influence": 0.499,
-          "susceptibility": 0.3455,
-          "fear_of_isolation": 0.4752,
-          "conviction": 0.5703
+          "opinion": 0.0684,
+          "belief_strength": 0.6536,
+          "influence": 0.4711,
+          "susceptibility": 0.4264,
+          "fear_of_isolation": 0.4216,
+          "conviction": 0.5811
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.032127225222555594,
-      "belief_strength": 0.6227147103180175,
-      "influence": 0.4989523809523809,
-      "susceptibility": 0.34552380952380957,
-      "fear_of_isolation": 0.4752406827843189,
-      "conviction": 0.5702697733448107,
+      "opinion": 0.0683582043664723,
+      "belief_strength": 0.6536148547012182,
+      "influence": 0.47111105677108656,
+      "susceptibility": 0.4264045810830833,
+      "fear_of_isolation": 0.42159869233529784,
+      "conviction": 0.5811468102896792,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 互联网治理。专业背景：互联网治理；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -599,7 +623,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "法学博士",
-          "specialty": "互联网治理"
+          "specialty": "互联网治理",
+          "title_rank": 1.0,
+          "age_band_code": 0.0,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.358,
@@ -607,28 +634,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.1006,
-          "belief_strength": 0.6144,
-          "influence": 0.4292,
-          "susceptibility": 0.3804,
-          "fear_of_isolation": 0.5175,
-          "conviction": 0.551
+          "opinion": 0.152,
+          "belief_strength": 0.628,
+          "influence": 0.4487,
+          "susceptibility": 0.4246,
+          "fear_of_isolation": 0.3083,
+          "conviction": 0.5288
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.10057674246034914,
-      "belief_strength": 0.6143623914654327,
-      "influence": 0.42923809523809525,
-      "susceptibility": 0.38038095238095243,
-      "fear_of_isolation": 0.5175134968635869,
-      "conviction": 0.5509926490448723,
+      "opinion": 0.15204883580643896,
+      "belief_strength": 0.6279564854815605,
+      "influence": 0.44871792875970734,
+      "susceptibility": 0.42456744315473816,
+      "fear_of_isolation": 0.3083234709284642,
+      "conviction": 0.5288217434939113,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 互联网治理。专业背景：互联网治理；学历/学位：研究生毕业法学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -669,7 +696,10 @@
           "party_role": "新闻所支部宣传委员",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.815,
@@ -677,28 +707,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.0783,
-          "belief_strength": 0.6879,
-          "influence": 0.8074,
-          "susceptibility": 0.2663,
-          "fear_of_isolation": 0.6374,
-          "conviction": 0.7843
+          "opinion": -0.0304,
+          "belief_strength": 0.7611,
+          "influence": 0.9582,
+          "susceptibility": 0.4582,
+          "fear_of_isolation": 0.7748,
+          "conviction": 0.6621
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.07832810827735258,
-      "belief_strength": 0.6878882035277809,
-      "influence": 0.8074285714285715,
-      "susceptibility": 0.2662857142857143,
-      "fear_of_isolation": 0.6373915383051226,
-      "conviction": 0.784333866818759,
+      "opinion": -0.030422348323404815,
+      "belief_strength": 0.7611310438256973,
+      "influence": 0.9582099505978644,
+      "susceptibility": 0.4582460812080144,
+      "fear_of_isolation": 0.7747699513332674,
+      "conviction": 0.6621184315360128,
       "persona": {
         "type": "现实组织画像",
         "desc": "资深研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -739,7 +769,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.585,
@@ -747,28 +780,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.0565,
-          "belief_strength": 0.6258,
-          "influence": 0.5426,
-          "susceptibility": 0.3237,
-          "fear_of_isolation": 0.5092,
-          "conviction": 0.5159
+          "opinion": -0.0134,
+          "belief_strength": 0.6994,
+          "influence": 0.432,
+          "susceptibility": 0.4929,
+          "fear_of_isolation": 0.3204,
+          "conviction": 0.6558
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.05651574382887534,
-      "belief_strength": 0.6258005239221194,
-      "influence": 0.5425714285714286,
-      "susceptibility": 0.32371428571428573,
-      "fear_of_isolation": 0.5092345954184999,
-      "conviction": 0.5158744896114424,
+      "opinion": -0.0133558330518446,
+      "belief_strength": 0.6993907342773215,
+      "influence": 0.4319567345462968,
+      "susceptibility": 0.4928868078716565,
+      "fear_of_isolation": 0.3203849303532922,
+      "conviction": 0.6557926154011765,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -809,7 +842,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.483,
@@ -817,28 +853,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.0558,
-          "belief_strength": 0.579,
-          "influence": 0.4914,
-          "susceptibility": 0.3493,
-          "fear_of_isolation": 0.3749,
-          "conviction": 0.596
+          "opinion": -0.0534,
+          "belief_strength": 0.567,
+          "influence": 0.4909,
+          "susceptibility": 0.4923,
+          "fear_of_isolation": 0.3489,
+          "conviction": 0.5389
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.055774407694651716,
-      "belief_strength": 0.5790348446076258,
-      "influence": 0.4913571428571428,
-      "susceptibility": 0.3493214285714286,
-      "fear_of_isolation": 0.37493617397354273,
-      "conviction": 0.5959531127915411,
+      "opinion": -0.05344860276664998,
+      "belief_strength": 0.5669896687874761,
+      "influence": 0.49089820451894706,
+      "susceptibility": 0.4923308057709888,
+      "fear_of_isolation": 0.34892428335923487,
+      "conviction": 0.5389269030918835,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -879,7 +915,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "管理学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.428,
@@ -887,28 +926,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.1285,
-          "belief_strength": 0.6453,
-          "influence": 0.4638,
-          "susceptibility": 0.3631,
-          "fear_of_isolation": 0.4948,
-          "conviction": 0.5009
+          "opinion": 0.1535,
+          "belief_strength": 0.6559,
+          "influence": 0.4121,
+          "susceptibility": 0.3541,
+          "fear_of_isolation": 0.2632,
+          "conviction": 0.4819
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.12851605818753517,
-      "belief_strength": 0.64526667612372,
-      "influence": 0.4637857142857143,
-      "susceptibility": 0.3631071428571429,
-      "fear_of_isolation": 0.49484110408412085,
-      "conviction": 0.500860474623436,
+      "opinion": 0.1534881188807288,
+      "belief_strength": 0.655881872451053,
+      "influence": 0.41206695112732017,
+      "susceptibility": 0.35411295635934864,
+      "fear_of_isolation": 0.2632225348585282,
+      "conviction": 0.48191520998157383,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -949,7 +988,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.705,
@@ -957,28 +999,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.1593,
-          "belief_strength": 0.6914,
-          "influence": 0.7526,
-          "susceptibility": 0.2937,
-          "fear_of_isolation": 0.6308,
-          "conviction": 0.6203
+          "opinion": 0.0605,
+          "belief_strength": 0.7337,
+          "influence": 0.7215,
+          "susceptibility": 0.519,
+          "fear_of_isolation": 0.478,
+          "conviction": 0.64
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.15929349709894625,
-      "belief_strength": 0.6913750804216299,
-      "influence": 0.7526428571428572,
-      "susceptibility": 0.29367857142857146,
-      "fear_of_isolation": 0.630822978164017,
-      "conviction": 0.6203469944520914,
+      "opinion": 0.060473415339788845,
+      "belief_strength": 0.7337429579938235,
+      "influence": 0.7215418812759589,
+      "susceptibility": 0.5189701228242096,
+      "fear_of_isolation": 0.4780269318973658,
+      "conviction": 0.6400358799980062,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1019,7 +1061,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.677,
@@ -1027,28 +1072,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.097,
-          "belief_strength": 0.6529,
-          "influence": 0.5884,
-          "susceptibility": 0.3008,
-          "fear_of_isolation": 0.5715,
-          "conviction": 0.6834
+          "opinion": -0.0144,
+          "belief_strength": 0.8036,
+          "influence": 0.5706,
+          "susceptibility": 0.3267,
+          "fear_of_isolation": 0.3898,
+          "conviction": 0.504
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.09702981510077235,
-      "belief_strength": 0.6528991448332994,
-      "influence": 0.5884285714285714,
-      "susceptibility": 0.3007857142857143,
-      "fear_of_isolation": 0.571490632923956,
-      "conviction": 0.6834413357806095,
+      "opinion": -0.014394995059608805,
+      "belief_strength": 0.8036136226747251,
+      "influence": 0.5705959257673447,
+      "susceptibility": 0.3267276386744207,
+      "fear_of_isolation": 0.38981557772132375,
+      "conviction": 0.5039531099905871,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1089,7 +1134,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.478,
@@ -1097,28 +1145,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.092,
-          "belief_strength": 0.5394,
-          "influence": 0.4888,
-          "susceptibility": 0.3506,
-          "fear_of_isolation": 0.4074,
-          "conviction": 0.6285
+          "opinion": -0.1487,
+          "belief_strength": 0.593,
+          "influence": 0.5167,
+          "susceptibility": 0.5195,
+          "fear_of_isolation": 0.3946,
+          "conviction": 0.5971
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.09203888900513134,
-      "belief_strength": 0.5394151679253629,
-      "influence": 0.4888095238095238,
-      "susceptibility": 0.3505952380952381,
-      "fear_of_isolation": 0.40740190357480766,
-      "conviction": 0.6285102613656286,
+      "opinion": -0.1486763659008785,
+      "belief_strength": 0.5930253958361493,
+      "influence": 0.5166891614734552,
+      "susceptibility": 0.5195291667538485,
+      "fear_of_isolation": 0.39457391297661915,
+      "conviction": 0.5970986767205965,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1159,7 +1207,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.0,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.31,
@@ -1167,28 +1218,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.0179,
-          "belief_strength": 0.5531,
-          "influence": 0.4048,
-          "susceptibility": 0.3926,
-          "fear_of_isolation": 0.4863,
-          "conviction": 0.4642
+          "opinion": 0.0116,
+          "belief_strength": 0.5922,
+          "influence": 0.3769,
+          "susceptibility": 0.4866,
+          "fear_of_isolation": 0.3375,
+          "conviction": 0.5005
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.017871937376409155,
-      "belief_strength": 0.553088650795303,
-      "influence": 0.40476190476190477,
-      "susceptibility": 0.39261904761904765,
-      "fear_of_isolation": 0.4863463799610295,
-      "conviction": 0.4642243267123995,
+      "opinion": 0.011578769845400273,
+      "belief_strength": 0.5921934118722865,
+      "influence": 0.3768556518461101,
+      "susceptibility": 0.48659604696769315,
+      "fear_of_isolation": 0.33750213570634635,
+      "conviction": 0.5004528437531404,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1229,7 +1280,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.777,
@@ -1237,28 +1291,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": -0.0995,
-          "belief_strength": 0.6549,
-          "influence": 0.7883,
-          "susceptibility": 0.2759,
-          "fear_of_isolation": 0.5817,
-          "conviction": 0.504
+          "opinion": -0.0841,
+          "belief_strength": 0.707,
+          "influence": 0.632,
+          "susceptibility": 0.3249,
+          "fear_of_isolation": 0.6576,
+          "conviction": 0.6075
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.09947785250402673,
-      "belief_strength": 0.6549487823450212,
-      "influence": 0.7882857142857144,
-      "susceptibility": 0.27585714285714286,
-      "fear_of_isolation": 0.5816709263096974,
-      "conviction": 0.5040187988673118,
+      "opinion": -0.08405661556601846,
+      "belief_strength": 0.7070400576390335,
+      "influence": 0.632043610522421,
+      "susceptibility": 0.3248916106219799,
+      "fear_of_isolation": 0.657611518389265,
+      "conviction": 0.6074667365232479,
       "persona": {
         "type": "现实组织画像",
         "desc": "资深研究员 / 管理职责 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1299,7 +1353,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.67,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.598,
@@ -1307,28 +1364,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.0014,
-          "belief_strength": 0.6893,
-          "influence": 0.5491,
-          "susceptibility": 0.3205,
-          "fear_of_isolation": 0.5275,
-          "conviction": 0.5967
+          "opinion": 0.1355,
+          "belief_strength": 0.7512,
+          "influence": 0.4972,
+          "susceptibility": 0.4005,
+          "fear_of_isolation": 0.5706,
+          "conviction": 0.5054
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.0013775944245063099,
-      "belief_strength": 0.6892640218382502,
-      "influence": 0.5490952380952381,
-      "susceptibility": 0.320452380952381,
-      "fear_of_isolation": 0.527481464525819,
-      "conviction": 0.596670741729407,
+      "opinion": 0.13551719745276827,
+      "belief_strength": 0.7512059823429444,
+      "influence": 0.4972461171930495,
+      "susceptibility": 0.4005331958183797,
+      "fear_of_isolation": 0.5705839219748137,
+      "conviction": 0.5054154303433538,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1369,7 +1426,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.42,
@@ -1377,28 +1437,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.0128,
-          "belief_strength": 0.5606,
-          "influence": 0.4602,
-          "susceptibility": 0.3649,
-          "fear_of_isolation": 0.4339,
-          "conviction": 0.5689
+          "opinion": -0.0527,
+          "belief_strength": 0.6037,
+          "influence": 0.4662,
+          "susceptibility": 0.4409,
+          "fear_of_isolation": 0.4087,
+          "conviction": 0.584
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.01282480328171241,
-      "belief_strength": 0.5606448343284071,
-      "influence": 0.4601904761904762,
-      "susceptibility": 0.3649047619047619,
-      "fear_of_isolation": 0.43393837601599,
-      "conviction": 0.5689238015871027,
+      "opinion": -0.0526736284646967,
+      "belief_strength": 0.6036915038228488,
+      "influence": 0.4661580888887297,
+      "susceptibility": 0.4408813975387157,
+      "fear_of_isolation": 0.408698339805619,
+      "conviction": 0.5840116401921288,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1439,7 +1499,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.389,
@@ -1447,28 +1510,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.0492,
-          "belief_strength": 0.5167,
-          "influence": 0.4447,
-          "susceptibility": 0.3727,
-          "fear_of_isolation": 0.5444,
-          "conviction": 0.5519
+          "opinion": -0.1392,
+          "belief_strength": 0.6895,
+          "influence": 0.451,
+          "susceptibility": 0.4136,
+          "fear_of_isolation": 0.3285,
+          "conviction": 0.596
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.04915749640021035,
-      "belief_strength": 0.5167457722356185,
-      "influence": 0.4446904761904762,
-      "susceptibility": 0.37265476190476193,
-      "fear_of_isolation": 0.5443711648300292,
-      "conviction": 0.5519159555792572,
+      "opinion": -0.13917128369666817,
+      "belief_strength": 0.6895188278345481,
+      "influence": 0.4510018120824533,
+      "susceptibility": 0.4136318776998422,
+      "fear_of_isolation": 0.32851635219987396,
+      "conviction": 0.5960339164151317,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1509,7 +1572,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "传播学"
+          "specialty": "传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.0,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.325,
@@ -1517,28 +1583,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.068,
-          "belief_strength": 0.5787,
-          "influence": 0.4125,
-          "susceptibility": 0.3888,
-          "fear_of_isolation": 0.4707,
-          "conviction": 0.5479
+          "opinion": 0.0641,
+          "belief_strength": 0.5823,
+          "influence": 0.4446,
+          "susceptibility": 0.551,
+          "fear_of_isolation": 0.3121,
+          "conviction": 0.6107
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.06803585150558845,
-      "belief_strength": 0.578741583196844,
-      "influence": 0.4125,
-      "susceptibility": 0.38875000000000004,
-      "fear_of_isolation": 0.47071882823784383,
-      "conviction": 0.5479085371776268,
+      "opinion": 0.06410395799211002,
+      "belief_strength": 0.5822656901982032,
+      "influence": 0.4445768297421014,
+      "susceptibility": 0.5510268886291914,
+      "fear_of_isolation": 0.3121449688500676,
+      "conviction": 0.6107344159663579,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 传播学。专业背景：传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1579,7 +1645,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.581,
@@ -1587,28 +1656,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.085,
-          "belief_strength": 0.5717,
-          "influence": 0.6906,
-          "susceptibility": 0.3247,
-          "fear_of_isolation": 0.6387,
-          "conviction": 0.591
+          "opinion": -0.1456,
+          "belief_strength": 0.6815,
+          "influence": 0.6918,
+          "susceptibility": 0.5142,
+          "fear_of_isolation": 0.6029,
+          "conviction": 0.6906
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.08495845807693318,
-      "belief_strength": 0.5717147243895796,
-      "influence": 0.6906190476190476,
-      "susceptibility": 0.32469047619047625,
-      "fear_of_isolation": 0.6387060828046053,
-      "conviction": 0.5909843433070368,
+      "opinion": -0.14564176045462235,
+      "belief_strength": 0.6815026880514569,
+      "influence": 0.6918493794075341,
+      "susceptibility": 0.5142188435576999,
+      "fear_of_isolation": 0.6028908746925267,
+      "conviction": 0.6905917164507844,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1649,7 +1718,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "哲学硕士",
-          "specialty": "哲学"
+          "specialty": "哲学",
+          "title_rank": 0.15,
+          "age_band_code": 0.33,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.181,
@@ -1657,28 +1729,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.1054,
-          "belief_strength": 0.5224,
-          "influence": 0.3407,
-          "susceptibility": 0.5046,
-          "fear_of_isolation": 0.5423,
-          "conviction": 0.4944
+          "opinion": 0.105,
+          "belief_strength": 0.4762,
+          "influence": 0.2246,
+          "susceptibility": 0.7145,
+          "fear_of_isolation": 0.3467,
+          "conviction": 0.3284
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.10537005833600721,
-      "belief_strength": 0.5224233010507203,
-      "influence": 0.34071428571428575,
-      "susceptibility": 0.5046428571428572,
-      "fear_of_isolation": 0.542284117713448,
-      "conviction": 0.49441218008203897,
+      "opinion": 0.10498682405537214,
+      "belief_strength": 0.47618914571358767,
+      "influence": 0.22460117263705973,
+      "susceptibility": 0.7145275437520053,
+      "fear_of_isolation": 0.34666064022907817,
+      "conviction": 0.3284078065423959,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年科研人员 / 哲学。专业背景：哲学；学历/学位：研究生毕业哲学硕士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1719,7 +1791,10 @@
           "party_role": "新闻所工会主席",
           "education": "研究生毕业",
           "degree": "管理学博士",
-          "specialty": "舆论学"
+          "specialty": "舆论学",
+          "title_rank": 1.0,
+          "age_band_code": 0.33,
+          "specialty_type": 0.5
         },
         "derived": {
           "seniority_score": 0.455,
@@ -1727,28 +1802,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": 0.0291,
-          "belief_strength": 0.5697,
-          "influence": 0.4775,
-          "susceptibility": 0.3563,
-          "fear_of_isolation": 0.5541,
-          "conviction": 0.5871
+          "opinion": -0.032,
+          "belief_strength": 0.5857,
+          "influence": 0.5824,
+          "susceptibility": 0.4723,
+          "fear_of_isolation": 0.5808,
+          "conviction": 0.6998
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.029056654248891117,
-      "belief_strength": 0.5696981262828804,
-      "influence": 0.4775,
-      "susceptibility": 0.35625,
-      "fear_of_isolation": 0.5540630447018431,
-      "conviction": 0.5870540175398435,
+      "opinion": -0.03200468429279902,
+      "belief_strength": 0.5857192039182026,
+      "influence": 0.5823932140318748,
+      "susceptibility": 0.47229249068666834,
+      "fear_of_isolation": 0.5807508386212491,
+      "conviction": 0.6997582034149653,
       "persona": {
         "type": "现实组织画像",
         "desc": "中坚研究员 / 舆论学。专业背景：舆论学；学历/学位：研究生毕业管理学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1789,7 +1864,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻学"
+          "specialty": "新闻学",
+          "title_rank": 1.0,
+          "age_band_code": 0.0,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.431,
@@ -1797,28 +1875,28 @@
           "is_influencer": true
         },
         "metrics": {
-          "opinion": 0.0814,
-          "belief_strength": 0.4825,
-          "influence": 0.6155,
-          "susceptibility": 0.3623,
-          "fear_of_isolation": 0.5178,
-          "conviction": 0.5508
+          "opinion": -0.2,
+          "belief_strength": 0.5177,
+          "influence": 0.6522,
+          "susceptibility": 0.5611,
+          "fear_of_isolation": 0.5626,
+          "conviction": 0.6379
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": 0.08144980584634062,
-      "belief_strength": 0.48252177502262933,
-      "influence": 0.615452380952381,
-      "susceptibility": 0.36227380952380955,
-      "fear_of_isolation": 0.5178391187329929,
-      "conviction": 0.5508411586073753,
+      "opinion": -0.2,
+      "belief_strength": 0.5177135513251132,
+      "influence": 0.6522181649811384,
+      "susceptibility": 0.5610873543847554,
+      "fear_of_isolation": 0.5626038234722011,
+      "conviction": 0.6379174503380769,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 管理职责 / 新闻学。专业背景：新闻学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",
@@ -1859,7 +1937,10 @@
           "party_role": "",
           "education": "研究生毕业",
           "degree": "文学博士",
-          "specialty": "新闻传播学"
+          "specialty": "新闻传播学",
+          "title_rank": 1.0,
+          "age_band_code": 0.0,
+          "specialty_type": 0.3
         },
         "derived": {
           "seniority_score": 0.338,
@@ -1867,28 +1948,28 @@
           "is_influencer": false
         },
         "metrics": {
-          "opinion": -0.0824,
-          "belief_strength": 0.5335,
-          "influence": 0.4191,
-          "susceptibility": 0.3855,
-          "fear_of_isolation": 0.413,
-          "conviction": 0.5031
+          "opinion": -0.0589,
+          "belief_strength": 0.5368,
+          "influence": 0.4094,
+          "susceptibility": 0.4382,
+          "fear_of_isolation": 0.2934,
+          "conviction": 0.5522
         },
         "formulas": {
-          "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-          "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-          "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-          "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-          "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-          "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间"
+          "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+          "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+          "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+          "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+          "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+          "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]"
         }
       },
-      "opinion": -0.08238019827632423,
-      "belief_strength": 0.5334672062117916,
-      "influence": 0.41907142857142854,
-      "susceptibility": 0.38546428571428576,
-      "fear_of_isolation": 0.4129954600595118,
-      "conviction": 0.5030797901579653,
+      "opinion": -0.05893912732766395,
+      "belief_strength": 0.5367914548114978,
+      "influence": 0.4093709749835151,
+      "susceptibility": 0.43821485129275684,
+      "fear_of_isolation": 0.29338514751045985,
+      "conviction": 0.5522276615354811,
       "persona": {
         "type": "现实组织画像",
         "desc": "青年研究员 / 新闻传播学。专业背景：新闻传播学；学历/学位：研究生毕业文学博士。该画像只基于组织角色、公开学术背景和模拟参数，不代表本人真实态度。",

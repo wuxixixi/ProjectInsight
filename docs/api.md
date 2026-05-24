@@ -1,6 +1,6 @@
 # API 接口文档
 
-更新时间：2026-05-11
+更新时间：2026-05-24
 
 ## 基础信息
 
@@ -41,6 +41,10 @@
 | 报告 | `GET /api/report/content?filename=...` | 读取报告内容 |
 | 报告 | `GET /api/report/download?filename=...` | 下载报告 |
 | 报告 | `POST /api/report/open` | 使用系统默认应用打开报告 |
+| 设置 | `GET /api/settings/llm` | 获取当前 LLM 与并发配置 |
+| 设置 | `POST /api/settings/llm` | 保存 LLM 与并发配置 |
+| 健康检查 | `GET /api/health/llm` | LLM 连通性检测 |
+| 热点新闻 | `GET /api/event/hot-news` | 获取今日热点新闻列表 |
 | 文档 | `GET /api/docs/usage` | 读取 `docs/README.md` |
 
 旧文档中的 `/api/event/inject`、`/api/prediction/update`、`/api/prediction/timeline`、`/api/risk/check`、`/ws` 已不是当前实现入口。
@@ -336,6 +340,38 @@ data: {"done":true,"filename":"intelligence_report_1234567890.md","path":"H:/Pro
 - 使用 LLM 模式；
 - 已至少运行过一步；
 - `llm_population` 已初始化。
+
+## 设置
+
+### `GET /api/settings/llm`
+
+返回当前 LLM 和并发配置（模型名称、Base URL、API Key、并发数、超时等）。
+
+### `POST /api/settings/llm`
+
+保存 LLM 和并发配置。请求体示例：
+
+```json
+{
+  "simulation_llm": { "model": "DeepSeek-V3", "base_url": "http://...", "api_key": "sk-..." },
+  "report_llm": { "model": "DeepSeek-R1", "base_url": "http://...", "api_key": "sk-..." },
+  "max_concurrent": 200,
+  "connection_pool_size": 400,
+  "timeout": 60,
+  "max_retries": 3,
+  "auto_interval": 3000
+}
+```
+
+### `GET /api/health/llm`
+
+检测 LLM 连通性。返回 `{ "ok": true/false, "detail": "..." }`。
+
+## 热点新闻
+
+### `GET /api/event/hot-news`
+
+获取今日热点新闻列表，供事件注入弹窗快速选择。
 
 ## WebSocket
 

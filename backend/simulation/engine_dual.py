@@ -20,6 +20,7 @@ from .graph_parser_agent import GraphParserAgent, get_graph_parser
 from .realistic_population import (
     apply_realistic_profile_to_llm_population,
     apply_realistic_profile_to_math_population,
+    enrich_personas_via_llm,
     load_realistic_population,
 )
 from .report_utils import (
@@ -74,13 +75,15 @@ class SimulationEngineDual:
         population_profile_id: Optional[str] = None,
         realistic_profile_source_path: Optional[str] = None,
         refresh_realistic_profile: bool = False,
-        include_public_enrichment: bool = False
+        include_public_enrichment: bool = False,
+        include_llm_enrichment: bool = False
     ):
         self.population_size = population_size
         self.population_profile_id = population_profile_id
         self.realistic_profile_source_path = realistic_profile_source_path
         self.refresh_realistic_profile = refresh_realistic_profile
         self.include_public_enrichment = include_public_enrichment
+        self.include_llm_enrichment = include_llm_enrichment
         self.realistic_population_profile = None
         if self.population_profile_id:
             self.realistic_population_profile = load_realistic_population(
@@ -531,6 +534,32 @@ class SimulationEngineDual:
                 self.population,
                 self.realistic_population_profile,
             )
+
+    async def async_enrich_personas(self):
+        """用 LLM 丰富 persona 描述（异步，需在 initialize 后调用）"""
+        if not self.include_llm_enrichment:
+            return
+        if not self.realistic_population_profile:
+            return
+        if not self.use_llm or not self.llm_client:
+            return
+
+        enriched = await enrich_personas_via_llm(
+            self.realistic_population_profile.agents,
+            self.llm_client,
+        )
+        if enriched is not self.realistic_population_profile.agents:
+            from .realistic_population import RealisticPopulationProfile
+            self.realistic_population_profile = RealisticPopulationProfile(
+                profile_id=self.realistic_population_profile.profile_id,
+                display_name=self.realistic_population_profile.display_name,
+                source_path=self.realistic_population_profile.source_path,
+                agents=enriched,
+                warnings=self.realistic_population_profile.warnings,
+                cache_path=self.realistic_population_profile.cache_path,
+                generated_at=self.realistic_population_profile.generated_at,
+            )
+            self._apply_realistic_population_profile()
 
     async def async_step(self) -> SimulationState:
         """

@@ -20,10 +20,12 @@ from .routers import report as report_router
 from .routers import event as event_router
 from .routers import prediction as pred_router
 from .routers import profiles as profiles_router
+from .routers import settings as settings_router
 from .llm.client import LLMConfig
 from .simulation.engine import SimulationEngine
 from .simulation.engine_dual import SimulationEngineDual
 from .simulation.realistic_population import load_realistic_population
+from .config.runtime_settings import bootstrap_runtime_settings
 
 # 配置日志
 logging.basicConfig(
@@ -32,6 +34,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 active_websockets: Dict[str, WebSocket] = {}
+
+bootstrap_runtime_settings()
 
 app = FastAPI(
     title="信息茧房推演系统",
@@ -73,12 +77,84 @@ app.include_router(report_router.router)
 app.include_router(event_router.router)
 app.include_router(pred_router.router)
 app.include_router(profiles_router.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/")
 async def root():
     """健康检查"""
     return {"status": "ok", "service": "信息茧房推演系统", "version": "3.0.0"}
+
+
+@app.get("/api/health/llm")
+async def llm_health():
+    """探测 LLM 端点可达性，返回连接状态供前端展示。"""
+    import aiohttp as _aiohttp
+    from urllib.parse import urlparse
+
+    base_url = os.getenv("LLM_BASE_URL", "").strip()
+    api_key = os.getenv("LLM_API_KEY", "").strip()
+    model = os.getenv("LLM_MODEL", "")
+
+    if not base_url:
+        return {
+            "status": "not_configured",
+            "base_url": "",
+            "model": model,
+            "message": "未配置 LLM_BASE_URL",
+        }
+
+    # localhost 视为可用（Ollama 等本地服务不走远程探测）
+    if "localhost" in base_url or "127.0.0.1" in base_url or "::1" in base_url:
+        return {
+            "status": "ok",
+            "base_url": base_url,
+            "model": model,
+            "message": "本地 LLM 服务",
+        }
+
+    # 远程端点：HEAD 探测
+    try:
+        parsed = urlparse(base_url)
+        probe_url = f"{parsed.scheme}://{parsed.netloc}"
+        timeout = _aiohttp.ClientTimeout(total=3)
+        async with _aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.head(probe_url) as resp:
+                if resp.status < 500:
+                    return {
+                        "status": "ok",
+                        "base_url": base_url,
+                        "model": model,
+                        "message": f"LLM 端点可达 (HTTP {resp.status})",
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "base_url": base_url,
+                        "model": model,
+                        "message": f"LLM 端点返回 HTTP {resp.status}",
+                    }
+    except _aiohttp.ClientConnectorError:
+        return {
+            "status": "unreachable",
+            "base_url": base_url,
+            "model": model,
+            "message": "无法连接到 LLM 端点",
+        }
+    except (asyncio.TimeoutError, _aiohttp.ServerTimeoutError):
+        return {
+            "status": "unreachable",
+            "base_url": base_url,
+            "model": model,
+            "message": "LLM 端点连接超时",
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "base_url": base_url,
+            "model": model,
+            "message": f"探测失败: {type(e).__name__}",
+        }
 
 
 # ==================== WebSocket ====================
@@ -256,6 +332,7 @@ async def websocket_simulation(websocket: WebSocket):
                 realistic_profile_source_path = params.get("realistic_profile_source_path")
                 refresh_realistic_profile = params.get("refresh_realistic_profile", False)
                 include_public_enrichment = params.get("include_public_enrichment", False)
+                include_llm_enrichment = params.get("include_llm_enrichment", False)
                 effective_population_size = population_size
                 if population_profile_id:
                     profile = load_realistic_population(
@@ -309,7 +386,8 @@ async def websocket_simulation(websocket: WebSocket):
                         population_profile_id=population_profile_id,
                         realistic_profile_source_path=realistic_profile_source_path,
                         refresh_realistic_profile=refresh_realistic_profile,
-                        include_public_enrichment=include_public_enrichment
+                        include_public_enrichment=include_public_enrichment,
+                        include_llm_enrichment=include_llm_enrichment
                     )
                 else:
                     state.engine = SimulationEngine(
@@ -346,6 +424,10 @@ async def websocket_simulation(websocket: WebSocket):
                         logger.info(f"已根据新闻内容设置初始分布")
 
                 initial_state = state.engine.initialize()
+
+                # LLM persona enrichment
+                if hasattr(state.engine, 'async_enrich_personas'):
+                    await state.engine.async_enrich_personas()
 
                 # ==================== 自动注入待处理的事件 ====================
                 if state.pending_knowledge_graph and state.pending_event_content:

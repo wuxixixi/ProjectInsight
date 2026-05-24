@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from .. import state
 from ..helpers import AirdropRequest, ParseRequest
+from ..llm.client import create_llm_config_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ async def parse_news_event(req: ParseRequest):
     from ..simulation.graph_parser_agent import get_graph_parser
 
     try:
-        graph_parser = get_graph_parser()
+        graph_parser = get_graph_parser(create_llm_config_from_env("LLM"))
         knowledge_graph = await graph_parser.parse(req.content)
 
         return {
@@ -94,7 +95,7 @@ async def airdrop_event(req: AirdropRequest):
 
             try:
                 from ..simulation.graph_parser_agent import get_graph_parser
-                graph_parser = get_graph_parser()
+                graph_parser = get_graph_parser(create_llm_config_from_env("LLM"))
                 knowledge_graph = await graph_parser.parse(req.content)
 
                 entity_count = len(knowledge_graph.get('entities', []))
@@ -237,3 +238,47 @@ async def get_current_knowledge_graph():
         "success": True,
         "data": state.engine.knowledge_graph
     }
+
+
+@router.get("/hot-news")
+async def get_hot_news():
+    """用 Tavily 抓取当天热点新闻，返回最多 10 条供用户选择注入。"""
+    import os
+    from tavily import TavilyClient
+
+    api_key = os.getenv("TAVILY_API_KEY", "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")
+    client = TavilyClient(api_key=api_key)
+
+    categories = ["中国政治经济政策", "中国社会文化热点", "国际政治经济"]
+    all_results = []
+
+    for cat in categories:
+        try:
+            resp = client.search(
+                query=f"今天{cat}最新新闻",
+                topic="news",
+                days=1,
+                max_results=5,
+                search_depth="basic",
+            )
+            for r in resp.get("results", []):
+                all_results.append({
+                    "title": r.get("title", ""),
+                    "content": r.get("content", "")[:500],
+                    "url": r.get("url", ""),
+                    "source": r.get("source", ""),
+                    "category": cat,
+                })
+        except Exception as e:
+            logger.warning(f"Tavily search failed for '{cat}': {e}")
+
+    # 去重（按 title）并取前 10 条
+    seen = set()
+    unique = []
+    for item in all_results:
+        t = item["title"]
+        if t and t not in seen:
+            seen.add(t)
+            unique.append(item)
+
+    return {"items": unique[:10]}

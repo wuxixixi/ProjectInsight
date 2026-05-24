@@ -16,7 +16,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+import logging
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_SHASS_NEWS_INSTITUTE_PATH = r"E:\wuxi_xws\名单\251231 新闻所在职人员名单.xlsx"
@@ -974,12 +978,12 @@ def _synthetic_metric_formulas() -> Dict[str, str]:
 
 def _workbook_metric_formulas() -> Dict[str, str]:
     return {
-        "opinion": "以中性为中心叠加小幅随机扰动，并限制在[-0.20, 0.20]，避免把现实人员预设为明确立场",
-        "belief_strength": "以资历分为基础，再叠加少量随机扰动，形成初始信念强度",
-        "influence": "资历分和行政职务共同影响影响力，最后限制在0.1到1.0之间",
-        "susceptibility": "资历分越高通常越不容易受影响，博士学历会再略微下调，最后限制在0.12到0.75之间",
-        "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加少量随机扰动，最后限制在0.15到0.9之间",
-        "conviction": "资历分越高通常越坚定，再叠加少量随机扰动，最后限制在0.2到0.9之间",
+        "opinion": "由专业类型（社科/人文/管理/技术）偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+        "belief_strength": "由资历分、职称等级和年龄段三个维度加权叠加，再加随机扰动，限制在[0.2, 0.9]",
+        "influence": "由资历分、职称等级、行政职务和党内职务多因素加权，再加随机扰动，限制在[0.1, 1.0]",
+        "susceptibility": "由年龄段（负相关）、职称等级（负相关）和博士学历（负相关）共同决定，限制在[0.12, 0.75]",
+        "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+        "conviction": "由资历分、职称等级和党内职务多因素加权，再加随机扰动，限制在[0.2, 0.9]",
     }
 
 
@@ -1098,12 +1102,34 @@ def _build_user_defined_agent_profile(
     role_label = _role_label(seniority_label, title, admin_role, specialty)
 
     evidence_bonus = min(len(notes) / 2000.0, 0.12)
-    influence = float(np.clip(0.23 + seniority_score * 0.48 + (0.14 if admin_role else 0.0) + evidence_bonus, 0.1, 1.0))
-    susceptibility = float(np.clip(0.58 - seniority_score * 0.22 - (0.06 if "博士" in degree + education else 0.0) - evidence_bonus * 0.5, 0.12, 0.78))
-    belief_strength = float(np.clip(0.42 + seniority_score * 0.28 + evidence_bonus + rng.normal(0, 0.04), 0.2, 0.9))
-    fear_of_isolation = float(np.clip(0.44 + (0.13 if admin_role or party_role else 0.0) + rng.normal(0, 0.05), 0.15, 0.9))
-    conviction = float(np.clip(0.43 + seniority_score * 0.24 + evidence_bonus + rng.normal(0, 0.05), 0.2, 0.9))
-    opinion = float(np.clip(rng.normal(0.0, 0.08), -0.2, 0.2))
+    title_rank = _title_rank(title)
+    age_band_code = _age_band_code(age)
+    specialty_type = _specialty_type(specialty)
+
+    opinion = float(np.clip(
+        specialty_type * 0.12 - (0.05 if "博士" in degree + education else 0) + rng.normal(0, 0.10),
+        -0.2, 0.2
+    ))
+    belief_strength = float(np.clip(
+        0.30 + seniority_score * 0.20 + title_rank * 0.20 + age_band_code * 0.10 + evidence_bonus + rng.normal(0, 0.05),
+        0.2, 0.9
+    ))
+    influence = float(np.clip(
+        0.15 + seniority_score * 0.25 + title_rank * 0.20 + (0.20 if admin_role else 0) + (0.10 if party_role else 0) + evidence_bonus + rng.normal(0, 0.04),
+        0.1, 1.0
+    ))
+    susceptibility = float(np.clip(
+        0.70 - age_band_code * 0.15 - title_rank * 0.10 - (0.10 if "博士" in degree + education else 0) - evidence_bonus * 0.5 + rng.normal(0, 0.06),
+        0.12, 0.78
+    ))
+    fear_of_isolation = float(np.clip(
+        0.35 + (0.20 if admin_role else 0) + (0.15 if party_role else 0) + age_band_code * 0.10 + rng.normal(0, 0.06),
+        0.15, 0.9
+    ))
+    conviction = float(np.clip(
+        0.30 + seniority_score * 0.15 + title_rank * 0.20 + (0.10 if party_role else 0) + evidence_bonus + rng.normal(0, 0.05),
+        0.2, 0.9
+    ))
     community_id = _community_id(specialty, department)
     is_influencer = bool(influence >= 0.72 or admin_role)
     generation_trace = _build_generation_trace(
@@ -1123,6 +1149,9 @@ def _build_user_defined_agent_profile(
             "degree": degree,
             "specialty": specialty,
             "notes_excerpt": notes[:240],
+            "title_rank": title_rank,
+            "age_band_code": age_band_code,
+            "specialty_type": specialty_type,
         },
         seniority_score=seniority_score,
         metrics={
@@ -1199,12 +1228,34 @@ def _build_agent_profile(
     seniority_label = _seniority_label(seniority_score)
     role_label = _role_label(seniority_label, title, admin_role, specialty)
 
-    influence = float(np.clip(0.25 + seniority_score * 0.5 + (0.15 if admin_role else 0.0), 0.1, 1.0))
-    susceptibility = float(np.clip(0.55 - seniority_score * 0.25 - (0.08 if "博士" in degree + education else 0.0), 0.12, 0.75))
-    belief_strength = float(np.clip(0.45 + seniority_score * 0.3 + rng.normal(0, 0.04), 0.2, 0.9))
-    fear_of_isolation = float(np.clip(0.45 + (0.15 if admin_role or party_role else 0.0) + rng.normal(0, 0.06), 0.15, 0.9))
-    conviction = float(np.clip(0.45 + seniority_score * 0.25 + rng.normal(0, 0.05), 0.2, 0.9))
-    opinion = float(np.clip(rng.normal(0.0, 0.08), -0.2, 0.2))
+    title_rank = _title_rank(title)
+    age_band_code = _age_band_code(age)
+    specialty_type = _specialty_type(specialty)
+
+    opinion = float(np.clip(
+        specialty_type * 0.12 - (0.05 if "博士" in degree + education else 0) + rng.normal(0, 0.10),
+        -0.2, 0.2
+    ))
+    belief_strength = float(np.clip(
+        0.30 + seniority_score * 0.20 + title_rank * 0.20 + age_band_code * 0.10 + rng.normal(0, 0.05),
+        0.2, 0.9
+    ))
+    influence = float(np.clip(
+        0.15 + seniority_score * 0.25 + title_rank * 0.20 + (0.20 if admin_role else 0) + (0.10 if party_role else 0) + rng.normal(0, 0.04),
+        0.1, 1.0
+    ))
+    susceptibility = float(np.clip(
+        0.70 - age_band_code * 0.15 - title_rank * 0.10 - (0.10 if "博士" in degree + education else 0) + rng.normal(0, 0.06),
+        0.12, 0.75
+    ))
+    fear_of_isolation = float(np.clip(
+        0.35 + (0.20 if admin_role else 0) + (0.15 if party_role else 0) + age_band_code * 0.10 + rng.normal(0, 0.06),
+        0.15, 0.9
+    ))
+    conviction = float(np.clip(
+        0.30 + seniority_score * 0.15 + title_rank * 0.20 + (0.10 if party_role else 0) + rng.normal(0, 0.05),
+        0.2, 0.9
+    ))
     community_id = _community_id(specialty, department)
     is_influencer = bool(influence >= 0.72 or admin_role)
     queries = _build_search_queries(row, specialty)
@@ -1223,6 +1274,9 @@ def _build_agent_profile(
             "education": education,
             "degree": degree,
             "specialty": specialty,
+            "title_rank": title_rank,
+            "age_band_code": age_band_code,
+            "specialty_type": specialty_type,
         },
         seniority_score=seniority_score,
         metrics={
@@ -1284,12 +1338,12 @@ def _build_agent_profile(
 
 def _user_metric_formulas() -> Dict[str, str]:
     return {
-        "opinion": "以中性为中心叠加小幅稳定扰动，并限制在[-0.20, 0.20]，避免根据资料预设明确立场",
-        "belief_strength": "以资历分和资料丰富度为基础，再叠加小幅稳定扰动，形成初始信念强度",
-        "influence": "资历分、管理职责和资料丰富度共同影响影响力，最后限制在0.1到1.0之间",
-        "susceptibility": "资历分越高通常越不容易受影响；高学历和资料丰富度会略微降低易感性，最后限制在0.12到0.78之间",
-        "fear_of_isolation": "行政或党内职务会略微提高对孤立的敏感度，再叠加小幅稳定扰动，最后限制在0.15到0.9之间",
-        "conviction": "资历分和资料丰富度越高通常越坚定，再叠加小幅稳定扰动，最后限制在0.2到0.9之间",
+        "opinion": "由专业类型偏移、博士学历微调和随机扰动共同决定，限制在[-0.20, 0.20]",
+        "belief_strength": "由资历分、职称等级、年龄段和资料丰富度多维加权，再加随机扰动，限制在[0.2, 0.9]",
+        "influence": "由资历分、职称等级、行政职务、党内职务和资料丰富度多因素加权，限制在[0.1, 1.0]",
+        "susceptibility": "由年龄段（负相关）、职称等级（负相关）、博士学历（负相关）和资料丰富度共同决定，限制在[0.12, 0.78]",
+        "fear_of_isolation": "由行政职务、党内职务和年龄段三个因素正向叠加，再加随机扰动，限制在[0.15, 0.9]",
+        "conviction": "由资历分、职称等级、党内职务和资料丰富度多因素加权，再加随机扰动，限制在[0.2, 0.9]",
     }
 
 
@@ -1326,6 +1380,42 @@ def _number(value: Any, *, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _title_rank(title: str) -> float:
+    """正高→1.0, 副高→0.67, 中级→0.33, 其他→0.15"""
+    if any(token in title for token in ("正高", "研究员", "教授")):
+        return 1.0
+    if any(token in title for token in ("副高", "副研究员", "副教授")):
+        return 0.67
+    if any(token in title for token in ("中级", "助理研究员")):
+        return 0.33
+    return 0.15
+
+
+def _age_band_code(age: float) -> float:
+    """<35→0.0, 35-44→0.33, 45-54→0.67, ≥55→1.0"""
+    if age < 35:
+        return 0.0
+    if age < 45:
+        return 0.33
+    if age < 55:
+        return 0.67
+    return 1.0
+
+
+def _specialty_type(specialty: str) -> float:
+    """社科/新闻/传播→0.3, 哲学/文学/历史→0.5, 管理/经济→0.7, 技术/信息→0.9"""
+    s = specialty.lower() if specialty else ""
+    if any(k in s for k in ("新闻", "传播", "社会", "政治", "法学", "教育")):
+        return 0.3
+    if any(k in s for k in ("哲学", "文学", "历史", "文化", "伦理", "宗教")):
+        return 0.5
+    if any(k in s for k in ("管理", "经济", "金融", "行政")):
+        return 0.7
+    if any(k in s for k in ("信息", "技术", "数据", "计算", "网络", "数字")):
+        return 0.9
+    return 0.5
 
 
 def _seniority_score(age: float, work_years: float, org_years: float, title: str, admin_role: str) -> float:
@@ -1382,3 +1472,104 @@ def _community_id(specialty: str, department: str) -> int:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+async def enrich_personas_via_llm(
+    agents: List[RealisticAgentProfile],
+    llm_client: Any,
+) -> List[RealisticAgentProfile]:
+    """用 LLM 为每个 agent 生成丰富的心理画像。
+
+    返回新的 agent 列表（frozen dataclass 不可变，需重建）。
+    已有 enrichment 的 agent 会被跳过。
+    """
+    to_enrich = []
+    to_enrich_indices = []
+    for i, agent in enumerate(agents):
+        persona = agent.persona or {}
+        if persona.get("personality"):
+            continue  # already enriched
+        to_enrich.append(agent)
+        to_enrich_indices.append(i)
+
+    if not to_enrich:
+        return agents
+
+    batch_messages = []
+    for agent in to_enrich:
+        prompt = f"""请根据以下人员信息，用中文简洁描述其可能的性格特点、信息消费习惯、社交风格和对权威的态度。
+
+人员信息：
+- 姓名：{agent.name}
+- 部门：{agent.department}
+- 职称：{agent.title}
+- 专业：{agent.specialty}
+- 资历：{agent.seniority_label}
+
+请严格返回 JSON 格式（不要其他文字），每个字段控制在15字以内：
+{{"personality": "性格特点", "media_habit": "信息消费习惯", "social_style": "社交风格", "authority_stance": "对权威态度"}}"""
+        batch_messages.append([{"role": "user", "content": prompt}])
+
+    try:
+        results = await llm_client.batch_chat_json(
+            batch_messages,
+            temperature=0.7,
+            max_tokens=150,
+        )
+    except Exception as e:
+        logger.warning(f"Persona enrichment failed: {e}")
+        return agents
+
+    enriched_agents = list(agents)
+    for idx, agent_idx in enumerate(to_enrich_indices):
+        if idx >= len(results):
+            break
+        result = results[idx]
+        if "error" in result and "personality" not in result:
+            continue
+
+        old_agent = agents[agent_idx]
+        old_persona = dict(old_agent.persona or {})
+        old_persona["personality"] = result.get("personality", "")
+        old_persona["media_habit"] = result.get("media_habit", "")
+        old_persona["social_style"] = result.get("social_style", "")
+        old_persona["authority_stance"] = result.get("authority_stance", "")
+        old_persona["desc"] = (
+            f"{old_persona.get('desc', '')} "
+            f"性格：{old_persona['personality']}；"
+            f"信息习惯：{old_persona['media_habit']}；"
+            f"社交风格：{old_persona['social_style']}；"
+            f"权威态度：{old_persona['authority_stance']}。"
+        )
+
+        old_trace = dict(old_agent.generation_trace or {})
+        old_trace["llm_enrichment"] = {
+            "personality": old_persona["personality"],
+            "media_habit": old_persona["media_habit"],
+            "social_style": old_persona["social_style"],
+            "authority_stance": old_persona["authority_stance"],
+        }
+
+        enriched_agents[agent_idx] = RealisticAgentProfile(
+            agent_id=old_agent.agent_id,
+            name=old_agent.name,
+            role_label=old_agent.role_label,
+            department=old_agent.department,
+            specialty=old_agent.specialty,
+            title=old_agent.title,
+            seniority_label=old_agent.seniority_label,
+            community_id=old_agent.community_id,
+            is_influencer=old_agent.is_influencer,
+            opinion=old_agent.opinion,
+            belief_strength=old_agent.belief_strength,
+            influence=old_agent.influence,
+            susceptibility=old_agent.susceptibility,
+            fear_of_isolation=old_agent.fear_of_isolation,
+            conviction=old_agent.conviction,
+            persona=old_persona,
+            public_evidence=old_agent.public_evidence,
+            search_queries=old_agent.search_queries,
+            generation_trace=old_trace,
+        )
+
+    return enriched_agents

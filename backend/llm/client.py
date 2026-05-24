@@ -30,6 +30,29 @@ def get_env_int(key: str, default: int) -> int:
     return int(val) if val else default
 
 
+def get_env_float(key: str, default: float) -> float:
+    """获取浮点类型的环境变量"""
+    val = os.getenv(key)
+    return float(val) if val else default
+
+
+def create_llm_config_from_env(
+    prefix: str = "LLM",
+    default_model: str = "Qwen2.5-32B-Instruct"
+) -> "LLMConfig":
+    """按环境变量前缀构建 LLM 配置。"""
+    return LLMConfig(
+        base_url=get_env_str(f"{prefix}_BASE_URL", get_env_str("LLM_BASE_URL", "")),
+        api_key=get_env_str(f"{prefix}_API_KEY", get_env_str("LLM_API_KEY", "")),
+        model=get_env_str(f"{prefix}_MODEL", get_env_str("LLM_MODEL", default_model)),
+        max_concurrent=get_env_int(f"{prefix}_MAX_CONCURRENT", get_env_int("LLM_MAX_CONCURRENT", 100)),
+        timeout=get_env_int(f"{prefix}_TIMEOUT", get_env_int("LLM_TIMEOUT", 60)),
+        max_retries=get_env_int(f"{prefix}_MAX_RETRIES", get_env_int("LLM_MAX_RETRIES", 5)),
+        temperature=get_env_float(f"{prefix}_TEMPERATURE", 0.7),
+        max_tokens=get_env_int(f"{prefix}_MAX_TOKENS", 150),
+    )
+
+
 @dataclass
 class LLMConfig:
     """LLM 配置 - 从环境变量读取默认值"""
@@ -348,6 +371,28 @@ class LLMClient:
             logger.warning(f"batch_chat: {fail_count}/{total} 请求失败")
 
         return success_results
+
+    async def batch_chat_json(
+        self,
+        batch_messages: List[List[Dict[str, str]]],
+        progress_callback: Optional[callable] = None,
+        **kwargs
+    ) -> List[Dict[str, Any]]:
+        """
+        批量聊天并解析 JSON 响应
+        """
+        raw_results = await self.batch_chat(batch_messages, progress_callback=progress_callback, **kwargs)
+        parsed = []
+        for r in raw_results:
+            if isinstance(r, Exception):
+                parsed.append({"error": str(r)})
+            else:
+                try:
+                    content = r["choices"][0]["message"]["content"]
+                    parsed.append(self._parse_json_content(content))
+                except (KeyError, IndexError) as e:
+                    parsed.append({"error": str(e), "raw": r})
+        return parsed
 
     async def chat_stream(
         self,
