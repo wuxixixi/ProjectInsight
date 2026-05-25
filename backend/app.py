@@ -10,8 +10,10 @@ import logging
 import os
 from typing import Dict, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from . import state
 from .helpers import calculate_max_concurrent, _state_to_dict
@@ -79,11 +81,23 @@ app.include_router(pred_router.router)
 app.include_router(profiles_router.router)
 app.include_router(settings_router.router)
 
+# 静态文件服务：生产模式下直接由后端提供前端页面
+_frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+if os.path.isdir(_frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_frontend_dist, "assets")), name="static-assets")
 
-@app.get("/")
-async def root():
-    """健康检查"""
-    return {"status": "ok", "service": "信息茧房推演系统", "version": "3.0.0"}
+    @app.get("/sass-logo.png")
+    async def serve_sass_logo():
+        return FileResponse(os.path.join(_frontend_dist, "sass-logo.png"))
+
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(os.path.join(_frontend_dist, "index.html"))
+else:
+    @app.get("/")
+    async def root():
+        """健康检查"""
+        return {"status": "ok", "service": "信息茧房推演系统", "version": "3.0.0"}
 
 
 @app.get("/api/health/llm")

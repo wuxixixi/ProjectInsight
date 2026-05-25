@@ -1,0 +1,151 @@
+INFO:     Will watch for changes in these directories: ['H:\\ProjectInsight']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [27380] using WatchFiles
+INFO:     Started server process [25288]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'temp_ws_check.py'. Reloading...
+INFO:     127.0.0.1:11045 - "WebSocket /ws/simulation" [accepted]
+2026-05-24 16:04:20,656 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-24 16:04:20,661 - backend.app - INFO - LLM并发数设置: 13 (Agent数量: 27)
+2026-05-24 16:04:20,661 - backend.app - INFO - 使用双层网络引擎, 社群数: 8, LLM模式: False
+2026-05-24 16:04:20,670 - backend.app - INFO - 模拟已启动, LLM模式: False, 双层网络: True
+2026-05-24 16:04:35,684 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+INFO:     127.0.0.1:11116 - "WebSocket /ws/simulation" [accepted]
+2026-05-24 16:05:23,686 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-24 16:05:23,691 - backend.app - INFO - LLM并发数设置: 13 (Agent数量: 27)
+2026-05-24 16:05:23,691 - backend.app - INFO - 使用双层网络引擎, 社群数: 8, LLM模式: False
+2026-05-24 16:05:23,697 - backend.app - INFO - 模拟已启动, LLM模式: False, 双层网络: True
+2026-05-24 16:05:23,759 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [25288]
+WARNING:  WatchFiles detected changes in 'temp_ws_check.py', 'temp_enrich_check.py'. Reloading...
+INFO:     Started server process [13608]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\miniconda3\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\miniconda3\Lib\site-packages\starlette\routing.py", line 701, in lifespan
+    await receive()
+  File "D:\miniconda3\Lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\asyncio\queues.py", line 186, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+INFO:     Started server process [18724]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:9113 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 08:02:51,155 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+WARNING:  WatchFiles detected changes in 'backend\app.py'. Reloading...
+INFO:     Shutting down
+2026-05-25 08:31:29,197 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18724]
+WARNING:  WatchFiles detected changes in 'backend\app.py'. Reloading...
+INFO:     Started server process [24400]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\miniconda3\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\miniconda3\Lib\site-packages\starlette\routing.py", line 701, in lifespan
+    await receive()
+  File "D:\miniconda3\Lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\asyncio\queues.py", line 186, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+INFO:     Started server process [26128]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'backend\app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [26128]
+INFO:     Started server process [29372]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:13700 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 15:35:38,737 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-25 16:36:55,688 - backend.routers.profiles - ERROR - Profile build failed: No usable profile records found in data\user_profiles\xxs_team\sources
+2026-05-25 16:38:49,144 - backend.routers.event - INFO - [绠＄嚎] 浜嬩欢娉ㄥ叆寮\u20ac濮嬶紝鎺ㄦ紨鏆傚仠绛夊緟
+2026-05-25 16:38:49,145 - backend.routers.event - INFO - [绠＄嚎闃舵\ue18c1] 寮\u20ac濮嬭В鏋愮獊鍙戜簨浠? Test Your News I.Q. 2026 Elections Election Result...
+2026-05-25 16:38:50,649 - backend.simulation.graph_parser_agent - WARNING - LLM config unavailable for graph parsing, fallback to default graph
+2026-05-25 16:38:50,651 - backend.routers.event - INFO - [事件注入-解析] 知识图谱解析完成: 1 个实体, 0 个关系
+2026-05-25 16:38:50,652 - backend.routers.event - INFO - [绠＄嚎闃舵\ue18c2] 灏佽\ue5ca缁撴瀯鍖栦簨浠舵秷鎭?..
+2026-05-25 16:38:50,652 - backend.routers.event - INFO - [事件注入-广播] 推演引擎未初始化，暂存待注入事件供后续使用
+2026-05-25 16:38:50,653 - backend.routers.event - INFO - [绠＄嚎] 浜嬩欢娉ㄥ叆缁撴潫锛屾帹婕斿彲鎭㈠\ue632
+2026-05-25 16:39:06,982 - backend.app - INFO - LLM并发数设置: 11 (Agent数量: 23)
+2026-05-25 16:39:06,983 - backend.app - INFO - 使用双层网络引擎, 社群数: 8, LLM模式: False
+2026-05-25 16:39:06,985 - backend.simulation.engine_dual - INFO - 根据新闻设置初始分布(双层): 情感=争议, 可信度=不确定, 实体数=1, 初始负面信念传播率=0.315
+2026-05-25 16:39:06,986 - backend.app - INFO - 已根据新闻内容设置初始分布
+2026-05-25 16:39:06,989 - backend.app - INFO - 检测到待注入事件，自动注入到引擎: Test Your News I.Q. 2026 Elections Election Result...
+2026-05-25 16:39:06,990 - backend.simulation.engine_dual - INFO - 知识图谱已设置: 1 实体, 0 关系
+2026-05-25 16:39:06,990 - backend.simulation.knowledge_evolution - INFO - 知识驱动演化器初始化: 1 实体, 0 关系
+2026-05-25 16:39:06,991 - backend.simulation.knowledge_evolution - INFO - 影响力TOP3: [('未知事件', 0.27)]
+2026-05-25 16:39:06,992 - backend.app - INFO - 知识驱动演化已启用
+2026-05-25 16:39:06,993 - backend.simulation.engine_dual - INFO - 事件冲击(双层): 强度=0.021, 情感=争议, 影响6个Agent, 平均偏移=0.0000
+2026-05-25 16:39:06,994 - backend.simulation.engine_dual - INFO - Step 0: 注入突发事件 [public_only] Test Your News I.Q. 2026 Elections Election Result...
+2026-05-25 16:39:06,994 - backend.app - INFO - 待注入事件已成功注入，图谱包含 1 个实体
+2026-05-25 16:39:06,996 - backend.app - INFO - 模拟已启动, LLM模式: False, 双层网络: True
+2026-05-25 16:39:07,481 - backend.app - INFO - 自动推演已启动, 间隔 500ms
+2026-05-25 16:39:12,126 - backend.simulation.engine_dual - INFO - Step 10: 发布权威回应
+2026-05-25 16:39:30,055 - backend.app - INFO - 自动推演已停止
+2026-05-25 16:39:30,056 - backend.app - INFO - 自动推演任务已取消
+2026-05-25 16:39:37,771 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed

@@ -1,5 +1,5 @@
-"""
-事件注入路由
+﻿"""
+浜嬩欢娉ㄥ叆璺敱
 """
 import inspect
 import logging
@@ -29,10 +29,10 @@ async def _maybe_set_news(engine, content: str, source: str) -> None:
 @router.post("/parse")
 async def parse_news_event(req: ParseRequest):
     """
-    解析新闻文本为知识图谱
+    瑙ｆ瀽鏂伴椈鏂囨湰涓虹煡璇嗗浘璋?
 
     Request Body:
-        content: 新闻文本内容
+        content: 鏂伴椈鏂囨湰鍐呭
     """
     from ..simulation.graph_parser_agent import get_graph_parser
 
@@ -45,7 +45,7 @@ async def parse_news_event(req: ParseRequest):
             "data": knowledge_graph
         }
     except Exception as e:
-        logger.error(f"知识图谱解析失败: {e}")
+        logger.error(f"鐭ヨ瘑鍥捐氨瑙ｆ瀽澶辫触: {e}")
         return JSONResponse(
             content={"success": False, "error": str(e)},
             status_code=500
@@ -55,33 +55,33 @@ async def parse_news_event(req: ParseRequest):
 @router.post("/airdrop")
 async def airdrop_event(req: AirdropRequest):
     """
-    注入突发事件 - "解析-注入-推演"三段式管线
+    娉ㄥ叆绐佸彂浜嬩欢 - "瑙ｆ瀽-娉ㄥ叆-鎺ㄦ紨"涓夋寮忕绾?
 
-    第一阶段（解析）：调用 GraphParserAgent 提取结构化知识图谱（可选跳过）
-    第二阶段（封装）：将图谱+原始文本封装成结构化的 EventMsg
-    第三阶段（广播）：将 EventMsg 发送给网络中的节点
+    绗竴闃舵锛堣В鏋愶級锛氳皟鐢?GraphParserAgent 鎻愬彇缁撴瀯鍖栫煡璇嗗浘璋憋紙鍙€夎烦杩囷級
+    绗簩闃舵锛堝皝瑁咃級锛氬皢鍥捐氨+鍘熷鏂囨湰灏佽鎴愮粨鏋勫寲鐨?EventMsg
+    绗笁闃舵锛堝箍鎾級锛氬皢 EventMsg 鍙戦€佺粰缃戠粶涓殑鑺傜偣
 
     Request Body:
-        content: 事件文本内容
-        source: 来源 (public/private)
-        skip_parse: 跳过知识图谱解析（快速注入模式）
+        content: 浜嬩欢鏂囨湰鍐呭
+        source: 鏉ユ簮 (public/private)
+        skip_parse: 璺宠繃鐭ヨ瘑鍥捐氨瑙ｆ瀽锛堝揩閫熸敞鍏ユā寮忥級
 
     Response:
-        success: 是否成功
-        knowledge_graph: 解析后的知识图谱 JSON
-        event: 事件记录
+        success: 鏄惁鎴愬姛
+        knowledge_graph: 瑙ｆ瀽鍚庣殑鐭ヨ瘑鍥捐氨 JSON
+        event: 浜嬩欢璁板綍
     """
-    # ==================== 标记注入进行中（暂停推演）====================
+    # ==================== 鏍囪娉ㄥ叆杩涜涓紙鏆傚仠鎺ㄦ紨锛?===================
     state.injection_in_progress = True
-    logger.info(f"[管线] 事件注入开始，推演暂停等待")
+    logger.info(f"[绠＄嚎] 浜嬩欢娉ㄥ叆寮€濮嬶紝鎺ㄦ紨鏆傚仠绛夊緟")
 
     try:
-        # ==================== 第一阶段：解析（可选跳过）====================
+        # ==================== 绗竴闃舵锛氳В鏋愶紙鍙€夎烦杩囷級====================
         if req.skip_parse:
-            # 快速注入模式：跳过 LLM 解析，使用简单图谱
-            logger.info(f"[快速注入] 跳过知识图谱解析: {req.content[:50]}...")
+            # 蹇€熸敞鍏ユā寮忥細璺宠繃 LLM 瑙ｆ瀽锛屼娇鐢ㄧ畝鍗曞浘璋?
+            logger.info(f"[蹇€熸敞鍏 璺宠繃鐭ヨ瘑鍥捐氨瑙ｆ瀽: {req.content[:50]}...")
             knowledge_graph = {
-                "entities": [{"id": "e1", "name": "事件主体", "type": "事件", "description": req.content[:50]}],
+                "entities": [{"id": "e1", "name": "浜嬩欢涓讳綋", "type": "浜嬩欢", "description": req.content[:50]}],
                 "relations": [],
                 "summary": req.content[:100],
                 "keywords": [],
@@ -90,8 +90,8 @@ async def airdrop_event(req: AirdropRequest):
                 "skip_parse": True
             }
         else:
-            # 完整解析模式：调用 LLM 解析知识图谱
-            logger.info(f"[管线阶段1] 开始解析突发事件: {req.content[:50]}...")
+            # 瀹屾暣瑙ｆ瀽妯″紡锛氳皟鐢?LLM 瑙ｆ瀽鐭ヨ瘑鍥捐氨
+            logger.info(f"[绠＄嚎闃舵1] 寮€濮嬭В鏋愮獊鍙戜簨浠? {req.content[:50]}...")
 
             try:
                 from ..simulation.graph_parser_agent import get_graph_parser
@@ -100,11 +100,11 @@ async def airdrop_event(req: AirdropRequest):
 
                 entity_count = len(knowledge_graph.get('entities', []))
                 relation_count = len(knowledge_graph.get('relations', []))
-                logger.info(f"[管线阶段1] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
+                logger.info(f"[事件注入-解析] 知识图谱解析完成: {entity_count} 个实体, {relation_count} 个关系")
 
             except Exception as e:
-                logger.error(f"[管线阶段1] 知识图谱解析失败: {e}")
-                # 即使解析失败，也继续流程，使用空图谱
+                logger.error(f"[绠＄嚎闃舵1] 鐭ヨ瘑鍥捐氨瑙ｆ瀽澶辫触: {e}")
+                # 鍗充娇瑙ｆ瀽澶辫触锛屼篃缁х画娴佺▼锛屼娇鐢ㄧ┖鍥捐氨
                 knowledge_graph = {
                     "entities": [],
                     "relations": [],
@@ -113,18 +113,18 @@ async def airdrop_event(req: AirdropRequest):
                     "error_message": str(e)
                 }
 
-        # ==================== 第二阶段：封装（构建结构化 EventMsg）====================
-        logger.info(f"[管线阶段2] 封装结构化事件消息...")
+        # ==================== 绗簩闃舵锛氬皝瑁咃紙鏋勫缓缁撴瀯鍖?EventMsg锛?===================
+        logger.info(f"[绠＄嚎闃舵2] 灏佽缁撴瀯鍖栦簨浠舵秷鎭?..")
 
-        # 用户选择的可信度优先于自动解析的
+        # 鐢ㄦ埛閫夋嫨鐨勫彲淇″害浼樺厛浜庤嚜鍔ㄨВ鏋愮殑
         final_credibility = req.credibility if req.credibility != "不确定" else knowledge_graph.get("credibility_hint", "不确定")
-        # 同步到 knowledge_graph 供后续待注入使用
+        # 鍚屾鍒?knowledge_graph 渚涘悗缁緟娉ㄥ叆浣跨敤
         knowledge_graph["credibility_hint"] = final_credibility
         event_msg = {
             "type": "breaking_news",
-            "content": req.content,  # 原始文本
-            "source": req.source,    # 来源
-            "knowledge_graph": knowledge_graph,  # 解析后的图谱
+            "content": req.content,  # 鍘熷鏂囨湰
+            "source": req.source,    # 鏉ユ簮
+            "knowledge_graph": knowledge_graph,  # 瑙ｆ瀽鍚庣殑鍥捐氨
             "summary": knowledge_graph.get("summary", ""),
             "keywords": knowledge_graph.get("keywords", []),
             "sentiment": knowledge_graph.get("sentiment", "中性"),
@@ -132,17 +132,17 @@ async def airdrop_event(req: AirdropRequest):
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         }
 
-        # 确定广播范围
+        # 纭畾骞挎挱鑼冨洿
         target_scope = "all"
         if req.source == "public":
             target_scope = "public_only"
         elif req.source == "private":
             target_scope = "private_only"
 
-        # ==================== 处理推演未开始的情况 ====================
+        # ==================== 澶勭悊鎺ㄦ紨鏈紑濮嬬殑鎯呭喌 ====================
         if state.engine is None:
-            logger.info("[管线阶段3] 推演引擎未初始化，存储待注入事件供后续使用")
-            # 存储待注入的事件
+            logger.info("[事件注入-广播] 推演引擎未初始化，暂存待注入事件供后续使用")
+            # 瀛樺偍寰呮敞鍏ョ殑浜嬩欢
             state.pending_knowledge_graph = knowledge_graph
             state.pending_event_content = req.content
             state.pending_event_source = req.source
@@ -153,54 +153,54 @@ async def airdrop_event(req: AirdropRequest):
                     "event": {"step": 0, "content": req.content, "scope": target_scope, "pending": True, "credibility": final_credibility},
                     "knowledge_graph": knowledge_graph,
                     "event_msg": event_msg,
-                    "message": "事件已解析并存储，将在推演开始时自动注入"
+                    "message": "浜嬩欢宸茶В鏋愬苟瀛樺偍锛屽皢鍦ㄦ帹婕斿紑濮嬫椂鑷姩娉ㄥ叆"
                 }
             }
 
-        # ==================== 第三阶段：广播（发送给推演引擎）====================
-        logger.info(f"[管线阶段3] 广播事件到推演引擎, 范围: {target_scope}")
+        # ==================== 绗笁闃舵锛氬箍鎾紙鍙戦€佺粰鎺ㄦ紨寮曟搸锛?===================
+        logger.info(f"[绠＄嚎闃舵3] 骞挎挱浜嬩欢鍒版帹婕斿紩鎿? 鑼冨洿: {target_scope}")
 
-        # 获取情感和可信度
+        # 鑾峰彇鎯呮劅鍜屽彲淇″害
         sentiment = knowledge_graph.get("sentiment", "中性")
-        # 使用前面计算的 final_credibility
+        # 浣跨敤鍓嶉潰璁＄畻鐨?final_credibility
         credibility = final_credibility
         entity_count = len(knowledge_graph.get('entities', []))
 
-        # 更新引擎的新闻和图谱
+        # 鏇存柊寮曟搸鐨勬柊闂诲拰鍥捐氨
         await _maybe_set_news(state.engine, req.content, req.source)
 
-        # 更新引擎的知识图谱（融合模式）
+        # 鏇存柊寮曟搸鐨勭煡璇嗗浘璋憋紙铻嶅悎妯″紡锛?
         entities = knowledge_graph.get('entities', [])
         relations = knowledge_graph.get('relations', [])
 
         if hasattr(state.engine, 'set_knowledge_graph'):
             if entities:
                 state.engine.set_knowledge_graph(entities, relations, merge=True)
-                logger.info(f"知识图谱已融合，知识驱动演化已启用")
+                logger.info("知识图谱已融合，知识驱动演化已启用")
             else:
-                # 空实体时仍更新图谱元数据（如 sentiment、credibility_hint）
+                # 绌哄疄浣撴椂浠嶆洿鏂板浘璋卞厓鏁版嵁锛堝 sentiment銆乧redibility_hint锛?
                 if state.engine.knowledge_graph:
                     state.engine.knowledge_graph.update(knowledge_graph)
                 else:
                     state.engine.knowledge_graph = knowledge_graph
-                logger.info(f"知识图谱元数据已更新（无实体）")
+                logger.info("知识图谱元数据已更新（无实体）")
         else:
-            # 降级：直接赋值
+            # 闄嶇骇锛氱洿鎺ヨ祴鍊?
             state.engine.knowledge_graph = knowledge_graph
 
-        # 广播事件（包含图谱信息，触发事件冲击）
+        # 骞挎挱浜嬩欢锛堝寘鍚浘璋变俊鎭紝瑙﹀彂浜嬩欢鍐插嚮锛?
         event = state.engine.broadcast_event(
             content=req.content,
             target_scope=target_scope,
             sentiment=sentiment,
             credibility=credibility
         )
-        # 返回融合后的知识图谱
+        # 杩斿洖铻嶅悎鍚庣殑鐭ヨ瘑鍥捐氨
         merged_graph = state.engine.knowledge_graph
         event["knowledge_graph"] = merged_graph
         event["event_msg"] = event_msg
 
-        logger.info(f"[管线完成] 事件注入成功，已广播给所有Agent，图谱包含 {len(merged_graph.get('entities', []))} 个实体")
+        logger.info(f"[事件注入-完成] 事件注入成功，已广播给所有 Agent，图谱包含 {len(merged_graph.get('entities', []))} 个实体")
 
         return {
             "success": True,
@@ -212,25 +212,25 @@ async def airdrop_event(req: AirdropRequest):
         }
 
     except Exception as e:
-        logger.error(f"[管线] 事件注入失败: {e}")
+        logger.error(f"[绠＄嚎] 浜嬩欢娉ㄥ叆澶辫触: {e}")
         return JSONResponse(
-            content={"success": False, "error": f"事件注入失败: {str(e)}"},
+            content={"success": False, "error": f"浜嬩欢娉ㄥ叆澶辫触: {str(e)}"},
             status_code=500
         )
     finally:
-        # 无论成功失败，都解除推演暂停
+        # 鏃犺鎴愬姛澶辫触锛岄兘瑙ｉ櫎鎺ㄦ紨鏆傚仠
         state.injection_in_progress = False
-        logger.info(f"[管线] 事件注入结束，推演可恢复")
+        logger.info(f"[绠＄嚎] 浜嬩欢娉ㄥ叆缁撴潫锛屾帹婕斿彲鎭㈠")
 
 
 @router.get("/knowledge-graph")
 async def get_current_knowledge_graph():
     """
-    获取当前推演的知识图谱
+    鑾峰彇褰撳墠鎺ㄦ紨鐨勭煡璇嗗浘璋?
     """
     if state.engine is None:
         return JSONResponse(
-            content={"success": False, "error": "推演引擎未初始化"},
+            content={"success": False, "error": "鎺ㄦ紨寮曟搸鏈垵濮嬪寲"},
             status_code=400
         )
 
@@ -242,43 +242,68 @@ async def get_current_knowledge_graph():
 
 @router.get("/hot-news")
 async def get_hot_news():
-    """用 Tavily 抓取当天热点新闻，返回最多 10 条供用户选择注入。"""
+    """使用 Tavily 抓取当天热点新闻，返回 10 条供前端一键注入。"""
     import os
     from tavily import TavilyClient
+
+    def _clean_text(value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            return ""
+        text = text.replace("\r", " ").replace("\n", " ")
+        text = " ".join(text.split())
+        suspicious = ("â", "ä¸", "ï")
+        if any(token in text for token in suspicious):
+            try:
+                repaired = text.encode("latin1", errors="ignore").decode("utf-8", errors="ignore").strip()
+                if repaired:
+                    text = repaired
+            except Exception:
+                pass
+        return text
 
     api_key = os.getenv("TAVILY_API_KEY", "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")
     client = TavilyClient(api_key=api_key)
 
-    categories = ["中国政治经济政策", "中国社会文化热点", "国际政治经济"]
+    categories = [
+        {"label": "政治", "query": "中国政治 政策 最新新闻"},
+        {"label": "经济", "query": "中国经济 产业 金融 最新新闻"},
+        {"label": "文化", "query": "中国文化 社会 教育 最新新闻"},
+        {"label": "国际", "query": "国际政治 经济 最新新闻"},
+    ]
     all_results = []
 
-    for cat in categories:
+    for category in categories:
         try:
             resp = client.search(
-                query=f"今天{cat}最新新闻",
+                query=category["query"],
                 topic="news",
-                days=1,
+                time_range="day",
                 max_results=5,
                 search_depth="basic",
             )
             for r in resp.get("results", []):
+                title = _clean_text(r.get("title", ""))
+                content = _clean_text(r.get("content", ""))[:500]
+                if not title or not content:
+                    continue
                 all_results.append({
-                    "title": r.get("title", ""),
-                    "content": r.get("content", "")[:500],
+                    "title": title,
+                    "content": content,
                     "url": r.get("url", ""),
-                    "source": r.get("source", ""),
-                    "category": cat,
+                    "source": _clean_text(r.get("source", "")),
+                    "category": category["label"],
                 })
         except Exception as e:
-            logger.warning(f"Tavily search failed for '{cat}': {e}")
+            logger.warning(f"Tavily search failed for '{category['label']}': {e}")
 
-    # 去重（按 title）并取前 10 条
     seen = set()
     unique = []
     for item in all_results:
-        t = item["title"]
-        if t and t not in seen:
-            seen.add(t)
+        title = item["title"]
+        if title and title not in seen:
+            seen.add(title)
             unique.append(item)
 
     return {"items": unique[:10]}
+
