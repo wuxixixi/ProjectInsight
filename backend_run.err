@@ -149,3 +149,76 @@ INFO:     connection open
 2026-05-25 16:39:30,056 - backend.app - INFO - 自动推演任务已取消
 2026-05-25 16:39:37,771 - backend.app - INFO - WebSocket 断开
 INFO:     connection closed
+INFO:     127.0.0.1:5757 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 17:00:43,482 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-25 17:10:46,327 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+INFO:     127.0.0.1:9279 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 17:26:02,921 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-25 17:32:02,129 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+WARNING:  WatchFiles detected changes in 'backend\app.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [29372]
+WARNING:  WatchFiles detected changes in 'backend\routers\event.py'. Reloading...
+INFO:     Started server process [29180]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\miniconda3\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "D:\miniconda3\Lib\asyncio\runners.py", line 123, in run
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\miniconda3\Lib\site-packages\starlette\routing.py", line 701, in lifespan
+    await receive()
+  File "D:\miniconda3\Lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\asyncio\queues.py", line 186, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+INFO:     Started server process [8504]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:11069 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 19:24:39,822 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+INFO:     127.0.0.1:11239 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 19:25:37,868 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-25 19:25:38,157 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+2026-05-25 19:25:51,865 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+INFO:     127.0.0.1:11517 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 19:28:08,323 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+INFO:     127.0.0.1:11548 - "WebSocket /ws/simulation" [accepted]
+2026-05-25 19:28:22,472 - backend.app - INFO - WebSocket 连接已建立
+INFO:     connection open
+2026-05-25 19:29:28,164 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed
+2026-05-25 19:30:46,042 - backend.app - INFO - WebSocket 断开
+INFO:     connection closed

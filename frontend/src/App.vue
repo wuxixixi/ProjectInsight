@@ -1375,11 +1375,12 @@ import DOMPurify from 'dompurify'
 
 const IS_DEV_SERVER = ['3000', '5173'].includes(window.location.port)
 const API_BASE = IS_DEV_SERVER
-  ? `http://${window.location.hostname}:8000`
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
   : window.location.origin
+const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const WS_BASE = IS_DEV_SERVER
-  ? `ws://${window.location.hostname}:8000`
-  : `ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}`
+  ? `${WS_PROTOCOL}//${window.location.hostname}:8000`
+  : `${WS_PROTOCOL}//${window.location.host}`
 
 import UsageDrawer from './components/UsageDrawer.vue'
 import MathModelDrawer from './components/MathModelDrawer.vue'
@@ -2733,10 +2734,17 @@ export default {
       this.hotNewsItems = []
       try {
         const resp = await fetch(API_BASE + '/api/event/hot-news')
+        if (!resp.ok) {
+          throw new Error(`接口返回 ${resp.status}`)
+        }
         const data = await resp.json()
         this.hotNewsItems = data.items || []
+        if (!this.hotNewsItems.length) {
+          alert('未获取到今日热点新闻。当前新闻源可能暂无结果，请稍后重试。')
+        }
       } catch (e) {
         console.error('获取热点新闻失败:', e)
+        alert(`获取今日热点失败：${e.message}`)
       } finally {
         this.hotNewsLoading = false
       }
@@ -3340,17 +3348,22 @@ export default {
       this.chartModalOpen = true
 
       this.$nextTick(() => {
-        try {
-          if (this.chartModalInstance) {
-            this.chartModalInstance.dispose()
-            this.chartModalInstance = null
+        window.requestAnimationFrame(() => {
+          try {
+            if (this.chartModalInstance) {
+              this.chartModalInstance.dispose()
+              this.chartModalInstance = null
+            }
+            const modalBody = this.$refs.chartModal?.getModalBody?.()
+            if (!modalBody) return
+            if (modalBody.clientWidth === 0 || modalBody.clientHeight === 0) return
+            this.chartModalInstance = echarts.init(modalBody)
+            this.renderModalChart()
+            this.chartModalInstance.resize()
+          } catch (error) {
+            console.error('打开图表放大弹窗失败:', error)
           }
-          if (!this.$refs.chartModal || !this.$refs.chartModal.modalBody) return
-          this.chartModalInstance = echarts.init(this.$refs.chartModal.modalBody)
-          this.renderModalChart()
-        } catch (error) {
-          console.error('打开图表放大弹窗失败:', error)
-        }
+        })
       })
     },
 

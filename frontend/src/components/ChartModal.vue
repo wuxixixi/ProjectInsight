@@ -5,7 +5,9 @@
         <h3>{{ title }}</h3>
         <button class="modal-close-btn" @click="$emit('update:modelValue', false)">✕</button>
       </div>
-      <div ref="modalBody" class="chart-modal-body"></div>
+      <div class="chart-modal-body">
+        <div ref="modalBody" class="chart-modal-canvas"></div>
+      </div>
     </div>
   </div>
 </template>
@@ -24,9 +26,13 @@ export default {
     }
   },
   emits: ['update:modelValue'],
-  expose: ['modalBody'],
   computed: {
     modalBody() {
+      return this.$refs.modalBody
+    }
+  },
+  methods: {
+    getModalBody() {
       return this.$refs.modalBody
     }
   }
@@ -93,5 +99,12 @@ export default {
 .chart-modal-body {
   flex: 1;
   padding: 20px;
+  min-height: 0;
+}
+
+.chart-modal-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
 }
 </style>

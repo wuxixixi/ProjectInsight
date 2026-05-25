@@ -233,6 +233,33 @@ frontend/dist
 uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ```
 
+### Windows Server 服务守护
+
+Windows Server 生产环境建议使用真正的 Windows Service，不要再用计划任务长期守护。
+
+仓库内提供 `NSSM` 安装脚本：
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\install_windows_service.ps1 -ProjectRoot C:\ProjectInsight
+```
+
+该脚本会：
+
+- 清理旧的 `ProjectInsight` 计划任务及残留 `ProjectInsight-Backend` / `ProjectInsight-Now`
+- 清理残留 `uvicorn` 进程
+- 用 `nssm` 注册 `ProjectInsight` Windows Service
+- 配置自动启动、异常退出自动重启、标准输出和错误日志
+
+常用运维命令：
+
+```powershell
+Get-Service ProjectInsight
+Restart-Service ProjectInsight
+Stop-Service ProjectInsight
+Start-Service ProjectInsight
+```
+
 Gunicorn 示例：
 
 ```bash

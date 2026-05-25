@@ -190,7 +190,10 @@ async def websocket_simulation(websocket: WebSocket):
         {"type": "error", "message": "..."}
     """
     await websocket.accept()
-    client_key = websocket.client.host if websocket.client else "unknown"
+    if websocket.client:
+        client_key = f"{websocket.client.host}:{websocket.client.port}"
+    else:
+        client_key = "unknown"
     previous_ws = active_websockets.get(client_key)
     if previous_ws is not None and previous_ws is not websocket:
         try:

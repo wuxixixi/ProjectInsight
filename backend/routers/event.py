@@ -244,7 +244,11 @@ async def get_current_knowledge_graph():
 async def get_hot_news():
     """使用 Tavily 抓取当天热点新闻，返回 10 条供前端一键注入。"""
     import os
-    from tavily import TavilyClient
+    from pathlib import Path
+    from dotenv import load_dotenv
+    from ..services.public_search import TavilySearchClient
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
     def _clean_text(value: str) -> str:
         text = (value or "").strip()
@@ -262,36 +266,42 @@ async def get_hot_news():
                 pass
         return text
 
-    api_key = os.getenv("TAVILY_API_KEY", "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")
-    client = TavilyClient(api_key=api_key)
+    api_key = os.getenv("TAVILY_API_KEY", "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").strip()
+    client = TavilySearchClient(api_key=api_key, timeout=30)
 
     categories = [
-        {"label": "政治", "query": "中国政治 政策 最新新闻"},
-        {"label": "经济", "query": "中国经济 产业 金融 最新新闻"},
-        {"label": "文化", "query": "中国文化 社会 教育 最新新闻"},
-        {"label": "国际", "query": "国际政治 经济 最新新闻"},
+        {
+            "label": "政治",
+            "queries": ["中国政治 政策 最新新闻", "China politics latest news"],
+        },
+        {
+            "label": "经济",
+            "queries": ["中国经济 产业 金融 最新新闻", "China economy finance latest news"],
+        },
+        {
+            "label": "文化",
+            "queries": ["中国文化 社会 教育 最新新闻", "China society education latest news"],
+        },
+        {
+            "label": "国际",
+            "queries": ["国际政治 经济 最新新闻", "world politics economy latest news"],
+        },
     ]
     all_results = []
 
     for category in categories:
         try:
-            resp = client.search(
-                query=category["query"],
-                topic="news",
-                time_range="day",
-                max_results=5,
-                search_depth="basic",
-            )
-            for r in resp.get("results", []):
-                title = _clean_text(r.get("title", ""))
-                content = _clean_text(r.get("content", ""))[:500]
+            results = await client.search_with_fallbacks(category["queries"], max_results=5)
+            for r in results:
+                title = _clean_text(r.title)
+                content = _clean_text(r.content)[:500]
                 if not title or not content:
                     continue
                 all_results.append({
                     "title": title,
                     "content": content,
-                    "url": r.get("url", ""),
-                    "source": _clean_text(r.get("source", "")),
+                    "url": r.url,
+                    "source": _clean_text(getattr(r, "source", "") or "Tavily"),
                     "category": category["label"],
                 })
         except Exception as e:
