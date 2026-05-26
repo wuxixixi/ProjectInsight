@@ -229,10 +229,11 @@ class GroupChat:
         
         if not group_opinions:
             return {"validation": 0.5, "agreement_ratio": 0.0}
-        
-        # 计算认同比例
+
+        # 计算认同比例（防御性除法，避免 ZeroDivisionError）
+        opinion_count = len(group_opinions)
         agreeing = sum(1 for op in group_opinions if (op > 0) == (agent_opinion > 0))
-        agreement_ratio = agreeing / len(group_opinions)
+        agreement_ratio = agreeing / opinion_count if opinion_count > 0 else 0.0
         
         # 社会验证强度
         validation = (agreement_ratio * self.validation_weight_agreement +
