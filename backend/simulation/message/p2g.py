@@ -8,6 +8,7 @@ P2G Broadcaster - Agent 广播通信
 """
 from typing import Dict, List, Optional
 import random
+import math
 import logging
 
 from .models import Message, MessageType, MessageStatus
@@ -133,7 +134,6 @@ class P2GBroadcaster:
         # 影响力随距离衰减 (issue #361)
         # 使用指数衰减: decay_factor = exp(-decay_rate * (distance - 1))
         if distance > 1:
-            import math
             decay_factor = math.exp(-self._decay_rate * (distance - 1))
             effective_prob = base_prob * decay_factor
         else:
