@@ -138,8 +138,8 @@ class AgentMemory:
         try:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_step ON belief_history(agent_id, step)")
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_exposure ON exposure_log(agent_id, step)")
-        except Exception:
-            pass
+        except sqlite3.Error as e:
+            logger.warning(f"Index creation failed: {e}. Queries may be slower.")
         
         self.conn.commit()
     
@@ -381,12 +381,13 @@ class AgentMemory:
         """清空所有记忆"""
         self.short_term.clear()
         self.cognition_buffer.clear()
-        
-        # 清空数据库记录
-        self.conn.execute("DELETE FROM belief_history WHERE agent_id = ?", (self.agent_id,))
-        self.conn.execute("DELETE FROM exposure_log WHERE agent_id = ?", (self.agent_id,))
-        self.conn.execute("DELETE FROM cognition_log WHERE agent_id = ?", (self.agent_id,))
-        self.conn.commit()
+
+        # 清空数据库记录（需要锁保护，issue #2229）
+        with self._db_lock:
+            self.conn.execute("DELETE FROM belief_history WHERE agent_id = ?", (self.agent_id,))
+            self.conn.execute("DELETE FROM exposure_log WHERE agent_id = ?", (self.agent_id,))
+            self.conn.execute("DELETE FROM cognition_log WHERE agent_id = ?", (self.agent_id,))
+            self.conn.commit()
     
     def close(self):
         """关闭数据库连接"""
