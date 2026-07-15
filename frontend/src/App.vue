@@ -1254,6 +1254,20 @@
               placeholder="请输入要注入的事件内容，或从上方热点新闻中选择"
               rows="5"
             ></textarea>
+            <button 
+              @click="enhancePrompt" 
+              :disabled="enhancing || !airdropContent.trim()"
+              class="btn-enhance-prompt"
+              style="margin-top: 8px; width: 100%;"
+            >
+              {{ enhancing ? '✨ AI 正在增强...' : '✨ 用 AI 增强提示' }}
+            </button>
+            <div v-if="enhanceError" class="enhance-error" style="margin-top: 8px; color: #f44336; font-size: 13px;">
+              {{ enhanceError }}
+            </div>
+            <div v-if="enhanceSuccess" class="enhance-success" style="margin-top: 8px; color: #4caf50; font-size: 13px;">
+              ✨ 内容已增强完成！
+            </div>
           </div>
           
           <!-- 传播领域选择 -->
@@ -1372,6 +1386,7 @@
 import * as echarts from 'echarts'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import apiClient from './utils/api-client'
 
 const IS_DEV_SERVER = ['3000', '5173'].includes(window.location.port)
 const API_BASE = IS_DEV_SERVER
@@ -1398,12 +1413,12 @@ export default {
 
   data() {
     return {
-      // 连接状态
+      // 连接状态（使用 apiClient 统一管理）
+      apiClient: null,
       isConnected: false,
       ws: null,
       wsReconnectCount: 0,
       wsMaxReconnectAttempts: 5,
-      wsReconnectTimer: null,
       wsOwnerToken: null,
 
       // UI状态
@@ -1589,6 +1604,11 @@ export default {
       airdropWarning: '',       // 降级警告（LLM 不可用时）
       airdropSuccess: false,    // 是否成功
       parsedGraphDisplay: null, // 解析后的图谱数据（用于展示）
+      
+      // AI 增强提示
+      enhancing: false,
+      enhanceError: '',
+      enhanceSuccess: false
 
       // 热点新闻
       hotNewsItems: [],
@@ -1984,6 +2004,13 @@ export default {
   },
 
   mounted() {
+    // 初始化 API 客户端
+    this.apiClient = apiClient
+    this.apiClient.onStatusChange((isConnected) => {
+      this.isConnected = isConnected
+    })
+    this.apiClient.startHealthCheck()
+    
     this.initCharts()
     this.connectWebSocket()
     this.fetchProfiles()
@@ -1994,6 +2021,7 @@ export default {
 
   beforeUnmount() {
     this.disconnectWebSocket()
+    this.apiClient?.stopHealthCheck()
     window.removeEventListener('resize', this.handleResize)
     this.opinionChartInstance?.dispose()
     this.networkChartInstance?.dispose()
@@ -2024,11 +2052,7 @@ export default {
       this.settingsError = ''
       this.settingsMessage = ''
       try {
-        const response = await fetch(API_BASE + '/api/settings/llm', { cache: 'no-store' })
-        const payload = await response.json()
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.error || `接口返回 ${response.status}`)
-        }
+        const payload = await this.apiClient.get('/api/settings/llm', { cache: 'no-store' })
         this.applySystemSettings(payload.data)
       } catch (error) {
         console.error('加载系统设置失败:', error)
@@ -2041,18 +2065,10 @@ export default {
       this.settingsError = ''
       this.settingsMessage = ''
       try {
-        const response = await fetch(API_BASE + '/api/settings/llm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            simulation_llm: this.simulationLlm,
-            report_llm: this.reportLlm
-          })
+        const payload = await this.apiClient.post('/api/settings/llm', {
+          simulation_llm: this.simulationLlm,
+          report_llm: this.reportLlm
         })
-        const payload = await response.json()
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.error || `接口返回 ${response.status}`)
-        }
         this.applySystemSettings(payload.data)
         this.settingsMessage = '系统设置已保存，后续推演、事件解析和专报生成将使用新配置。'
       } catch (error) {
@@ -2390,11 +2406,7 @@ export default {
     async fetchProfiles() {
       this.profileLoading = true
       try {
-        const response = await fetch(API_BASE + '/api/profiles')
-        const data = await response.json()
-        if (!response.ok || data.success === false) {
-          throw new Error(data.error || '画像列表获取失败')
-        }
+        const data = await this.apiClient.get('/api/profiles')
         this.profileOptions = data.profiles || []
         if (!this.selectedUserProfileId && this.userProfiles.length) {
           this.selectedUserProfileId = this.userProfiles[0].profile_id
@@ -2422,14 +2434,7 @@ export default {
           formData.append('display_name', this.customProfileName)
         }
         Array.from(files).forEach(file => formData.append('files', file))
-        const response = await fetch(API_BASE + '/api/profiles/upload', {
-          method: 'POST',
-          body: formData
-        })
-        const data = await response.json()
-        if (!response.ok || data.success === false) {
-          throw new Error(data.error || '资料上传失败')
-        }
+        const data = await this.apiClient.post('/api/profiles/upload', formData)
         this.profileMessage = `已上传 ${data.saved?.length || 0} 个文件`
         await this.fetchProfiles()
       } catch (error) {
@@ -2444,18 +2449,10 @@ export default {
       this.profileMessage = ''
       this.profileLoading = true
       try {
-        const response = await fetch(API_BASE + '/api/profiles/build', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            profile_id: this.customProfileId,
-            display_name: this.customProfileName || this.customProfileId
-          })
+        const data = await this.apiClient.post('/api/profiles/build', {
+          profile_id: this.customProfileId,
+          display_name: this.customProfileName || this.customProfileId
         })
-        const data = await response.json()
-        if (!response.ok || data.success === false) {
-          throw new Error(data.error || '画像构建失败')
-        }
         const profile = data.profile
         this.profileMessage = `画像已构建：${profile.display_name}，${profile.size} 人`
         this.selectedUserProfileId = profile.profile_id
@@ -2637,8 +2634,7 @@ export default {
 
       this.mathModelLoading = true
       try {
-        const response = await fetch(API_BASE + '/api/math-model/explanation')
-        const data = await response.json()
+        const data = await this.apiClient.get('/api/math-model/explanation')
         this.mathModelExplanation = data
       } catch (error) {
         console.error('获取数学模型说明失败:', error)
@@ -2654,8 +2650,7 @@ export default {
     async fetchUsageContent() {
       this.usageLoading = true
       try {
-        const response = await fetch(API_BASE + '/api/docs/usage')
-        const data = await response.json()
+        const data = await this.apiClient.get('/api/docs/usage')
         if (data.success && data.content) {
           this.usageContent = DOMPurify.sanitize(marked(data.content))
         }
@@ -2677,12 +2672,7 @@ export default {
       this.parsedKnowledgeGraph = null
       
       try {
-        const response = await fetch(API_BASE + '/api/event/parse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: this.newsContent })
-        })
-        const data = await response.json()
+        const data = await this.apiClient.post('/api/event/parse', { content: this.newsContent })
         
         if (data.success) {
           this.parsedKnowledgeGraph = data.data
@@ -2716,8 +2706,7 @@ export default {
 
     async checkLlmStatus() {
       try {
-        const resp = await fetch(API_BASE + '/api/health/llm')
-        const data = await resp.json()
+        const data = await this.apiClient.get('/api/health/llm')
         this.llmStatus = data.status || 'unknown'
         this.llmStatusMessage = data.message || ''
         this.llmStatusModel = data.model || ''
@@ -2733,11 +2722,7 @@ export default {
       this.hotNewsLoading = true
       this.hotNewsItems = []
       try {
-        const resp = await fetch(API_BASE + '/api/event/hot-news')
-        if (!resp.ok) {
-          throw new Error(`接口返回 ${resp.status}`)
-        }
-        const data = await resp.json()
+        const data = await this.apiClient.get('/api/event/hot-news')
         this.hotNewsItems = data.items || []
         if (!this.hotNewsItems.length) {
           alert('未获取到今日热点新闻。当前新闻源可能暂无结果，请稍后重试。')
@@ -2761,6 +2746,40 @@ export default {
           setTimeout(() => { this.airdropHighlight = false }, 1500)
         }
       })
+    },
+
+    async enhancePrompt() {
+      if (!this.airdropContent.trim()) return
+      
+      this.enhancing = true
+      this.enhanceError = ''
+      this.enhanceSuccess = false
+      
+      try {
+        const data = await this.apiClient.post('/api/event/enhance-prompt', {
+          prompt: this.airdropContent
+        })
+        
+        if (data.success && data.data?.enhanced_prompt) {
+          this.airdropContent = data.data.enhanced_prompt
+          this.enhanceSuccess = true
+          this.$nextTick(() => {
+            const el = this.$refs.airdropInput
+            if (el) {
+              el.focus()
+              el.setSelectionRange(el.value.length, el.value.length)
+            }
+          })
+          setTimeout(() => { this.enhanceSuccess = false }, 3000)
+        } else {
+          throw new Error(data.error || '增强失败')
+        }
+      } catch (e) {
+        console.error('AI 增强提示失败:', e)
+        this.enhanceError = `增强失败：${e.message}`
+      } finally {
+        this.enhancing = false
+      }
     },
 
     async injectEvent() {
@@ -2929,8 +2948,7 @@ export default {
     // 刷新推演状态（事件注入后调用）
     async refreshSimulationState() {
       try {
-        const response = await fetch(API_BASE + '/api/simulation/state')
-        const data = await response.json()
+        const data = await this.apiClient.get('/api/simulation/state')
         if (data.step !== undefined && data.agents && data.opinion_distribution) {
           this.updateState(data)
           console.log('[refreshSimulationState] 状态已刷新，当前步骤:', data.step)
@@ -2959,8 +2977,7 @@ export default {
         params.append('sort', this.reportSortBy)
         params.append('order', this.reportSortOrder)
 
-        const response = await fetch(API_BASE + '/api/report/list?' + params.toString())
-        const data = await response.json()
+        const data = await this.apiClient.get(`/api/report/list?${params.toString()}`)
         this.reportList = data.reports || []
         this.simulationReports = data.simulation_reports || []
         this.intelligenceReports = data.intelligence_reports || []
@@ -3272,8 +3289,7 @@ export default {
 
     async fetchPrediction() {
       try {
-        const response = await fetch(API_BASE + '/api/prediction')
-        const data = await response.json()
+        const data = await this.apiClient.get('/api/prediction')
         if (data.success) {
           this.prediction = data.data
         }
@@ -3284,8 +3300,7 @@ export default {
 
     async fetchRiskAlerts() {
       try {
-        const response = await fetch(API_BASE + '/api/risk-alerts')
-        const data = await response.json()
+        const data = await this.apiClient.get('/api/risk-alerts')
         if (data.success) {
           this.riskAlerts = data.data
         }

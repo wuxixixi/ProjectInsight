@@ -7,10 +7,17 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from .. import state
 from ..helpers import AirdropRequest, ParseRequest
 from ..llm.client import create_llm_config_from_env
+
+
+# ==================== AI 增强提示模型 ====================
+class PromptEnhanceRequest(BaseModel):
+    """AI 增强提示请求"""
+    prompt: str  # 用户输入的原始提示词
 
 logger = logging.getLogger(__name__)
 
@@ -316,4 +323,93 @@ async def get_hot_news():
             unique.append(item)
 
     return {"items": unique[:10]}
+
+
+@router.post("/enhance-prompt")
+async def enhance_prompt_api(request: PromptEnhanceRequest):
+    """
+    AI 增强提示词
+    
+    使用大模型将用户简短的提示词扩写成详细、结构化的事件描述
+    
+    Request Body:
+        prompt: 用户输入的原始提示词
+    
+    Response:
+        enhanced_prompt: 增强后的详细提示词
+        original_prompt: 原始提示词
+    """
+    if not request.prompt or not request.prompt.strip():
+        return JSONResponse(
+            content={"success": False, "error": "提示词不能为空"},
+            status_code=400
+        )
+    
+    try:
+        logger.info(f"[AI 增强提示] 原始提示：{request.prompt[:100]}")
+        
+        # 构建增强提示的系统提示词
+        system_prompt = """你是一位专业的信息场模拟事件策划助手。用户会输入一个简短的事件关键词或短语，
+        你需要将其扩写成一段详细、具体、适合注入到信息场推演系统中的事件描述。
+        
+        扩写要求：
+        1. 保持事件的核心主题不变
+        2. 添加具体的时间、地点、涉及人物/组织
+        3. 描述事件的发展过程和关键细节
+        4. 包含可能产生的社会影响和争议点
+        5. 语气客观中立，适合模拟推演
+        6. 长度控制在 200-400 字之间
+        
+        示例：
+        用户输入："AI 失业"
+        你的输出："2026 年 3 月，某大型互联网公司宣布将裁减 30% 的客服人员，全面替换为 AI 聊天机器人。
+        该决定引发社会广泛关注，支持者认为这是技术进步必然，反对者担忧大规模失业将冲击社会稳定。
+        工会组织呼吁政府介入，要求制定 AI 替代人类的补偿机制。社交媒体上#AI 失业#话题热度飙升，
+        形成支持与反对两大阵营的激烈辩论。"
+        
+        现在，请扩写以下用户输入："""
+        
+        # 调用 LLM 生成增强提示词
+        from ..llm.client import LLMClient
+        
+        # 构建 OpenAI 格式的消息列表
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": request.prompt}
+        ]
+        
+        # 使用 LLMClient 直接生成文本
+        async with LLMClient() as client:
+            response = await client.chat(messages=messages)
+        
+        # 从响应中提取内容（OpenAI 格式）
+        enhanced_prompt = response["choices"][0]["message"]["content"].strip()
+        
+        # 如果生成内容过短，尝试重新生成
+        if len(enhanced_prompt) < 50:
+            system_prompt += "\n\n请确保输出足够详细，至少 200 字以上。"
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.prompt}
+            ]
+            async with LLMClient() as client:
+                response = await client.chat(messages=messages)
+            enhanced_prompt = response["choices"][0]["message"]["content"].strip()
+        
+        logger.info(f"[AI 增强提示 v2] 增强成功，长度：{len(enhanced_prompt)} 字符")
+        
+        return {
+            "success": True,
+            "data": {
+                "enhanced_prompt": enhanced_prompt,
+                "original_prompt": request.prompt
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"[AI 增强提示] 生成失败：{e}")
+        return JSONResponse(
+            content={"success": False, "error": f"AI 增强失败：{str(e)}"},
+            status_code=500
+        )
 
