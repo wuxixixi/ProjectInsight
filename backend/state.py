@@ -103,7 +103,15 @@ class GlobalState:
     def reset(self):
         """重置所有状态"""
         with self._lock:
-            self._engine = None
+            # 清理引擎资源（如果存在 cleanup 方法）
+            if self._engine is not None:
+                cleanup_method = getattr(self._engine, 'cleanup', None)
+                if cleanup_method is not None:
+                    try:
+                        cleanup_method()
+                    except Exception:
+                        pass  # 忽略清理错误，确保状态重置继续
+                self._engine = None
             self._pending_knowledge_graph = None
             self._pending_event_content = None
             self._pending_event_source = None
