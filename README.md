@@ -328,3 +328,7 @@ npm run preview
 ## License
 
 MIT License
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
