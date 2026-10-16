@@ -231,10 +231,11 @@ class AgentMemory:
             params.append(end_step)
         
         query += " ORDER BY step ASC"
-        
-        rows = self.conn.execute(query, params).fetchall()
+
+        with self._db_lock:
+            rows = self.conn.execute(query, params).fetchall()
         self._read_count += 1
-        
+
         return [dict(row) for row in rows]
     
     def get_exposure_history(
@@ -256,7 +257,8 @@ class AgentMemory:
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
 
-        rows = self.conn.execute(query, params).fetchall()
+        with self._db_lock:
+            rows = self.conn.execute(query, params).fetchall()
         self._read_count += 1
 
         return [dict(row) for row in rows]
