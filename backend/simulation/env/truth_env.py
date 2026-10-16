@@ -15,6 +15,11 @@ class Intervention:
 
     _next_id: int = 0
 
+    @classmethod
+    def reset_id_counter(cls) -> None:
+        """Reset the ID counter for new simulation runs."""
+        cls._next_id = 0
+
     def __init__(
         self,
         step: int,
@@ -178,6 +183,7 @@ class TruthEnv(EnvBase):
                 )
 
     async def reset(self):
+        Intervention.reset_id_counter()
         self._interventions.clear()
         self._published.clear()
         self._exposure_tracking.clear()
