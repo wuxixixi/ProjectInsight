@@ -1,14 +1,14 @@
 """
-全局常量定义
+Global Constants Definition
 
-此模块不依赖 backend 内部任何模块，可被任意模块安全导入。
+This module has no dependencies on other backend modules and can be safely imported anywhere.
 """
 
-# 观点分类阈值（统一使用，确保跨模块一致）
-OPINION_THRESHOLD_NEGATIVE = -0.1  # 低于此值为误信负面信息
-OPINION_THRESHOLD_POSITIVE = 0.1   # 高于此值为正确认知
+# Opinion classification thresholds (unified, ensures cross-module consistency)
+OPINION_THRESHOLD_NEGATIVE = -0.1  # Below this value indicates misled belief
+OPINION_THRESHOLD_POSITIVE = 0.1   # Above this value indicates correct belief
 
-# 极化指数阈值（用于识别极端观点，比普通分类阈值更严格）
-# issue #962: 统一管理，与 OPINION_THRESHOLD 区分语义
-POLARIZATION_THRESHOLD_NEGATIVE = -0.3  # 极端负面立场（信念激进）
-POLARIZATION_THRESHOLD_POSITIVE = 0.3   # 极端正面立场（信念激进）
+# Polarization thresholds (for identifying extreme views, stricter than normal classification)
+# issue #962: Centralized management, distinct from OPINION_THRESHOLD semantics
+POLARIZATION_THRESHOLD_NEGATIVE = -0.3  # Extreme negative stance (radical belief)
+POLARIZATION_THRESHOLD_POSITIVE = 0.3   # Extreme positive stance (radical belief)
