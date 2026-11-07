@@ -373,6 +373,39 @@ data: {"done":true,"filename":"intelligence_report_1234567890.md","path":"H:/Pro
 
 获取今日热点新闻列表，供事件注入弹窗快速选择。
 
+**来源策略：主流媒体白名单**。仅收录 `backend/services/news_sources.py` 中白名单媒体的当日报道，避免采集站、山寨新闻站、百科词条、门户自媒体号等非正规来源进入推演。
+
+| 等级 | 说明 | 示例 |
+| --- | --- | --- |
+| T1 | 中央主要新闻单位 / 官方发布 | 新华网、人民网、央视网、中国新闻网、中国政府网 |
+| T2 | 全国性权威媒体 / 财经媒体 | 澎湃新闻、财新、第一财经、界面、证券时报 |
+| T3 | 国际主流通讯社 / 权威媒体 | Reuters、AP、BBC、FT、Bloomberg |
+
+实现要点：
+
+- 检索阶段用 Tavily `include_domains` 限定域名，`topic=news` + `time_range=day` 保证是当日新闻报道；
+- 结果阶段二次校验白名单，并剔除站点首页 / 频道栏目页 / 专题聚合页；
+- `body` 由 Tavily 整页 Markdown 清洗而来：先剔除 logo、分享按钮、导航菜单、页脚版权等行，再截断到 3000 字（保证正文不被前部导航挤掉）；若清洗后没有可用正文，则回退到 Tavily 摘要，避免把 `![...](...)` 之类的页面装饰注入推演；
+- 白名单内无结果时返回空 `items` + `warning`，**不降级到不限定来源的搜索结果**；
+- 响应字段：`source` 为规范媒体名，`source_tier` 为等级 1/2/3，`published_at` 为 `YYYY-MM-DD`；
+- `TAVILY_API_KEY` 未配置时返回空 `items` + `warning`（不抛 5xx）；
+- 应急开关 `HOT_NEWS_STRICT_SOURCES=0` 可临时关闭限定，不建议在生产使用。
+
+### `POST /api/event/enhance-prompt`
+
+把用户输入的简短事件提示扩写成 200–400 字的推演事件描述（`max_tokens=800`）。
+
+**LLM 配置**（院算力 OpenAI 兼容网关）：
+
+| 变量 | 说明 |
+| --- | --- |
+| `LLM_BASE_URL` | 必须以 `/v1` 结尾，例如 `http://172.19.1.20:31277/v1`；客户端会自动拼接 `/chat/completions`，不要写完整路径，否则会产生 `.../v1/chat/completions/chat/completions` 而返回 404 |
+| `LLM_MODEL` | 当前可用：`Qwen3.5-122B-A10B-w8a8-mtp`（2026-11-06 实测）。`deepseek-v4-flash`、`DeepSeek-V3.2`、`DeepSeek-R1-0528-64k` 已从网关下线，请求会返回 404 |
+| `LLM_FALLBACK_MODELS` | 逗号分隔的备选模型；主模型返回 404 时客户端自动切换并更新本次会话的模型 |
+| `data/system_settings.json` | 运行时设置，`bootstrap_runtime_settings()` 会在启动时覆盖 `.env` 中的同名变量；修改模型时两处都要同步 |
+
+网关按 `model` 路由：模型下线时表现为 404（Spring 网关 `Not Found`），模型后端暂时不可用时表现为 503。错误信息现会带上模型名与请求 URL，便于快速定位。
+
 ## WebSocket
 
 ### 地址

@@ -3,8 +3,11 @@
 """
 import inspect
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -12,6 +15,23 @@ from pydantic import BaseModel
 from .. import state
 from ..helpers import AirdropRequest, ParseRequest
 from ..llm.client import create_llm_config_from_env
+from ..models.schemas import HotNewsResponse, NewsItem
+from ..services.news_sources import (
+    MAINSTREAM_DOMAINS,
+    filter_mainstream,
+)
+from ..services.public_search import (
+    TavilySearchClient,
+    _aggregate_hot_news,
+)
+
+# Load .env once at import time so test code can monkey-patch ``load_dotenv``
+# for the empty-API-key path. ``override=False`` ensures OS env vars win over
+# the .env file.
+load_dotenv(
+    Path(__file__).resolve().parents[2] / ".env",
+    override=False,
+)
 
 
 # ==================== AI 增强提示模型 ====================
@@ -247,82 +267,108 @@ async def get_current_knowledge_graph():
     }
 
 
-@router.get("/hot-news")
+@router.get("/hot-news", response_model=HotNewsResponse)
 async def get_hot_news():
-    """使用 Tavily 抓取当天热点新闻，返回 10 条供前端一键注入。"""
-    import os
-    from pathlib import Path
-    from dotenv import load_dotenv
-    from ..services.public_search import TavilySearchClient
+    """抓取当天**主流媒体**热点新闻，按跨 query 累加的相关度排序，返回 Top 8。
 
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+    来源治理（解决"来源不正"问题）：
+    - 检索阶段通过 Tavily ``include_domains`` 把域名限定在主流媒体白名单
+      （中央主要新闻单位 / 全国性权威媒体 / 国际主流通讯社），从源头排除
+      采集站、山寨新闻站、百科词条、门户自媒体号与站点演示页。
+    - ``topic=news`` + ``time_range=day`` + ``include_published_date`` 保证
+      结果是有发布日期的当日新闻报道，而非旧文章或栏目索引页。
+    - 结果阶段再做一次白名单校验（防御性兜底），并剔除站点首页。
+    - 若 ``TAVILY_API_KEY`` 未配置或白名单内无结果，返回空 ``items`` +
+      ``warning``，不抛 5xx，**也不降级到不可信来源**。
+    - 应急开关：``HOT_NEWS_STRICT_SOURCES=0`` 可临时关闭限定（不建议生产使用）。
+    """
+    api_key = os.getenv("TAVILY_API_KEY", "").strip()
+    if not api_key:
+        logger.warning("[hot-news] TAVILY_API_KEY is not configured; returning empty items")
+        return HotNewsResponse(
+            items=[],
+            total=0,
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            warning="TAVILY_API_KEY 未配置，无法抓取热点新闻。请在 .env 中配置后重试。",
+        )
 
-    def _clean_text(value: str) -> str:
-        text = (value or "").strip()
-        if not text:
-            return ""
-        text = text.replace("\r", " ").replace("\n", " ")
-        text = " ".join(text.split())
-        suspicious = ("â", "ä¸", "ï")
-        if any(token in text for token in suspicious):
-            try:
-                repaired = text.encode("latin1", errors="ignore").decode("utf-8", errors="ignore").strip()
-                if repaired:
-                    text = repaired
-            except Exception:
-                pass
-        return text
+    # 严格模式（默认）：检索与结果两层都锁定主流媒体白名单。
+    strict = os.getenv("HOT_NEWS_STRICT_SOURCES", "1").strip().lower() not in (
+        "0", "false", "no",
+    )
+    client = TavilySearchClient(
+        api_key=api_key,
+        timeout=30,
+        include_domains=list(MAINSTREAM_DOMAINS) if strict else None,
+        topic="news",
+        time_range="day",
+        include_published_date=True,
+    )
 
-    api_key = os.getenv("TAVILY_API_KEY", "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").strip()
-    client = TavilySearchClient(api_key=api_key, timeout=30)
-
+    # 查询词聚焦"今日要闻/具体报道"，避免召回百科词条与新闻栏目索引页。
+    # 每个分类保留中英双语 fallback（Tavily 偶发拒绝 CJK 密集查询）。
     categories = [
         {
             "label": "政治",
-            "queries": ["中国政治 政策 最新新闻", "China politics latest news"],
+            "queries": ["今日时政要闻 政策发布 报道", "China politics policy news today"],
         },
         {
             "label": "经济",
-            "queries": ["中国经济 产业 金融 最新新闻", "China economy finance latest news"],
+            "queries": ["今日经济财经要闻 宏观 产业 报道", "China economy finance news today"],
         },
         {
             "label": "文化",
-            "queries": ["中国文化 社会 教育 最新新闻", "China society education latest news"],
+            "queries": ["今日社会 文化 教育 要闻 报道", "China society culture education news today"],
         },
         {
             "label": "国际",
-            "queries": ["国际政治 经济 最新新闻", "world politics economy latest news"],
+            "queries": ["今日国际要闻 全球政治经济 报道", "world news today politics economy Reuters"],
         },
     ]
-    all_results = []
 
+    per_category: list = []
+    dropped = 0
     for category in categories:
         try:
-            results = await client.search_with_fallbacks(category["queries"], max_results=5)
-            for r in results:
-                title = _clean_text(r.title)
-                content = _clean_text(r.content)[:500]
-                if not title or not content:
-                    continue
-                all_results.append({
-                    "title": title,
-                    "content": content,
-                    "url": r.url,
-                    "source": _clean_text(getattr(r, "source", "") or "Tavily"),
-                    "category": category["label"],
-                })
+            results = await client.search_with_fallbacks(
+                category["queries"],
+                max_results=5,
+                search_depth="advanced",
+                include_raw_content=True,
+            )
+            if results:
+                # 二次校验：即使 API 返回越界域名，也不让非主流来源进入推演。
+                trusted = filter_mainstream(results) if strict else list(results)
+                dropped += len(results) - len(trusted)
+                if trusted:
+                    per_category.append((category["label"], trusted))
         except Exception as e:
-            logger.warning(f"Tavily search failed for '{category['label']}': {e}")
+            logger.warning(f"[hot-news] Tavily search failed for '{category['label']}': {e}")
 
-    seen = set()
-    unique = []
-    for item in all_results:
-        title = item["title"]
-        if title and title not in seen:
-            seen.add(title)
-            unique.append(item)
+    if dropped:
+        logger.info(f"[hot-news] filtered out {dropped} non-mainstream / index-page results")
 
-    return {"items": unique[:10]}
+    if not per_category:
+        # 全部失败或白名单内无结果：返回友好提示而不是 5xx，也绝不回退到
+        # 不限定来源的搜索结果（那正是"来源不正"的根因）。
+        return HotNewsResponse(
+            items=[],
+            total=0,
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            warning=(
+                "今日未检索到主流媒体来源的热点新闻，请稍后重试。"
+                "系统仅收录新华社、人民日报、央视、澎湃、路透社等主流媒体当日报道。"
+            ),
+        )
+
+    ranked_dicts = _aggregate_hot_news(per_category, top_n=8)
+    items = [NewsItem(**d) for d in ranked_dicts]
+    return HotNewsResponse(
+        items=items,
+        total=len(items),
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        warning=None,
+    )
 
 
 @router.post("/enhance-prompt")
@@ -380,7 +426,9 @@ async def enhance_prompt_api(request: PromptEnhanceRequest):
         
         # 使用 LLMClient 直接生成文本
         async with LLMClient() as client:
-            response = await client.chat(messages=messages)
+            response = await client.chat(
+                messages=messages, max_tokens=800, temperature=0.7
+            )
         
         # 从响应中提取内容（OpenAI 格式）
         enhanced_prompt = response["choices"][0]["message"]["content"].strip()
@@ -393,7 +441,9 @@ async def enhance_prompt_api(request: PromptEnhanceRequest):
                 {"role": "user", "content": request.prompt}
             ]
             async with LLMClient() as client:
-                response = await client.chat(messages=messages)
+                response = await client.chat(
+                    messages=messages, max_tokens=800, temperature=0.7
+                )
             enhanced_prompt = response["choices"][0]["message"]["content"].strip()
         
         logger.info(f"[AI 增强提示 v2] 增强成功，长度：{len(enhanced_prompt)} 字符")

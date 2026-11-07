@@ -225,3 +225,73 @@ class TestClientContextManager:
         async with client:
             session2 = client._session
             assert session2 is not None
+
+
+class _FakeResponse:
+    def __init__(self, status, body):
+        self.status = status
+        self._body = body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def text(self):
+        return self._body
+
+    async def json(self):
+        return json.loads(self._body)
+
+
+class _FakeSession:
+    """Minimal aiohttp-like session that replays a list of status codes."""
+
+    def __init__(self, statuses):
+        self.statuses = list(statuses)
+        self.payloads = []
+
+    def post(self, url, json=None, **kwargs):
+        self.payloads.append(dict(json or {}))
+        status = self.statuses.pop(0)
+        body = (
+            '{"choices":[{"message":{"content":"OK"}}]}'
+            if status == 200 else '{"error":"Not Found"}'
+        )
+        return _FakeResponse(status, body)
+
+
+class TestModelFallback:
+    """院算力网关下线模型时返回 404，客户端应自动切换备选模型。"""
+
+    @pytest.mark.asyncio
+    async def test_404_switches_to_fallback_model(self, monkeypatch):
+        monkeypatch.setenv("LLM_FALLBACK_MODELS", "backup-model")
+        config = LLMConfig(base_url="http://gateway/v1/", api_key="k",
+                           model="retired-model", max_retries=3)
+        client = LLMClient(config)
+        client._session = _FakeSession([404, 200])
+
+        result = await client.chat([{"role": "user", "content": "hi"}])
+
+        assert result["choices"][0]["message"]["content"] == "OK"
+        assert client.config.model == "backup-model"
+        assert client._session.payloads[0]["model"] == "retired-model"
+        assert client._session.payloads[1]["model"] == "backup-model"
+
+    @pytest.mark.asyncio
+    async def test_404_without_fallback_reports_model_and_url(self, monkeypatch):
+        monkeypatch.delenv("LLM_FALLBACK_MODELS", raising=False)
+        config = LLMConfig(base_url="http://gateway/v1", api_key="k",
+                           model="retired-model", max_retries=1)
+        client = LLMClient(config)
+        client._session = _FakeSession([404])
+
+        with pytest.raises(Exception) as exc:
+            await client.chat([{"role": "user", "content": "hi"}])
+
+        message = str(exc.value)
+        assert "404" in message
+        assert "retired-model" in message
+        assert "http://gateway/v1/chat/completions" in message

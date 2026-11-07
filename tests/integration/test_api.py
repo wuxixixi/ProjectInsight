@@ -26,14 +26,23 @@ class TestRootEndpoint:
     """测试根端点"""
 
     def test_root_returns_ok(self, client):
-        """测试根路径返回正常状态"""
+        """测试根路径返回正常状态。
+
+        后端在未构建前端时返回健康检查 JSON；存在 frontend/dist 时改为
+        托管 SPA 的 index.html（HTML）。两种部署形态都应视为正常。
+        """
         response = client.get("/")
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert "service" in data
-        assert "version" in data
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = response.json()
+            assert data["status"] == "ok"
+            assert "service" in data
+            assert "version" in data
+        else:
+            assert "text/html" in content_type
+            assert "<html" in response.text.lower()
 
 
 class TestSimulationStart:

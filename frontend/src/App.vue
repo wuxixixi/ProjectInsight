@@ -1233,18 +1233,56 @@
               <button class="btn-fetch-news" @click="fetchHotNews" :disabled="hotNewsLoading">
                 {{ hotNewsLoading ? '⏳ 获取中...' : '🔍 获取今日热点新闻' }}
               </button>
+              <div class="hot-news-source-note">
+                ✅ 仅收录主流媒体当日报道（新华社、人民日报、央视、澎湃、财新、路透社等），已排除采集站与自媒体聚合内容
+              </div>
+              <div v-if="hotNewsWarning" class="hot-news-warning">
+                ⚠️ {{ hotNewsWarning }}
+              </div>
+              <div v-if="hotNewsItems.length" class="hot-news-header">
+                🔥 今日热点 TOP {{ hotNewsItems.length }}（按热度排序 · 主流媒体来源）
+              </div>
               <div v-if="hotNewsItems.length" class="hot-news-list">
-                <div v-for="(item, idx) in hotNewsItems" :key="idx" class="hot-news-item">
+                <div v-for="(item, idx) in hotNewsItems" :key="item.url || idx" class="hot-news-item">
                   <div class="hot-news-meta">
                     <span class="hot-news-category">{{ item.category }}</span>
-                    <span class="hot-news-source">{{ item.source }}</span>
+                    <span class="hot-news-source">
+                      <span
+                        v-if="item.source_tier"
+                        class="hot-news-verified"
+                        :title="'主流媒体白名单来源 · 等级 T' + item.source_tier"
+                      >✓</span>
+                      {{ item.source }}
+                    </span>
+                    <span v-if="item.published_at" class="hot-news-date">{{ formatNewsDate(item.published_at) }}</span>
+                    <span class="hot-news-heat">🔥 {{ item.heat_score !== undefined ? Number(item.heat_score).toFixed(2) : '-' }}</span>
                   </div>
-                  <div class="hot-news-title">{{ item.title }}</div>
+                  <div
+                    class="hot-news-title"
+                    :class="{ clickable: item.body }"
+                    @click="toggleHotNews(item)"
+                  >
+                    {{ item.title }}
+                    <span v-if="item.body" class="hot-news-toggle">
+                      {{ hotNewsExpandedId === item.url ? '收起 ▲' : '展开 ▼' }}
+                    </span>
+                  </div>
+                  <div
+                    v-if="hotNewsExpandedId === item.url && item.body"
+                    class="hot-news-body"
+                    v-html="sanitizeHotNewsBody(item.body)"
+                  ></div>
+                  <div v-if="item.summary && hotNewsExpandedId !== item.url" class="hot-news-summary">
+                    {{ item.summary }}
+                  </div>
                   <div class="hot-news-actions">
                     <button class="btn-use-news" @click="useHotNews(item)">使用</button>
                     <a v-if="item.url" :href="item.url" target="_blank" class="hot-news-link">原文</a>
                   </div>
                 </div>
+              </div>
+              <div v-else-if="!hotNewsLoading && hotNewsFetched" class="hot-news-empty">
+                🗞️ 暂无热点新闻，点击上方按钮重新获取
               </div>
             </div>
             <textarea
@@ -1608,11 +1646,14 @@ export default {
       // AI 增强提示
       enhancing: false,
       enhanceError: '',
-      enhanceSuccess: false
+      enhanceSuccess: false,
 
       // 热点新闻
       hotNewsItems: [],
       hotNewsLoading: false,
+      hotNewsFetched: false,    // 是否曾经调用过 fetchHotNews（用于空状态展示）
+      hotNewsWarning: '',
+      hotNewsExpandedId: null,  // 当前展开正文的条目 url（null=全部收起）
 
       // 事件日志（透明化展示）
       eventLogs: [],  // 存储所有注入事件的日志
@@ -2721,14 +2762,20 @@ export default {
     async fetchHotNews() {
       this.hotNewsLoading = true
       this.hotNewsItems = []
+      this.hotNewsWarning = ''
+      this.hotNewsExpandedId = null
+      this.hotNewsFetched = true
       try {
         const data = await this.apiClient.get('/api/event/hot-news')
         this.hotNewsItems = data.items || []
-        if (!this.hotNewsItems.length) {
+        this.hotNewsWarning = data.warning || ''
+        if (!this.hotNewsItems.length && !this.hotNewsWarning) {
+          // Empty + no warning => show generic alert as a last resort.
           alert('未获取到今日热点新闻。当前新闻源可能暂无结果，请稍后重试。')
         }
       } catch (e) {
         console.error('获取热点新闻失败:', e)
+        this.hotNewsWarning = `获取今日热点失败：${e.message}`
         alert(`获取今日热点失败：${e.message}`)
       } finally {
         this.hotNewsLoading = false
@@ -2736,7 +2783,13 @@ export default {
     },
 
     useHotNews(item) {
-      this.airdropContent = item.content || item.title
+      // Inject title + body (falling back to summary / content / title) so the
+      // simulated event has the richest possible context.
+      const parts = []
+      if (item.title) parts.push(item.title)
+      const body = item.body || item.summary || item.content
+      if (body) parts.push(body)
+      this.airdropContent = parts.join('\n\n') || item.title || ''
       this.$nextTick(() => {
         const el = this.$refs.airdropInput
         if (el) {
@@ -2746,6 +2799,34 @@ export default {
           setTimeout(() => { this.airdropHighlight = false }, 1500)
         }
       })
+    },
+
+    formatNewsDate(value) {
+      if (!value) return ''
+      const text = String(value)
+      const match = text.match(/\d{4}-\d{2}-\d{2}/)
+      return match ? match[0] : text.slice(0, 16)
+    },
+
+    toggleHotNews(item) {
+      if (!item || !item.body) return
+      this.hotNewsExpandedId = this.hotNewsExpandedId === item.url ? null : item.url
+    },
+
+    sanitizeHotNewsBody(text) {
+      // Body comes from Tavily raw_content and is server-side HTML-stripped,
+      // but we still pass through DOMPurify as a defense-in-depth measure.
+      if (!text) return ''
+      // Convert newlines into paragraph + line-break markup for readability.
+      const escaped = String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      const formatted = escaped
+        .split(/\n{2,}/)
+        .map((para) => `<p>${para.replace(/\n/g, '<br/>')}</p>`)
+        .join('')
+      return DOMPurify.sanitize(formatted)
     },
 
     async enhancePrompt() {
@@ -6591,6 +6672,36 @@ export default {
 .hot-news-source {
   font-size: 11px;
   color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hot-news-verified {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.22);
+  color: #4ade80;
+  font-size: 9px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.hot-news-date {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.hot-news-source-note {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #7dd3a8;
 }
 
 .hot-news-title {
@@ -6629,6 +6740,95 @@ export default {
 
 .hot-news-link:hover {
   text-decoration: underline;
+}
+
+/* 热度排序标识 + 展开 / 收起 */
+.hot-news-header {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #fbbf24;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.hot-news-heat {
+  font-size: 11px;
+  color: #f97316;
+  margin-left: auto;
+}
+
+.hot-news-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: default;
+}
+
+.hot-news-title.clickable {
+  cursor: pointer;
+}
+
+.hot-news-toggle {
+  font-size: 11px;
+  color: #60a5fa;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hot-news-summary {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 4px 0 6px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hot-news-body {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin: 6px 0 8px 0;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.4);
+  border-left: 2px solid #60a5fa;
+  border-radius: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.hot-news-body p {
+  margin: 0 0 6px 0;
+}
+
+.hot-news-body p:last-child {
+  margin-bottom: 0;
+}
+
+.hot-news-warning {
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+.hot-news-empty {
+  margin-top: 8px;
+  padding: 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
 }
 
 .kg-error {

@@ -8,6 +8,7 @@
 
 向后兼容：旧字段名通过 model_validator 自动映射到新字段名
 """
+from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Optional
 from enum import Enum
@@ -367,3 +368,42 @@ class DualNetworkInfo(BaseModel):
     public_edges: int
     private_edges: int
     influencer_ids: List[int]
+
+
+# ============================================================================
+# 热点新闻（Hot News）模型 — 用于 GET /api/event/hot-news
+# ============================================================================
+
+class NewsItem(BaseModel):
+    """单条热点新闻条目。
+
+    - ``body`` 是页面正文（来自 Tavily ``raw_content``，回退 ``content``），
+      长度上限 3000 字，已做 HTML / 空白清理。
+    - ``summary`` 是 200 字以内的一句话摘要。
+    - ``heat_score`` 是跨 query 累加的相关度评分（越大越热）。
+    - ``source`` 从 URL 域名解析得到，例如 ``bbc.com → BBC``。
+    - ``source_tier`` 是主流媒体白名单等级：1 中央主要新闻单位 /
+      官方发布，2 全国性权威媒体，3 国际主流媒体；0 表示未分级。
+      热点新闻端点只返回 1/2/3 的来源。
+    - ``published_at`` 来自 Tavily ``published_date``（news 主题下自动返回），
+      可能为 None。
+    """
+
+    title: str
+    url: str
+    source: str
+    category: str
+    summary: str = ""
+    body: str = ""
+    heat_score: float = 0.0
+    published_at: Optional[str] = None
+    source_tier: int = 0
+
+
+class HotNewsResponse(BaseModel):
+    """GET /api/event/hot-news 响应体。"""
+
+    items: List[NewsItem] = Field(default_factory=list)
+    total: int = 0
+    generated_at: str = ""
+    warning: Optional[str] = None

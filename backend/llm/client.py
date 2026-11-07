@@ -121,6 +121,25 @@ class LLMClient:
         self._retry_count = 0
         # 实例级随机生成器 (issue #527)
         self._rng = random.Random(self.config.seed)
+        # 院算力网关会不定期下线模型（例如 deepseek-v4-flash 突然返回 404）。
+        # LLM_FALLBACK_MODELS 用逗号分隔配置备选模型；主模型 404 时自动切换，
+        # 避免整个推演 / AI 增强功能因模型下线而瘫痪。
+        configured = (self.config.model or "").strip()
+        self._fallback_models = [
+            m.strip() for m in get_env_str("LLM_FALLBACK_MODELS", "").split(",")
+            if m.strip() and m.strip() != configured
+        ]
+
+    def _next_fallback_model(self) -> Optional[str]:
+        """Return the next candidate model after a 404, or None if exhausted."""
+        models = self._fallback_models
+        if not models:
+            return None
+        try:
+            idx = models.index((self.config.model or "").strip())
+        except ValueError:
+            idx = -1
+        return models[idx + 1] if idx + 1 < len(models) else None
 
     @property
     def semaphore(self) -> asyncio.Semaphore:
@@ -210,6 +229,7 @@ class LLMClient:
             "temperature": temperature if temperature is not None else self.config.temperature,
             "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens
         }
+        endpoint = f"{self.config.base_url.rstrip('/')}/chat/completions"
 
         self._request_count += 1
         last_error = None
@@ -219,7 +239,7 @@ class LLMClient:
             for attempt in range(self.config.max_retries + 1):
                 try:
                     async with self._session.post(
-                        f"{self.config.base_url}/chat/completions",
+                        endpoint,
                         json=payload
                     ) as response:
                         if response.status == 200:
@@ -244,10 +264,32 @@ class LLMClient:
                             )
                             await asyncio.sleep(wait_time)
 
+                        elif response.status == 404:
+                            # 院算力网关按 model 路由；404 通常是模型已下线。
+                            error = await response.text()
+                            nxt = self._next_fallback_model()
+                            if nxt:
+                                logger.warning(
+                                    f"[模型回退] {self.config.model} 返回 404，"
+                                    f"自动切换到 {nxt}（请同步更新 LLM_MODEL）"
+                                )
+                                self.config.model = nxt
+                                payload["model"] = nxt
+                                continue
+                            logger.error(f"LLM API 错误: 404 - {error}")
+                            raise Exception(
+                                f"LLM API 错误: 404 (model={self.config.model}, "
+                                f"url={endpoint})：模型可能已下线，请更新 LLM_MODEL 或 "
+                                f"配置 LLM_FALLBACK_MODELS"
+                            )
+
                         else:  # 其他错误，不重试
                             error = await response.text()
                             logger.error(f"LLM API 错误: {response.status} - {error}")
-                            raise Exception(f"LLM API 错误: {response.status}")
+                            raise Exception(
+                                f"LLM API 错误: {response.status} "
+                                f"(model={self.config.model}, url={endpoint})"
+                            )
 
                 except asyncio.TimeoutError as e:
                     last_error = e
@@ -427,16 +469,21 @@ class LLMClient:
 
         self._request_count += 1
 
+        endpoint = f"{self.config.base_url.rstrip('/')}/chat/completions"
+
         async with self.semaphore:
             try:
                 async with self._session.post(
-                    f"{self.config.base_url}/chat/completions",
+                    endpoint,
                     json=payload
                 ) as response:
                     if response.status != 200:
                         error = await response.text()
                         logger.error(f"LLM API 错误: {response.status} - {error}")
-                        raise Exception(f"LLM API 错误: {response.status}")
+                        raise Exception(
+                            f"LLM API 错误: {response.status} "
+                            f"(model={self.config.model}, url={endpoint})"
+                        )
 
                     self._success_count += 1
 
